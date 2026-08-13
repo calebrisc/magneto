@@ -1,0 +1,843 @@
+<title>Anatomy of a Mouse</title>
+<style>
+  :root {
+    --paper:  #E6E7E9;
+    --card:   #F3F4F5;
+    --sunk:   #DCDEE1;
+    --ink:    #14181C;
+    --ink2:   #495259;
+    --ink3:   #78818A;
+    --rule:   #C6CACF;
+    --rule2:  #D7DADE;
+    --brass:  #8A6A16;
+    --brassb: #6E5410;
+    --sig:    #B2382C;
+    --sigbg:  #EFE0DC;
+    --shell:  #CFD3D7;
+    --skate:  #FBFBFC;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:  #0F1214;
+      --card:   #171B1E;
+      --sunk:   #101416;
+      --ink:    #E4E7E9;
+      --ink2:   #9AA4AB;
+      --ink3:   #6E7880;
+      --rule:   #2A3034;
+      --rule2:  #212729;
+      --brass:  #D6AE55;
+      --brassb: #E8C87E;
+      --sig:    #E0705F;
+      --sigbg:  #2A1A16;
+      --shell:  #262C31;
+      --skate:  #C8CDD2;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:  #0F1214;
+    --card:   #171B1E;
+    --sunk:   #101416;
+    --ink:    #E4E7E9;
+    --ink2:   #9AA4AB;
+    --ink3:   #6E7880;
+    --rule:   #2A3034;
+    --rule2:  #212729;
+    --brass:  #D6AE55;
+    --brassb: #E8C87E;
+    --sig:    #E0705F;
+    --sigbg:  #2A1A16;
+    --shell:  #262C31;
+    --skate:  #C8CDD2;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Helvetica Neue", Helvetica, system-ui, -apple-system, sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    margin: 0;
+    padding: 0 22px 100px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 940px; margin: 0 auto; }
+  .col  { max-width: 720px; }
+
+  .mono, code, .desig, .kicker, .legend b, .badge {
+    font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  }
+
+  /* ---------- masthead ---------- */
+  header { padding: 70px 0 30px; }
+  .kicker {
+    font-size: 11px; letter-spacing: .18em; text-transform: uppercase;
+    color: var(--brass); margin: 0 0 18px; font-weight: 600;
+  }
+  h1 {
+    font-size: clamp(40px, 8vw, 68px); font-weight: 800; letter-spacing: -.035em;
+    line-height: .98; margin: 0 0 20px; text-wrap: balance;
+  }
+  .deck { font-size: 19px; line-height: 1.5; color: var(--ink2); margin: 0; max-width: 56ch; }
+
+  /* ---------- cutaway ---------- */
+  .cut {
+    margin: 40px 0 0; background: var(--card);
+    border: 1px solid var(--rule); border-radius: 5px;
+    padding: 14px 10px 6px; overflow-x: auto;
+  }
+  .cut svg { display: block; width: 100%; min-width: 660px; height: auto; }
+  .cut svg [data-goto] { cursor: pointer; }
+  .cut svg [data-goto]:hover circle { fill: var(--brass); }
+  .cut svg [data-goto]:hover text { fill: var(--card); }
+  .cut svg [data-goto] circle, .cut svg [data-goto] text { transition: fill .15s; }
+
+  .cutnote {
+    font-size: 12.5px; color: var(--ink3); margin: 12px 4px 0; line-height: 1.5;
+  }
+
+  /* ---------- legend ---------- */
+  .legend {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+    gap: 0; margin: 26px 0 0; border-top: 1px solid var(--ink);
+  }
+  .legend a {
+    display: flex; gap: 9px; align-items: baseline; padding: 11px 12px 11px 0;
+    border-bottom: 1px solid var(--rule2); text-decoration: none; color: var(--ink);
+    font-size: 14.5px; line-height: 1.35;
+  }
+  .legend a:hover { color: var(--brassb); }
+  .legend a:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+  .legend b {
+    font-size: 11.5px; font-weight: 700; color: var(--brass);
+    flex: none; font-variant-numeric: tabular-nums;
+  }
+
+  /* ---------- controls ---------- */
+  .ctrls { display: flex; gap: 10px; margin: 52px 0 18px; align-items: center; }
+  .ctrls h2 {
+    font-size: 12px; letter-spacing: .15em; text-transform: uppercase;
+    color: var(--ink3); margin: 0; flex: 1; font-weight: 700;
+  }
+  button {
+    font: inherit; font-size: 12px; font-weight: 600; letter-spacing: .04em;
+    padding: 6px 13px; border-radius: 3px; cursor: pointer;
+    background: transparent; color: var(--ink2); border: 1px solid var(--rule);
+  }
+  button:hover { color: var(--ink); border-color: var(--ink3); }
+  button:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+
+  /* ---------- systems ---------- */
+  details {
+    border-top: 1px solid var(--rule);
+    background: linear-gradient(var(--paper), var(--paper));
+  }
+  details:last-of-type { border-bottom: 1px solid var(--rule); }
+  details[open] { background: var(--card); }
+
+  summary {
+    list-style: none; cursor: pointer; padding: 20px 46px 20px 0; position: relative;
+    display: grid; grid-template-columns: 44px 1fr; gap: 16px; align-items: baseline;
+  }
+  summary::-webkit-details-marker { display: none; }
+  summary:focus-visible { outline: 2px solid var(--brass); outline-offset: -2px; }
+  details[open] summary, summary:hover { padding-left: 14px; }
+  summary { transition: padding-left .15s; }
+
+  .sysno {
+    font-family: ui-monospace, Menlo, monospace; font-size: 12px; font-weight: 700;
+    color: var(--brass); letter-spacing: .04em; font-variant-numeric: tabular-nums;
+  }
+  .systitle { font-size: 21px; font-weight: 700; letter-spacing: -.02em; line-height: 1.2; }
+  .sysrole { display: block; font-size: 14.5px; font-weight: 400; color: var(--ink2); margin-top: 3px; }
+  summary::after {
+    content: "+"; position: absolute; right: 14px; top: 21px;
+    font-family: ui-monospace, Menlo, monospace; font-size: 19px; color: var(--ink3);
+    line-height: 1;
+  }
+  details[open] summary::after { content: "\2212"; }
+
+  .body { padding: 4px 14px 34px; }
+  .body > .col { margin-left: 60px; }
+  @media (max-width: 640px) { .body > .col { margin-left: 0; } }
+  .body p { margin: 0 0 15px; font-size: 15.5px; line-height: 1.62; }
+  .body p:last-child { margin-bottom: 0; }
+  strong { font-weight: 600; }
+  em { font-style: italic; color: var(--ink2); }
+
+  h4 {
+    font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--ink3); margin: 26px 0 10px;
+  }
+  h4:first-child { margin-top: 8px; }
+
+  /* parts list */
+  .parts { list-style: none; margin: 0; padding: 0; }
+  .parts li {
+    display: grid; grid-template-columns: 168px 1fr; gap: 18px;
+    padding: 9px 0; border-top: 1px solid var(--rule2); font-size: 15px; line-height: 1.5;
+  }
+  .parts li:first-child { border-top: 1px solid var(--rule); }
+  .desig { font-size: 13.5px; font-weight: 600; color: var(--ink); padding-top: 1px; }
+  .parts li > span:last-child { color: var(--ink2); }
+  @media (max-width: 560px) {
+    .parts li { grid-template-columns: 1fr; gap: 2px; }
+  }
+
+  /* figures inside a system */
+  figure.fig { margin: 22px 0 0; }
+  figure.fig .frame {
+    background: var(--sunk); border: 1px solid var(--rule); border-radius: 4px;
+    padding: 16px 10px 10px; overflow-x: auto;
+  }
+  figure.fig svg { display: block; width: 100%; min-width: 540px; height: auto; }
+  figure.fig figcaption {
+    font-size: 13px; color: var(--ink3); margin-top: 10px; line-height: 1.5;
+  }
+
+  /* ours */
+  .ours {
+    border-left: 2px solid var(--brass); background: var(--sunk);
+    padding: 14px 16px; margin: 26px 0 0; border-radius: 0 3px 3px 0;
+  }
+  .ours .tag {
+    font-family: ui-monospace, Menlo, monospace; font-size: 10.5px; font-weight: 700;
+    letter-spacing: .13em; text-transform: uppercase; color: var(--brass);
+    display: block; margin-bottom: 6px;
+  }
+  .ours p { font-size: 14.5px; margin: 0; color: var(--ink2); }
+  .ours p + p { margin-top: 10px; }
+
+  /* failure note */
+  .fail {
+    border-left: 2px solid var(--sig); background: var(--sigbg);
+    padding: 14px 16px; margin: 22px 0 0; border-radius: 0 3px 3px 0;
+  }
+  .fail .tag {
+    font-family: ui-monospace, Menlo, monospace; font-size: 10.5px; font-weight: 700;
+    letter-spacing: .13em; text-transform: uppercase; color: var(--sig);
+    display: block; margin-bottom: 6px;
+  }
+  .fail p { font-size: 14.5px; margin: 0; color: var(--ink2); }
+
+  footer {
+    margin-top: 60px; padding-top: 20px; border-top: 1px solid var(--rule);
+    font-size: 13px; color: var(--ink3);
+  }
+  ::selection { background: var(--brass); color: var(--paper); }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; scroll-behavior: auto !important; }
+  }
+</style>
+
+<div class="wrap">
+
+<header>
+  <p class="kicker">Reference · Haptic Mouse Project</p>
+  <h1>Anatomy of a Mouse</h1>
+  <p class="deck">Nine systems, what each one is made of, and how the parts inside actually do their job. Open any system to go deeper.</p>
+</header>
+
+<div class="cut">
+  <svg viewBox="0 0 900 400" role="img" aria-label="Cutaway side view of a computer mouse showing shell, buttons, scroll wheel, sensor, mainboard, antenna, battery, feet and side buttons.">
+    <defs>
+      <pattern id="hatch" width="7" height="7" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+        <line x1="0" y1="0" x2="0" y2="7" stroke="var(--rule)" stroke-width="1.6"/>
+      </pattern>
+    </defs>
+
+    <!-- desk -->
+    <line x1="40" y1="345" x2="866" y2="345" stroke="var(--ink3)" stroke-width="1.6"/>
+    <rect x="40" y="346" width="826" height="9" fill="url(#hatch)" opacity=".8"/>
+
+    <!-- outer shell -->
+    <path d="M140,340 L754,340 C766,326 768,300 756,282 C720,238 660,198 590,174
+             C500,144 420,138 360,146 C268,158 190,200 158,262 C146,288 136,318 140,340 Z"
+          fill="var(--shell)" stroke="var(--ink)" stroke-width="2.4" stroke-linejoin="round"/>
+
+    <!-- inner cavity face -->
+    <path d="M155,335 L748,335 C757,323 758,303 748,288 C714,246 656,208 588,185
+             C502,157 424,151 366,159 C282,171 208,210 178,266 C168,290 160,316 155,335 Z"
+          fill="var(--card)" stroke="var(--rule)" stroke-width="1.2"/>
+
+    <!-- button plate lamina -->
+    <path d="M468,190 C540,196 620,216 690,250 C720,265 744,274 756,282"
+          fill="none" stroke="var(--ink)" stroke-width="2" stroke-linecap="round"/>
+    <path d="M466,168 L468,192" stroke="var(--ink)" stroke-width="2" stroke-linecap="round"/>
+
+    <!-- bottom shell inner line + sensor aperture -->
+    <path d="M156,334 L476,334 M506,334 L748,334" stroke="var(--ink)" stroke-width="2"/>
+
+    <!-- battery -->
+    <rect x="225" y="250" width="122" height="50" rx="3"
+          fill="var(--sunk)" stroke="var(--ink)" stroke-width="1.8"/>
+    <path d="M233,258 h30 M233,266 h30" stroke="var(--ink3)" stroke-width="1.6"/>
+
+    <!-- pcb -->
+    <rect x="190" y="300" width="558" height="8" fill="var(--brass)" opacity=".55"/>
+    <rect x="190" y="300" width="558" height="8" fill="none" stroke="var(--ink)" stroke-width="1.6"/>
+
+    <!-- mcu -->
+    <rect x="380" y="286" width="52" height="14" fill="var(--ink)"/>
+    <path d="M384,286 v-5 M394,286 v-5 M404,286 v-5 M414,286 v-5 M424,286 v-5"
+          stroke="var(--ink3)" stroke-width="1.4"/>
+
+    <!-- main switch -->
+    <rect x="648" y="280" width="40" height="20" rx="2"
+          fill="var(--card)" stroke="var(--ink)" stroke-width="1.8"/>
+    <path d="M668,280 v-8" stroke="var(--ink)" stroke-width="2.4"/>
+    <path d="M655,292 q13,-7 26,0" fill="none" stroke="var(--sig)" stroke-width="1.8"/>
+
+    <!-- antenna -->
+    <path d="M708,300 l0,-12 l8,0 l0,12 l8,0 l0,-12 l8,0 l0,12 l8,0 l0,-12"
+          fill="none" stroke="var(--sig)" stroke-width="2" stroke-linejoin="round"/>
+
+    <!-- usb-c -->
+    <rect x="740" y="288" width="22" height="14" rx="6"
+          fill="var(--sunk)" stroke="var(--ink)" stroke-width="1.8"/>
+
+    <!-- scroll wheel -->
+    <circle cx="600" cy="212" r="34" fill="var(--sunk)" stroke="var(--ink)" stroke-width="2.2"/>
+    <circle cx="600" cy="212" r="21" fill="var(--card)" stroke="var(--ink3)" stroke-width="1.5"/>
+    <g stroke="var(--ink3)" stroke-width="1.5">
+      <path d="M600,178 v9 M600,237 v9 M566,212 h9 M625,212 h9
+               M576,188 l6,6 M618,230 l6,6 M624,188 l-6,6 M582,230 l-6,6"/>
+    </g>
+    <!-- encoder -->
+    <rect x="574" y="248" width="52" height="52" rx="3"
+          fill="var(--card)" stroke="var(--ink)" stroke-width="1.8"/>
+    <circle cx="600" cy="266" r="6" fill="none" stroke="var(--ink3)" stroke-width="1.5"/>
+
+    <!-- sensor + lens -->
+    <rect x="470" y="308" width="44" height="16" fill="var(--ink)"/>
+    <path d="M474,324 L510,324 L504,334 L480,334 Z"
+          fill="var(--card)" stroke="var(--ink)" stroke-width="1.8"/>
+    <path d="M486,336 l-5,7 M498,336 l5,7" stroke="var(--sig)" stroke-width="1.8"/>
+
+    <!-- side buttons (near wall, dashed = in front of cut plane) -->
+    <rect x="466" y="264" width="76" height="24" rx="4"
+          fill="none" stroke="var(--ink2)" stroke-width="1.8" stroke-dasharray="6 4"/>
+    <path d="M504,264 v24" stroke="var(--ink2)" stroke-width="1.5" stroke-dasharray="4 4"/>
+
+    <!-- skates -->
+    <rect x="172" y="334" width="70" height="8" rx="2" fill="var(--skate)" stroke="var(--ink)" stroke-width="1.6"/>
+    <rect x="656" y="334" width="80" height="8" rx="2" fill="var(--skate)" stroke="var(--ink)" stroke-width="1.6"/>
+
+    <!-- ============ callout badges ============ -->
+    <g font-family="ui-monospace, Menlo, monospace" font-size="12.5" font-weight="700" text-anchor="middle">
+
+      <g data-goto="s1"><line x1="248" y1="196" x2="214" y2="176" stroke="var(--ink3)" stroke-width="1.2"/>
+        <circle cx="252" cy="202" r="12" fill="var(--card)" stroke="var(--ink)" stroke-width="1.8"/>
+        <text x="252" y="207" fill="var(--ink)">1</text></g>
+
+      <g data-goto="s2"><line x1="668" y1="258" x2="668" y2="274" stroke="var(--ink3)" stroke-width="1.2"/>
+        <circle cx="668" cy="248" r="12" fill="var(--card)" stroke="var(--ink)" stroke-width="1.8"/>
+        <text x="668" y="253" fill="var(--ink)">2</text></g>
+
+      <g data-goto="s3"><circle cx="600" cy="212" r="12" fill="var(--card)" stroke="var(--ink)" stroke-width="1.8"/>
+        <text x="600" y="217" fill="var(--ink)">3</text></g>
+
+      <g data-goto="s4"><line x1="546" y1="320" x2="518" y2="318" stroke="var(--ink3)" stroke-width="1.2"/>
+        <circle cx="558" cy="321" r="12" fill="var(--card)" stroke="var(--ink)" stroke-width="1.8"/>
+        <text x="558" y="326" fill="var(--ink)">4</text></g>
+
+      <g data-goto="s5"><line x1="406" y1="270" x2="406" y2="284" stroke="var(--ink3)" stroke-width="1.2"/>
+        <circle cx="406" cy="259" r="12" fill="var(--card)" stroke="var(--ink)" stroke-width="1.8"/>
+        <text x="406" y="264" fill="var(--ink)">5</text></g>
+
+      <g data-goto="s6"><line x1="724" y1="310" x2="724" y2="300" stroke="var(--ink3)" stroke-width="1.2"/>
+        <circle cx="724" cy="321" r="12" fill="var(--card)" stroke="var(--ink)" stroke-width="1.8"/>
+        <text x="724" y="326" fill="var(--ink)">6</text></g>
+
+      <g data-goto="s7"><circle cx="286" cy="275" r="12" fill="var(--card)" stroke="var(--ink)" stroke-width="1.8"/>
+        <text x="286" y="280" fill="var(--ink)">7</text></g>
+
+      <g data-goto="s8"><line x1="120" y1="338" x2="168" y2="338" stroke="var(--ink3)" stroke-width="1.2"/>
+        <circle cx="106" cy="338" r="12" fill="var(--card)" stroke="var(--ink)" stroke-width="1.8"/>
+        <text x="106" y="343" fill="var(--ink)">8</text></g>
+
+      <g data-goto="s9"><circle cx="504" cy="276" r="12" fill="var(--card)" stroke="var(--ink)" stroke-width="1.8"/>
+        <text x="504" y="281" fill="var(--ink)">9</text></g>
+    </g>
+  </svg>
+</div>
+
+<p class="cutnote">Side cutaway, front to the right. Solid outlines are in the cut plane; the dashed box is the side-button cluster, which sits on the near wall in front of it. Click any number.</p>
+
+<nav class="legend">
+  <a href="#s1" data-goto="s1"><b>01</b>Shell &amp; chassis</a>
+  <a href="#s2" data-goto="s2"><b>02</b>Buttons &amp; switches</a>
+  <a href="#s3" data-goto="s3"><b>03</b>Scroll assembly</a>
+  <a href="#s4" data-goto="s4"><b>04</b>Sensor &amp; optics</a>
+  <a href="#s5" data-goto="s5"><b>05</b>Mainboard &amp; MCU</a>
+  <a href="#s6" data-goto="s6"><b>06</b>Radio &amp; antenna</a>
+  <a href="#s7" data-goto="s7"><b>07</b>Power</a>
+  <a href="#s8" data-goto="s8"><b>08</b>Feet &amp; desk interface</a>
+  <a href="#s9" data-goto="s9"><b>09</b>Auxiliary controls</a>
+</nav>
+
+<div class="ctrls">
+  <h2>The nine systems</h2>
+  <button id="expand">Expand all</button>
+  <button id="collapse">Collapse all</button>
+</div>
+
+<!-- ============================= 01 ============================= -->
+<details id="s1">
+  <summary>
+    <span class="sysno">01</span>
+    <span class="systitle">Shell &amp; chassis
+      <span class="sysrole">Holds every other part in a fixed relationship, and gives your hand something to hold.</span>
+    </span>
+  </summary>
+  <div class="body"><div class="col">
+    <h4>What's inside it</h4>
+    <ul class="parts">
+      <li><span class="desig">Top shell</span><span>The grip surface. On most mice the main button plates are part of this piece, joined by a thinned strip of plastic that acts as a hinge.</span></li>
+      <li><span class="desig">Bottom shell</span><span>The reference plane for the whole machine. Everything's height is measured from here.</span></li>
+      <li><span class="desig">Screw bosses</span><span>Molded columns the case screws thread into. Usually hidden under the feet.</span></li>
+      <li><span class="desig">PCB standoffs</span><span>Short pillars that set the board's exact height — which sets the sensor's height.</span></li>
+      <li><span class="desig">Internal ribs</span><span>Thin walls stiffening large unsupported spans.</span></li>
+      <li><span class="desig">Surface finish</span><span>Texture cut into the mold, or a sprayed rubberized coating.</span></li>
+    </ul>
+
+    <h4>How it works</h4>
+    <p>The bottom shell is the datum. Every critical vertical dimension in a mouse — sensor height above the desk, switch travel, how far the wheel protrudes — is referenced to that one surface. This is why a mouse with a flexible bottom shell tracks inconsistently when you press down hard: you're bending the datum.</p>
+    <p>The ribs matter more than they look. A large flat span with no rib behind it will flex under a grip, and that flex shows up as creaking, as mushy clicks, and as the shell rubbing on the wheel.</p>
+
+    <div class="ours">
+      <span class="tag">In your build</span>
+      <p>3D printed, which frees you from every injection-molding constraint that shapes commercial mice: no draft angles, no uniform wall thickness, undercuts allowed, ribs anywhere you want them.</p>
+      <p>Splitting this into a rigid internal chassis plus a swappable outer skin means shape iteration stays cheap after the electronics are settled.</p>
+    </div>
+  </div></div>
+</details>
+
+<!-- ============================= 02 ============================= -->
+<details id="s2">
+  <summary>
+    <span class="sysno">02</span>
+    <span class="systitle">Buttons &amp; switches
+      <span class="sysrole">Turn a finger press into a digital event — and it's messier than it sounds.</span>
+    </span>
+  </summary>
+  <div class="body"><div class="col">
+    <h4>What's inside it</h4>
+    <ul class="parts">
+      <li><span class="desig">Button plate</span><span>The lever your finger presses.</span></li>
+      <li><span class="desig">Hinge</span><span>Usually a "living hinge" — a deliberately thinned section of the shell that bends a few million times before it fatigues.</span></li>
+      <li><span class="desig">Stem / plunger</span><span>Transfers plate motion down to the switch.</span></li>
+      <li><span class="desig">Microswitch</span><span>The sensing element. Omron D2FC, Kailh GM, Huano and TTC are the common families.</span></li>
+      <li><span class="desig">Leaf spring</span><span>Inside the switch. Provides both the return force and the tactile snap.</span></li>
+      <li><span class="desig">Contacts</span><span>One movable, two fixed. Usually silver or gold plated.</span></li>
+    </ul>
+
+    <h4>How a microswitch actually works</h4>
+    <p>A curved metal leaf is held under compression. The plunger pushes it until it passes a buckling point, at which the leaf <em>snaps over-center</em> and slams its movable contact against the fixed one. That snap is the click sound and the tactile break — both are the spring buckling, not the electrical event.</p>
+    <p>When the contacts meet, the metal physically bounces. They chatter open and closed for somewhere between one and ten milliseconds before settling. Firmware has to <strong>debounce</strong> this — wait out the chatter before believing the press — and that waiting period is pure added latency, sitting in the critical path of every click you make.</p>
+
+    <div class="fail">
+      <span class="tag">Why mice double-click as they age</span>
+      <p>Contacts oxidize and pit with use, so the bounce gets longer and dirtier. Eventually the chatter outlasts the debounce window and the firmware reports a second click that your finger never made. The switch isn't broken in any dramatic way — its bounce simply outgrew the filter.</p>
+    </div>
+
+    <h4>Optical switches</h4>
+    <p>Replace the contacts with an infrared emitter and photodiode, and put a shutter on the plunger. Breaking the beam is the event. No bounce, no debounce, no oxidation, no aging double-click. The <em>feel</em>, though, still comes from a conventional leaf spring — optical switches change the electrical half only.</p>
+
+    <div class="ours">
+      <span class="tag">In your build</span>
+      <p>Neither. A coil or Hall sensor reads the plate's travel as a continuous value, and an LRA generates the click sensation as a waveform. Nothing bounces, so there is no debounce, no contact wear, and no fixed actuation point — the threshold becomes a setting.</p>
+    </div>
+  </div></div>
+</details>
+
+<!-- ============================= 03 ============================= -->
+<details id="s3">
+  <summary>
+    <span class="sysno">03</span>
+    <span class="systitle">Scroll assembly
+      <span class="sysrole">A rotation sensor, a tactile ratchet, and a third button, stacked into one module.</span>
+    </span>
+  </summary>
+  <div class="body"><div class="col">
+    <h4>What's inside it</h4>
+    <ul class="parts">
+      <li><span class="desig">Wheel</span><span>A plastic hub with a rubber or TPU tire over it.</span></li>
+      <li><span class="desig">Shaft</span><span>Runs through the encoder body, carrying the rotation.</span></li>
+      <li><span class="desig">Encoder</span><span>Converts rotation into electrical pulses.</span></li>
+      <li><span class="desig">Detent ring</span><span>A toothed ring the wheel turns against.</span></li>
+      <li><span class="desig">Detent spring</span><span>A sprung arm riding those teeth. This, alone, is the "tick" you feel.</span></li>
+      <li><span class="desig">Middle-click switch</span><span>Sits under the encoder. The whole encoder body floats and presses down onto it.</span></li>
+    </ul>
+
+    <h4>How rotation becomes scroll</h4>
+    <p>All three encoder types produce the same thing: two square-wave signals, <strong>A</strong> and <strong>B</strong>, ninety degrees out of phase. Which one changes first tells you the direction. Counting the edges tells you how far. That's quadrature encoding, and it's the same principle in a $5 mouse and a CNC machine.</p>
+    <ul class="parts">
+      <li><span class="desig">Mechanical</span><span>Two wiper contacts sweeping a segmented metal ring. Cheap, and it wears and bounces exactly like a switch does — a scroll wheel that jumps backward is a worn encoder.</span></li>
+      <li><span class="desig">Optical</span><span>A slotted disc spinning between an IR emitter and two detectors. No contact, no wear, no bounce.</span></li>
+      <li><span class="desig">Magnetic</span><span>A diametrically magnetized magnet on the shaft over a Hall array. Contactless and very high resolution.</span></li>
+    </ul>
+
+    <p>The detent feel is <em>completely independent</em> of the sensing — it's just a spring arm on a toothed ring. That separation is why free-spin wheels are possible: a clutch lifts the arm off the teeth, and the encoder never notices.</p>
+
+    <h4>Electromagnetic detents — the modern version</h4>
+    <p>The newest approach throws out the spring arm, the toothed ring, and the clutch entirely, and generates the detents with magnets instead. Logitech ships this as MagSpeed. Two electromagnets sit above a toothed steel rim, and <strong>which way you drive their coils decides whether the wheel is notchy or free.</strong></p>
+
+    <figure class="fig">
+      <div class="frame">
+        <svg viewBox="0 0 760 320" role="img" aria-label="Two states of an electromagnetic detent wheel. With coil currents in the same direction their fields add across the air gap and flux passes through the toothed steel rim, creating detents. With one current reversed the fields cancel at the gap, no flux reaches the rim, and the wheel spins free. Reversing the current switches between them with no moving parts.">
+
+          <!-- ============ PANEL 1: RATCHET ============ -->
+          <text x="165" y="20" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="12" font-weight="700" fill="var(--sig)">RATCHET</text>
+          <text x="165" y="36" text-anchor="middle" font-size="12" fill="currentColor" opacity=".75">coil currents same direction</text>
+
+          <!-- yoke -->
+          <rect x="50" y="52" width="230" height="16" fill="none" stroke="currentColor" stroke-width="2"/>
+          <!-- poles -->
+          <rect x="80" y="68" width="34" height="62" fill="none" stroke="currentColor" stroke-width="2"/>
+          <rect x="216" y="68" width="34" height="62" fill="none" stroke="currentColor" stroke-width="2"/>
+          <!-- coils -->
+          <g fill="currentColor" opacity=".28">
+            <rect x="68" y="80" width="58" height="9"/><rect x="68" y="94" width="58" height="9"/><rect x="68" y="108" width="58" height="9"/>
+            <rect x="204" y="80" width="58" height="9"/><rect x="204" y="94" width="58" height="9"/><rect x="204" y="108" width="58" height="9"/>
+          </g>
+          <!-- current direction arrows -->
+          <path d="M74,73 h40" stroke="currentColor" stroke-width="2" marker-end="url(#ar2)"/>
+          <path d="M210,73 h40" stroke="currentColor" stroke-width="2" marker-end="url(#ar2)"/>
+
+          <!-- teeth + rim -->
+          <g fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M30,160 h270 v28 h-270 z"/>
+            <path d="M40,160 v-14 h20 v14 M78,160 v-14 h20 v14 M116,160 v-14 h20 v14 M154,160 v-14 h20 v14
+                     M192,160 v-14 h20 v14 M230,160 v-14 h20 v14 M268,160 v-14 h20 v14"/>
+          </g>
+
+          <!-- flux loop through the rim -->
+          <path d="M97,74 L97,174 L233,174 L233,74 Z" fill="none" stroke="var(--sig)" stroke-width="3"/>
+          <g fill="var(--sig)">
+            <polygon points="97,134 92,124 102,124"/>
+            <polygon points="175,174 165,169 165,179"/>
+            <polygon points="233,114 238,124 228,124"/>
+            <polygon points="155,74 165,79 165,69"/>
+          </g>
+
+          <text x="165" y="216" text-anchor="middle" font-size="12.5" fill="var(--sig)" font-weight="600">flux crosses the gap</text>
+          <text x="165" y="234" text-anchor="middle" font-size="12.5" fill="currentColor" opacity=".75">teeth pull into alignment → notches</text>
+
+          <!-- part labels -->
+          <g font-size="11.5" fill="currentColor" opacity=".65">
+            <path d="M300,60 h22" stroke="currentColor" stroke-width="1" opacity=".5"/>
+            <text x="326" y="64">yoke</text>
+            <path d="M262,100 h60" stroke="currentColor" stroke-width="1" opacity=".5"/>
+            <text x="326" y="104">coil</text>
+            <path d="M304,174 h18" stroke="currentColor" stroke-width="1" opacity=".5"/>
+            <text x="326" y="178">toothed</text>
+            <text x="326" y="192">steel rim</text>
+          </g>
+
+          <!-- ============ TOGGLE ============ -->
+          <g>
+            <path d="M366,150 h28" stroke="var(--sig)" stroke-width="2.5" marker-end="url(#ar3)"/>
+            <path d="M394,172 h-28" stroke="var(--sig)" stroke-width="2.5" marker-end="url(#ar3)"/>
+            <text x="380" y="132" text-anchor="middle" font-size="11.5" font-weight="700" fill="var(--sig)" font-family="ui-monospace, Menlo, monospace">TOGGLE</text>
+            <text x="380" y="200" text-anchor="middle" font-size="11" fill="currentColor" opacity=".7">reverse</text>
+            <text x="380" y="214" text-anchor="middle" font-size="11" fill="currentColor" opacity=".7">the current</text>
+          </g>
+
+          <!-- ============ PANEL 2: FREESPIN ============ -->
+          <text x="595" y="20" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="12" font-weight="700" fill="var(--sig)">FREESPIN</text>
+          <text x="595" y="36" text-anchor="middle" font-size="12" fill="currentColor" opacity=".75">one coil current reversed</text>
+
+          <rect x="480" y="52" width="230" height="16" fill="none" stroke="currentColor" stroke-width="2"/>
+          <rect x="510" y="68" width="34" height="62" fill="none" stroke="currentColor" stroke-width="2"/>
+          <rect x="646" y="68" width="34" height="62" fill="none" stroke="currentColor" stroke-width="2"/>
+          <g fill="currentColor" opacity=".28">
+            <rect x="498" y="80" width="58" height="9"/><rect x="498" y="94" width="58" height="9"/><rect x="498" y="108" width="58" height="9"/>
+            <rect x="634" y="80" width="58" height="9"/><rect x="634" y="94" width="58" height="9"/><rect x="634" y="108" width="58" height="9"/>
+          </g>
+          <path d="M504,73 h40" stroke="currentColor" stroke-width="2" marker-end="url(#ar2)"/>
+          <path d="M692,73 h-40" stroke="currentColor" stroke-width="2" marker-end="url(#ar2)"/>
+
+          <g fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M460,160 h270 v28 h-270 z"/>
+            <path d="M470,160 v-14 h20 v14 M508,160 v-14 h20 v14 M546,160 v-14 h20 v14 M584,160 v-14 h20 v14
+                     M622,160 v-14 h20 v14 M660,160 v-14 h20 v14 M698,160 v-14 h20 v14"/>
+          </g>
+
+          <!-- opposing fields cancel at the gap -->
+          <path d="M527,140 h44" stroke="var(--sig)" stroke-width="2.5" marker-end="url(#ar3)"/>
+          <path d="M663,140 h-44" stroke="var(--sig)" stroke-width="2.5" marker-end="url(#ar3)"/>
+          <circle cx="595" cy="140" r="9" fill="none" stroke="var(--sig)" stroke-width="2.5"/>
+          <path d="M589,134 l12,12 M601,134 l-12,12" stroke="var(--sig)" stroke-width="2.5"/>
+
+          <text x="595" y="216" text-anchor="middle" font-size="12.5" fill="var(--sig)" font-weight="600">fields cancel — no flux in the rim</text>
+          <text x="595" y="234" text-anchor="middle" font-size="12.5" fill="currentColor" opacity=".75">nothing grips the teeth → wheel spins free</text>
+
+          <defs>
+            <marker id="ar2" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+              <path d="M0,0 L7,3.5 L0,7 z" fill="currentColor"/>
+            </marker>
+            <marker id="ar3" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+              <path d="M0,0 L7,3.5 L0,7 z" fill="var(--sig)"/>
+            </marker>
+          </defs>
+        </svg>
+      </div>
+      <figcaption>Same hardware, both states. Drive the coils the same direction and their fields add across the air gap, so flux runs through the toothed rim and the teeth get pulled into alignment — detents. Reverse one and the fields cancel at the gap, no flux reaches the rim, and nothing holds the wheel. Switching modes is a current change, so it happens instantly and nothing mechanical moves.</figcaption>
+    </figure>
+
+    <p>Why teeth produce notches: magnetic flux strongly prefers steel over air. With a tooth directly under a pole the gap is full of steel — an easy path, a low-energy position. With a valley there it's mostly air — a harder path, higher energy. So the wheel has a natural resting position at every tooth, and rotating away from one costs energy you feel as resistance.</p>
+    <p>This is the same effect as <strong>cogging torque</strong> in a brushless motor — the notchiness when you spin an unpowered drone motor by hand. Motor designers work hard to eliminate it. Here it's the product.</p>
+
+    <h4>A detent is not friction</h4>
+    <p>Worth being precise about, because it's the difference between a wheel that feels crisp and one that feels stiff.</p>
+
+    <figure class="fig">
+      <div class="frame">
+        <svg viewBox="0 0 760 270" role="img" aria-label="Graph of torque against wheel rotation. Detent torque is a wave that crosses zero at each tooth and reverses sign, pulling the wheel back into the nearest tooth position. Friction is a flat constant line opposing motion everywhere, with no stable positions.">
+          <!-- axes -->
+          <line x1="70" y1="140" x2="710" y2="140" stroke="currentColor" stroke-width="1.5" opacity=".55"/>
+          <line x1="70" y1="58" x2="70" y2="216" stroke="currentColor" stroke-width="1.5" opacity=".55"/>
+          <text x="76" y="52" font-size="11.5" fill="currentColor" opacity=".6">torque you feel</text>
+          <text x="60" y="72" text-anchor="end" font-size="12" fill="currentColor" opacity=".5">+</text>
+          <text x="60" y="208" text-anchor="end" font-size="12" fill="currentColor" opacity=".5">−</text>
+          <text x="710" y="248" text-anchor="end" font-size="11.5" fill="currentColor" opacity=".6">wheel rotation →</text>
+
+          <!-- friction reference -->
+          <line x1="70" y1="172" x2="700" y2="172" stroke="currentColor" stroke-width="2" opacity=".45" stroke-dasharray="6 5"/>
+          <text x="700" y="190" text-anchor="end" font-size="11.5" fill="currentColor" opacity=".6">friction: same drag everywhere, no stable point</text>
+
+          <!-- detent torque wave -->
+          <polyline fill="none" stroke="var(--sig)" stroke-width="2.5" stroke-linejoin="round" points="
+            70,140 86,179 102,195 117,179 133,140 149,101 165,85 180,101 196,140
+            212,179 228,195 243,179 259,140 275,101 291,85 306,101 322,140
+            338,179 354,195 369,179 385,140 401,101 417,85 432,101 448,140
+            464,179 480,195 495,179 511,140 527,101 543,85 558,101 574,140
+            590,179 606,195 621,179 637,140 653,101 669,85 684,101 700,140"/>
+          <text x="250" y="62" text-anchor="middle" font-size="11.5" fill="var(--sig)" font-weight="600">detent torque</text>
+
+          <!-- stable points -->
+          <g fill="var(--sig)">
+            <circle cx="70" cy="140" r="4"/><circle cx="196" cy="140" r="4"/><circle cx="322" cy="140" r="4"/>
+            <circle cx="448" cy="140" r="4"/><circle cx="574" cy="140" r="4"/><circle cx="700" cy="140" r="4"/>
+          </g>
+          <line x1="322" y1="134" x2="322" y2="118" stroke="var(--sig)" stroke-width="1.2"/>
+          <text x="322" y="112" text-anchor="middle" font-size="11.5" fill="var(--sig)" font-weight="600">wheel settles here</text>
+
+          <!-- tooth ticks -->
+          <g stroke="currentColor" stroke-width="1.5" opacity=".45">
+            <path d="M70,216 v10 M196,216 v10 M322,216 v10 M448,216 v10 M574,216 v10 M700,216 v10"/>
+          </g>
+          <text x="133" y="240" text-anchor="middle" font-size="11.5" fill="currentColor" opacity=".6">one tooth</text>
+          <path d="M78,232 h40 M188,232 h-40" stroke="currentColor" stroke-width="1" opacity=".4" marker-start="url(#ar4)" marker-end="url(#ar4)"/>
+
+          <defs>
+            <marker id="ar4" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+              <path d="M0,0 L6,3 L0,6 z" fill="currentColor" opacity=".5"/>
+            </marker>
+          </defs>
+        </svg>
+      </div>
+      <figcaption>Friction is a constant drag — the same everywhere, opposing you no matter where the wheel is. Detent torque reverses sign at each tooth, so it actively pulls the wheel toward the nearest resting position and holds it there. Between teeth there is almost no resistance at all, which is why a good ratchet wheel feels crisp to click through rather than heavy to turn.</figcaption>
+    </figure>
+
+    <div class="ours">
+      <span class="tag">In your build</span>
+      <p>An LRA can only produce a vibration impulse — it cannot produce torque, so it can't hold the wheel in a notch. On its own it would tick, but the wheel would feel loose and keep drifting.</p>
+      <p>So: electromagnetic coils for the force, LRA for the texture. The coils give real counter-torque and the mode toggle with no moving parts; the LRA layers a crisp transient on top of each detent. Nobody ships that combination. And since the coils can also be energized to brake, spin-down time becomes a software setting rather than a property of your bearings.</p>
+    </div>
+  </div></div>
+</details>
+
+<!-- ============================= 04 ============================= -->
+<details id="s4">
+  <summary>
+    <span class="sysno">04</span>
+    <span class="systitle">Sensor &amp; optics
+      <span class="sysrole">A very small, very fast camera that measures how far the desk moved underneath it.</span>
+    </span>
+  </summary>
+  <div class="body"><div class="col">
+    <h4>What's inside it</h4>
+    <ul class="parts">
+      <li><span class="desig">Sensor IC</span><span>An image sensor and a dedicated image processor in one package. PixArt makes nearly all of them.</span></li>
+      <li><span class="desig">Lens assembly</span><span>One molded part doing two jobs: aiming the illuminator at the desk, and imaging the desk onto the pixel array.</span></li>
+      <li><span class="desig">Illuminator</span><span>An infrared LED in most mice, a VCSEL laser in some.</span></li>
+      <li><span class="desig">Aperture</span><span>The window in the bottom shell.</span></li>
+      <li><span class="desig">Z-height feature</span><span>The lens's mounting boss, which fixes the distance from lens to desk.</span></li>
+    </ul>
+
+    <h4>How it works</h4>
+    <p>The illuminator lights the desk at a low grazing angle, so the surface's microscopic texture throws long shadows. The lens images that shadow pattern onto a tiny pixel array — on the order of thirty by thirty pixels. The onboard processor captures frames at many thousands per second and cross-correlates each new frame against the previous one, searching for the offset where the two patterns line up best.</p>
+    <p>That offset, in pixels, scaled by a factor, is your dX and dY. <strong>DPI is that scaling factor</strong> — nothing more mysterious than a multiplier applied to a measured pixel shift.</p>
+
+    <div class="fail">
+      <span class="tag">The three classic failures, explained</span>
+      <p><strong>Glass and gloss don't track</strong> because there's no surface texture to cast shadows — the camera sees a featureless field and has nothing to correlate. <strong>The IPS limit</strong> is the speed at which consecutive frames stop overlapping enough to find a match. <strong>Lift-off distance</strong> is the height at which the image defocuses past the point the processor trusts it, so it stops reporting motion.</p>
+    </div>
+
+    <p>Sensors also drop their frame rate when idle to save power — "rest modes." Set too aggressively, the first movement after a pause feels sluggish while the sensor spins back up.</p>
+
+    <div class="ours">
+      <span class="tag">In your build</span>
+      <p>Buy the sensor as a pre-built module with its matched lens. That lens-to-desk distance is a couple of millimetres with a tolerance measured in tenths, and getting it wrong is the single most common reason homemade mice track badly.</p>
+    </div>
+  </div></div>
+</details>
+
+<!-- ============================= 05 ============================= -->
+<details id="s5">
+  <summary>
+    <span class="sysno">05</span>
+    <span class="systitle">Mainboard &amp; MCU
+      <span class="sysrole">The brain, the wiring, and the loop that runs a few thousand times a second.</span>
+    </span>
+  </summary>
+  <div class="body"><div class="col">
+    <h4>What's inside it</h4>
+    <ul class="parts">
+      <li><span class="desig">MCU</span><span>Processor, radio, USB controller and peripherals in one chip.</span></li>
+      <li><span class="desig">Oscillator</span><span>The timebase. Polling rate accuracy is only as good as this crystal.</span></li>
+      <li><span class="desig">Flash</span><span>Stores firmware plus your config: DPI steps, profiles, curves.</span></li>
+      <li><span class="desig">SWD pads</span><span>Programming and debug points, often just bare pads you clip onto.</span></li>
+      <li><span class="desig">Passives</span><span>Decoupling caps, resistors, pull-ups. Unglamorous, and the majority of the part count.</span></li>
+      <li><span class="desig">FFC connectors</span><span>Flat flex cables out to daughterboards — side buttons, sometimes the sensor.</span></li>
+    </ul>
+
+    <h4>What the firmware actually does</h4>
+    <p>The main loop is short: read the sensor, read the buttons, assemble an HID report, hand it to USB or the radio. Repeat. An HID mouse report is remarkably small — a bitfield for the buttons, a delta for X, a delta for Y, a delta for the wheel.</p>
+    <p><strong>Polling rate is simply how often that report goes out.</strong> 1000 Hz means one report every millisecond. Everything else — sensor reads, debounce, report assembly — has to fit inside that window with room to spare, which is the entire reason processor headroom matters at high polling rates.</p>
+  </div></div>
+</details>
+
+<!-- ============================= 06 ============================= -->
+<details id="s6">
+  <summary>
+    <span class="sysno">06</span>
+    <span class="systitle">Radio &amp; antenna
+      <span class="sysrole">Getting a tiny packet to the PC, on time, every time.</span>
+    </span>
+  </summary>
+  <div class="body"><div class="col">
+    <h4>What's inside it</h4>
+    <ul class="parts">
+      <li><span class="desig">Transceiver</span><span>A 2.4 GHz radio, these days built into the MCU rather than a separate chip.</span></li>
+      <li><span class="desig">Antenna</span><span>Usually a trace etched right into the PCB. Sometimes a tiny ceramic chip part.</span></li>
+      <li><span class="desig">Matching network</span><span>A few very small inductors and capacitors tuning the antenna to 50 ohms.</span></li>
+      <li><span class="desig">Keep-out zone</span><span>A region with no copper pour, no battery, no metal. Empty space is a component here.</span></li>
+      <li><span class="desig">Receiver</span><span>The dongle: a second MCU with a radio on one side and USB on the other.</span></li>
+    </ul>
+
+    <h4>Why gaming mice ship a dongle</h4>
+    <p>Bluetooth LE is standardized and frugal, but its connection-interval rules make consistently high polling rates awkward. So gaming mice run <strong>proprietary 2.4 GHz protocols</strong> instead — Nordic's ESB, Logitech's Lightspeed — paired to their own receiver. That gives full control over packet timing, retries, and channel hopping, at the cost of needing the dongle in the box.</p>
+
+    <div class="fail">
+      <span class="tag">Your hand is an antenna problem</span>
+      <p>A hand is mostly saltwater, which absorbs and detunes 2.4 GHz badly. So does a lithium pouch and any metal weight. The antenna almost always ends up at the front or a corner of the board — as far from your palm as the shape allows.</p>
+    </div>
+  </div></div>
+</details>
+
+<!-- ============================= 07 ============================= -->
+<details id="s7">
+  <summary>
+    <span class="sysno">07</span>
+    <span class="systitle">Power
+      <span class="sysrole">Turning a battery whose voltage sags all day into rails that don't.</span>
+    </span>
+  </summary>
+  <div class="body"><div class="col">
+    <h4>What's inside it</h4>
+    <ul class="parts">
+      <li><span class="desig">Cell</span><span>A lithium-polymer pouch, typically 300–500 mAh in a lightweight mouse.</span></li>
+      <li><span class="desig">Protection circuit</span><span>A sliver of PCB on the cell's own tabs guarding against over-charge, over-discharge and short circuit. Not optional.</span></li>
+      <li><span class="desig">Charge IC</span><span>Runs the constant-current then constant-voltage charge profile from USB.</span></li>
+      <li><span class="desig">Load-share</span><span>Lets the mouse run off USB while charging, instead of cycling the cell every time you plug in.</span></li>
+      <li><span class="desig">Regulator</span><span>A LiPo swings from 4.2 V down to 3.0 V; the electronics want a steady rail. Buck-boost or LDO.</span></li>
+      <li><span class="desig">Fuel gauge</span><span>Models the actual state of charge, so the reported percentage isn't just a voltage guess.</span></li>
+    </ul>
+
+    <h4>Where the current actually goes</h4>
+    <p>The radio and the sensor dominate. Both spend most of their life asleep and wake in bursts — which is why battery life quoted at 1000 Hz and at 125 Hz differ so wildly, and why a mouse idling on your desk can last weeks.</p>
+    <p>Voltage sag under load is the sneaky one: a peak current draw pulls the rail down momentarily, and if the regulator and bulk capacitance aren't sized for it, things brown out or behave differently at 20% battery than at full.</p>
+  </div></div>
+</details>
+
+<!-- ============================= 08 ============================= -->
+<details id="s8">
+  <summary>
+    <span class="sysno">08</span>
+    <span class="systitle">Feet &amp; desk interface
+      <span class="sysrole">The only part of the whole machine that actually touches anything.</span>
+    </span>
+  </summary>
+  <div class="body"><div class="col">
+    <h4>What's inside it</h4>
+    <ul class="parts">
+      <li><span class="desig">Skates</span><span>PTFE pads. Sometimes glass or ceramic on aftermarket sets.</span></li>
+      <li><span class="desig">Adhesive</span><span>Double-sided tape, and the reason a badly-applied foot lifts a corner and ruins the glide.</span></li>
+      <li><span class="desig">Sensor aperture</span><span>The window the optics look through.</span></li>
+      <li><span class="desig">Case screws</span><span>Very often underneath the feet — which is why opening a mouse starts with peeling one off.</span></li>
+    </ul>
+
+    <h4>Why PTFE</h4>
+    <p>It has one of the lowest coefficients of friction of any solid material against almost anything. <strong>Virgin</strong> PTFE — unfilled and unrecycled — glides best and wears fastest. Filled PTFE lasts considerably longer and feels slower. That's the entire tradeoff, and it's why enthusiasts replace feet as a consumable.</p>
+    <p>Edge treatment is the underrated detail: a foot with a sharp square edge catches on mousepad weave, while a rounded or chamfered edge rides over it. Two feet of identical material can feel completely different because of it.</p>
+  </div></div>
+</details>
+
+<!-- ============================= 09 ============================= -->
+<details id="s9">
+  <summary>
+    <span class="sysno">09</span>
+    <span class="systitle">Auxiliary controls
+      <span class="sysrole">Everything that isn't a main click, and mostly living on its own little board.</span>
+    </span>
+  </summary>
+  <div class="body"><div class="col">
+    <h4>What's inside it</h4>
+    <ul class="parts">
+      <li><span class="desig">Side buttons</span><span>Almost always on a separate daughterboard or flex cable, because they sit on a vertical wall the flat mainboard can't reach.</span></li>
+      <li><span class="desig">DPI button</span><span>Frequently moved to the underside on gaming mice, specifically so it can't be hit mid-game.</span></li>
+      <li><span class="desig">Mode switches</span><span>Power, polling rate, wireless mode. Usually on the bottom.</span></li>
+      <li><span class="desig">LEDs</span><span>Surface-mount, on the mainboard.</span></li>
+      <li><span class="desig">Light pipes</span><span>Molded clear plastic that ducts light from an LED on the board to wherever you actually see it. A surprising amount of "lighting design" is just plastic geometry.</span></li>
+    </ul>
+
+    <p>The daughterboard is the useful pattern to notice here. A flat rigid mainboard can't put a switch on a vertical wall, so you hang a small second board off a flex cable — which also means those parts can be repositioned without touching the main PCB at all. It's the standard escape hatch from the flat-board constraint.</p>
+
+    <div class="ours">
+      <span class="tag">In your build</span>
+      <p>This is the cheapest freedom you have. Anything on a flex cable can move when the shell shape changes, so put every control your hand touches on a daughterboard and keep the mainboard purely functional.</p>
+    </div>
+  </div></div>
+</details>
+
+<footer>Anatomy of a Mouse · reference sheet for the haptic mouse project · v1</footer>
+
+</div>
+
+<script>
+  const jump = id => {
+    const t = document.getElementById(id);
+    if (!t) return;
+    t.open = true;
+    t.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+  document.querySelectorAll('[data-goto]').forEach(el => {
+    el.addEventListener('click', e => { e.preventDefault(); jump(el.dataset.goto); });
+    if (el.tagName.toLowerCase() === 'g') {
+      el.setAttribute('tabindex', '0');
+      el.setAttribute('role', 'button');
+      el.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); jump(el.dataset.goto); }
+      });
+    }
+  });
+  document.getElementById('expand').addEventListener('click', () =>
+    document.querySelectorAll('details').forEach(d => d.open = true));
+  document.getElementById('collapse').addEventListener('click', () =>
+    document.querySelectorAll('details').forEach(d => d.open = false));
+</script>

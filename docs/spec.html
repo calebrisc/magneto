@@ -1,0 +1,1514 @@
+<title>Haptic Mouse Build Spec</title>
+<style>
+  :root {
+    --ground:   #E4E6E1;
+    --surface:  #F4F5F1;
+    --sunken:   #DADCD5;
+    --ink:      #15191A;
+    --ink-soft: #4C5450;
+    --ink-mute: #77807A;
+    --rule:     #C6C9C1;
+    --rule-soft:#D5D8D0;
+    --sig:      #0C6E77;
+    --sig-deep: #08535A;
+    --warn:     #9A5B08;
+    --warn-bg:  #F0E6D2;
+    --shadow:   0 1px 2px rgba(20,26,25,.07), 0 8px 24px -12px rgba(20,26,25,.18);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:   #0E1211;
+      --surface:  #171C1B;
+      --sunken:   #101514;
+      --ink:      #E7EAE5;
+      --ink-soft: #A3ADA7;
+      --ink-mute: #7C8681;
+      --rule:     #2A3230;
+      --rule-soft:#212827;
+      --sig:      #4FC3C9;
+      --sig-deep: #7FDDE1;
+      --warn:     #E3A94F;
+      --warn-bg:  #2A2114;
+      --shadow:   0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:   #0E1211;
+    --surface:  #171C1B;
+    --sunken:   #101514;
+    --ink:      #E7EAE5;
+    --ink-soft: #A3ADA7;
+    --ink-mute: #7C8681;
+    --rule:     #2A3230;
+    --rule-soft:#212827;
+    --sig:      #4FC3C9;
+    --sig-deep: #7FDDE1;
+    --warn:     #E3A94F;
+    --warn-bg:  #2A2114;
+    --shadow:   0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: Charter, "Bitstream Charter", Georgia, "Times New Roman", serif;
+    font-size: 17px;
+    line-height: 1.62;
+    margin: 0;
+    padding: 0 24px 96px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 820px; margin: 0 auto; }
+
+  h1, h2, h3, h4, .lbl, th, .num, .stat b {
+    font-family: "Helvetica Neue", "Inter", system-ui, -apple-system, sans-serif;
+  }
+  code, .mono, td.p, .dim {
+    font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  }
+
+  /* ---- masthead ---- */
+  header { padding: 72px 0 40px; border-bottom: 2px solid var(--ink); }
+  .lbl {
+    font-size: 11px; font-weight: 700; letter-spacing: .16em;
+    text-transform: uppercase; color: var(--sig); margin: 0 0 20px;
+  }
+  h1 {
+    font-size: clamp(38px, 7vw, 60px); font-weight: 800; letter-spacing: -.03em;
+    line-height: 1.02; margin: 0 0 20px; text-wrap: balance;
+  }
+  .deck {
+    font-size: 20px; line-height: 1.5; color: var(--ink-soft);
+    margin: 0; max-width: 60ch;
+  }
+  .specbar {
+    display: flex; flex-wrap: wrap; gap: 0; margin-top: 36px;
+    border-top: 1px solid var(--rule);
+  }
+  .stat {
+    flex: 1 1 130px; padding: 14px 18px 14px 0; border-right: 1px solid var(--rule-soft);
+  }
+  .stat:last-child { border-right: 0; }
+  .stat b {
+    display: block; font-size: 22px; font-weight: 700; letter-spacing: -.02em;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat span {
+    display: block; font-size: 11px; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--ink-mute); margin-top: 3px;
+    font-family: "Helvetica Neue", system-ui, sans-serif;
+  }
+
+  /* ---- sections ---- */
+  section { padding-top: 56px; }
+  h2 {
+    font-size: 13px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--ink-mute); margin: 0 0 8px;
+  }
+  h3 {
+    font-size: 27px; font-weight: 700; letter-spacing: -.02em; line-height: 1.2;
+    margin: 0 0 18px; text-wrap: balance;
+  }
+  h4 {
+    font-size: 16px; font-weight: 700; letter-spacing: -.01em; margin: 0 0 10px;
+  }
+  p { margin: 0 0 16px; max-width: 68ch; }
+  p:last-child { margin-bottom: 0; }
+  a { color: var(--sig-deep); text-underline-offset: 2px; }
+  strong { font-weight: 600; }
+  em { font-style: italic; color: var(--ink-soft); }
+  code {
+    font-size: .86em; background: var(--sunken); padding: 1px 5px;
+    border-radius: 3px; border: 1px solid var(--rule-soft);
+  }
+
+  /* ---- diagram ---- */
+  figure { margin: 28px 0 8px; }
+  .diagram {
+    background: var(--surface); border: 1px solid var(--rule); border-radius: 4px;
+    padding: 20px 8px; overflow-x: auto;
+  }
+  .diagram svg { display: block; width: 100%; min-width: 560px; height: auto; }
+  figcaption {
+    font-size: 13px; color: var(--ink-mute); margin-top: 10px; line-height: 1.5;
+    font-family: "Helvetica Neue", system-ui, sans-serif; max-width: 74ch;
+  }
+
+  /* ---- option fork ---- */
+  .fork { display: grid; gap: 18px; margin: 24px 0; }
+  @media (min-width: 700px) { .fork { grid-template-columns: 1fr 1fr; } }
+  .opt {
+    background: var(--surface); border: 1px solid var(--rule); border-radius: 4px;
+    padding: 22px; box-shadow: var(--shadow);
+  }
+  .opt .tag {
+    font-family: "Helvetica Neue", system-ui, sans-serif;
+    font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--sig); display: block; margin-bottom: 8px;
+  }
+  .opt p { font-size: 15.5px; line-height: 1.55; }
+  .pc { margin: 14px 0 0; padding: 0; list-style: none; font-size: 14.5px; line-height: 1.5; }
+  .pc li { display: flex; gap: 9px; padding: 5px 0; border-top: 1px solid var(--rule-soft); }
+  .pc li span:first-child {
+    font-family: ui-monospace, Menlo, monospace; font-weight: 700; flex: none; width: 12px;
+  }
+  .pro span:first-child { color: var(--sig); }
+  .con span:first-child { color: var(--warn); }
+
+  /* ---- callout ---- */
+  .call {
+    background: var(--warn-bg); border-left: 3px solid var(--warn);
+    padding: 18px 20px; margin: 24px 0; border-radius: 0 4px 4px 0;
+  }
+  .call h4 { color: var(--warn); }
+  .call p { font-size: 15.5px; }
+
+  .verdict {
+    border-top: 2px solid var(--ink); border-bottom: 1px solid var(--rule);
+    padding: 18px 0; margin: 26px 0 0;
+  }
+  .verdict h4 { color: var(--sig); }
+
+  /* ---- tables ---- */
+  .tw { overflow-x: auto; margin: 22px 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 15px; min-width: 460px; }
+  th {
+    text-align: left; font-size: 10.5px; font-weight: 700; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--ink-mute);
+    padding: 0 14px 8px 0; border-bottom: 1px solid var(--ink);
+  }
+  td {
+    padding: 11px 14px 11px 0; border-bottom: 1px solid var(--rule-soft);
+    vertical-align: top; line-height: 1.45;
+  }
+  td.p { font-size: 13.5px; font-weight: 500; }
+  td.n { text-align: right; font-variant-numeric: tabular-nums; padding-right: 0;
+         font-family: ui-monospace, Menlo, monospace; font-size: 14px; }
+  tr.tot td { border-bottom: 0; border-top: 2px solid var(--ink); font-weight: 700; padding-top: 12px; }
+  tr.tot td.n { color: var(--sig); }
+
+  /* ---- placement rationale ---- */
+  .why { list-style: none; margin: 26px 0 0; padding: 0; }
+  .why li {
+    display: grid; grid-template-columns: 190px 1fr; gap: 18px;
+    padding: 11px 0; border-top: 1px solid var(--rule-soft);
+    font-size: 15px; line-height: 1.5;
+  }
+  .why li:first-child { border-top: 1px solid var(--ink); }
+  .why b {
+    font-family: "Helvetica Neue", system-ui, sans-serif;
+    font-size: 13.5px; font-weight: 700; padding-top: 1px;
+  }
+  .why li > span { color: var(--ink-soft); }
+  @media (max-width: 560px) { .why li { grid-template-columns: 1fr; gap: 2px; } }
+
+  /* ---- phases ---- */
+  .phases { list-style: none; margin: 24px 0 0; padding: 0; }
+  .phases li {
+    display: grid; grid-template-columns: 46px 1fr; gap: 16px;
+    padding: 18px 0; border-top: 1px solid var(--rule-soft);
+  }
+  .phases li:first-child { border-top: 1px solid var(--ink); }
+  .num {
+    font-size: 12px; font-weight: 700; letter-spacing: .06em; color: var(--sig);
+    padding-top: 3px; font-variant-numeric: tabular-nums;
+  }
+  .phases h4 { margin-bottom: 4px; }
+  .phases p { font-size: 15px; color: var(--ink-soft); line-height: 1.5; margin: 0; }
+  .phases li.key { background: linear-gradient(90deg, var(--surface), transparent 70%); }
+  .phases li.key .num { color: var(--warn); }
+
+  /* ---- feature list ---- */
+  .feat { list-style: none; margin: 22px 0 0; padding: 0; }
+  .feat li {
+    padding: 13px 0 13px 26px; border-top: 1px solid var(--rule-soft);
+    position: relative; font-size: 15.5px; line-height: 1.5; max-width: 68ch;
+  }
+  .feat li:first-child { border-top: 1px solid var(--rule); }
+  .feat li::before {
+    content: ""; position: absolute; left: 4px; top: 22px;
+    width: 8px; height: 2px; background: var(--sig);
+  }
+
+  ul.plain { padding-left: 20px; margin: 18px 0 0; }
+  ul.plain li { padding: 5px 0; line-height: 1.5; max-width: 64ch; }
+
+  footer {
+    margin-top: 72px; padding-top: 22px; border-top: 1px solid var(--rule);
+    font-size: 13px; color: var(--ink-mute);
+    font-family: "Helvetica Neue", system-ui, sans-serif;
+  }
+
+  /* ---- tabs ---- */
+  .tabs {
+    display: flex; gap: 6px; margin-top: 16px;
+    font-family: "Helvetica Neue", system-ui, sans-serif;
+  }
+  .tabs button {
+    font: inherit; font-size: 12.5px; font-weight: 700; letter-spacing: .09em;
+    text-transform: uppercase; color: var(--ink-mute);
+    background: none; border: none; cursor: pointer;
+    padding: 12px 14px; border-bottom: 2px solid transparent;
+  }
+  .tabs button:hover { color: var(--ink); }
+  .tabs button[aria-selected="true"] { color: var(--sig); border-bottom-color: var(--sig); }
+  .tabs button:focus-visible { outline: 2px solid var(--sig); outline-offset: 2px; }
+
+  /* ---- layer stepper ---- */
+  .lvls { display: flex; gap: 8px; flex-wrap: wrap; margin: 24px 0 18px;
+    font-family: "Helvetica Neue", system-ui, sans-serif; }
+  .lvls button {
+    font: inherit; font-size: 12.5px; font-weight: 600; letter-spacing: .02em;
+    padding: 8px 14px; border-radius: 3px; cursor: pointer;
+    border: 1px solid var(--rule); background: var(--surface); color: var(--ink-soft);
+  }
+  .lvls button:hover { color: var(--ink); border-color: var(--ink-mute); }
+  .lvls button[aria-pressed="true"] {
+    color: var(--sig); border-color: var(--sig);
+    box-shadow: inset 0 -2px 0 var(--sig);
+  }
+  .lvls button:focus-visible { outline: 2px solid var(--sig); outline-offset: 2px; }
+  .lvls .k { font-family: ui-monospace, Menlo, monospace; margin-right: 7px; color: var(--sig); }
+  .lvlnote { font-size: 12.5px; color: var(--ink-mute); margin: 0 0 4px;
+    font-family: "Helvetica Neue", system-ui, sans-serif; }
+
+  #layersvg g[data-lvl] { transition: opacity .3s; }
+  @media (prefers-reduced-motion: reduce) {
+    #layersvg g[data-lvl] { transition: none; }
+  }
+
+  .linfo { border-top: 2px solid var(--ink); padding-top: 16px; margin-top: 20px; }
+  .linfo h4 { color: var(--sig); margin-bottom: 6px; }
+  .linfo p.role { font-size: 14.5px; color: var(--ink-soft); margin-bottom: 6px; }
+
+  /* ---- parts catalog ---- */
+  .part { margin-top: 40px; }
+  .part > p { font-size: 15px; color: var(--ink-soft); margin-bottom: 4px; }
+  .part table { min-width: 560px; font-size: 14px; }
+  .part td { padding: 9px 12px 9px 0; }
+  tr.pick td { background: linear-gradient(90deg, var(--surface), transparent 92%); }
+  tr.pick td:first-child { color: var(--sig); font-weight: 700; }
+  tr.cmp td { color: var(--ink-mute); font-size: 13.5px; }
+  tr.cmp td:first-child { font-weight: 600; color: var(--ink-soft); }
+
+  /* ---- handoff brief ---- */
+  .brief {
+    margin-top: 64px; border: 2px solid var(--ink); border-radius: 5px;
+    padding: 26px 28px; background: var(--surface);
+  }
+  .brief h3 { margin-bottom: 4px; }
+  .brief .mono-block {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13px; line-height: 1.7; color: var(--ink-soft);
+    background: var(--sunken); border: 1px solid var(--rule-soft); border-radius: 4px;
+    padding: 16px 18px; margin-top: 14px; overflow-x: auto; white-space: pre-wrap;
+  }
+
+  ::selection { background: var(--sig); color: var(--ground); }
+</style>
+
+<div class="wrap">
+
+<header>
+  <p class="lbl">Build Spec · v0.4 · 13 Aug 2026</p>
+  <h1>Haptic Mouse</h1>
+  <p class="deck">A switchless wireless mouse, built six times. Analog travel sensing on the main buttons, click feel generated in firmware, electromagnetic scroll, and a shell fit to each owner's hand.</p>
+  <div class="specbar">
+    <div class="stat"><b>≤75 g</b><span>Cap · aiming ~60</span></div>
+    <div class="stat"><b>8K</b><span>Committed · 1 kHz first</span></div>
+    <div class="stat"><b>0</b><span>Microswitches</span></div>
+    <div class="stat"><b>×6</b><span>Units planned</span></div>
+  </div>
+</header>
+
+<nav class="tabs" role="tablist" aria-label="Views">
+  <button id="tab-spec" role="tab" aria-selected="true" aria-controls="view-spec">Spec</button>
+  <button id="tab-layers" role="tab" aria-selected="false" aria-controls="view-layers">Layers</button>
+  <button id="tab-parts" role="tab" aria-selected="false" aria-controls="view-parts">Parts</button>
+  <button id="tab-kbd" role="tab" aria-selected="false" aria-controls="view-kbd">Keyboard</button>
+  <button id="tab-radio" role="tab" aria-selected="false" aria-controls="view-radio">Radio</button>
+</nav>
+
+<div id="view-spec" role="tabpanel" aria-labelledby="tab-spec">
+
+<!-- ============================================================ -->
+<section>
+  <h2>01 · Mechanism</h2>
+  <h3>The click, and why it can beat the reference</h3>
+  <p>The reference is Logitech's G Pro X2 Superstrike (61 g, 8 K, $179). Under each of its main buttons: an inductive sensor reading sub-millimetre plate travel as a continuous value, and an actuator that fires the click sensation as a waveform. No microswitch anywhere. Actuation point becomes a setting, rapid-trigger clicking falls out for free, and the entire feel of the mouse is firmware.</p>
+
+  <figure>
+    <div class="diagram">
+      <svg viewBox="0 0 620 300" role="img" aria-label="Cross-section of a haptic button: hinged key plate, actuator bonded beneath it, sensing target on the stem, air gap, and sensor on the PCB.">
+        <defs>
+          <marker id="ar" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+            <path d="M0,0 L7,3.5 L0,7 z" fill="var(--ink-mute)"/>
+          </marker>
+        </defs>
+        <rect x="70" y="62" width="420" height="20" rx="4" fill="var(--sunken)" stroke="var(--ink-soft)" stroke-width="1.5"/>
+        <circle cx="82" cy="72" r="5" fill="var(--surface)" stroke="var(--ink-soft)" stroke-width="1.5"/>
+        <path d="M70 88 L70 96 M64 92 L76 92" stroke="var(--ink-mute)" stroke-width="1.2"/>
+        <rect x="150" y="86" width="92" height="26" rx="3" fill="var(--surface)" stroke="var(--sig)" stroke-width="2"/>
+        <path d="M164 99 h64" stroke="var(--sig)" stroke-width="2"/>
+        <path d="M222 93 l8 6 l-8 6 M170 93 l-8 6 l8 6" stroke="var(--sig)" stroke-width="2" fill="none"/>
+        <rect x="378" y="82" width="34" height="42" fill="var(--sunken)" stroke="var(--ink-soft)" stroke-width="1.5"/>
+        <rect x="380" y="124" width="30" height="10" rx="2" fill="var(--ink-soft)"/>
+        <path d="M462 134 L462 176" stroke="var(--ink-mute)" stroke-width="1" marker-end="url(#ar)"/>
+        <path d="M462 176 L462 134" stroke="var(--ink-mute)" stroke-width="1" marker-end="url(#ar)"/>
+        <text x="470" y="159" font-family="ui-monospace, Menlo, monospace" font-size="12" fill="var(--ink-mute)">travel ≈ 0.3 mm</text>
+        <path d="M377 140 Q371 156 377 172 M395 140 Q389 156 395 172 M413 140 Q407 156 413 172"
+              stroke="var(--sig)" stroke-width="1.4" fill="none" stroke-dasharray="3 4" opacity=".75"/>
+        <rect x="366" y="168" width="58" height="10" rx="2" fill="var(--sig)" opacity=".3"/>
+        <rect x="366" y="168" width="58" height="10" rx="2" fill="none" stroke="var(--sig)" stroke-width="1.6"/>
+        <rect x="110" y="178" width="400" height="22" fill="var(--sunken)" stroke="var(--ink-soft)" stroke-width="1.5"/>
+        <path d="M110 200 h400" stroke="var(--ink-soft)" stroke-width="3"/>
+        <g font-family="'Helvetica Neue', system-ui, sans-serif" font-size="12.5" fill="var(--ink)">
+          <path d="M280 60 L280 44 L300 44" stroke="var(--rule)" stroke-width="1" fill="none"/>
+          <text x="306" y="48">Key plate — stiff, hinged, polymer at the tip</text>
+          <path d="M196 114 L196 232 L216 232" stroke="var(--rule)" stroke-width="1" fill="none"/>
+          <text x="222" y="236" fill="var(--sig)" font-weight="600">Actuator</text>
+          <text x="286" y="236">— bonded to the plate, fires the click waveform</text>
+          <path d="M395 134 L340 134 L340 118 L320 118" stroke="var(--rule)" stroke-width="1" fill="none"/>
+          <text x="314" y="122" text-anchor="end">Target: magnet or steel tab</text>
+          <path d="M395 202 L395 262 L415 262" stroke="var(--rule)" stroke-width="1" fill="none"/>
+          <text x="421" y="266" fill="var(--sig)" font-weight="600">Sensor</text>
+          <text x="470" y="266">— Hall IC or PCB coil, reads travel as analog</text>
+          <path d="M150 200 L150 232 L130 232" stroke="var(--rule)" stroke-width="1" fill="none"/>
+          <text x="124" y="236" text-anchor="end">Mainboard</text>
+        </g>
+      </svg>
+    </div>
+    <figcaption>One button, both bench forks drawn as one: the sensing element under the stem (Hall IC or inductive coil) and the actuator bonded under the plate. Firmware watches the analog travel value cross a threshold, reports the click, and fires the waveform — press and release each get their own.</figcaption>
+  </figure>
+
+  <h4>What we know about how it has to feel</h4>
+  <ul class="feat">
+    <li><strong>The fingertip's vibration band is ~50–500 Hz, peaking near 250 Hz</strong> (Pacinian corpuscles). Kilohertz content is inaudible to touch — sharpness is not treble.</li>
+    <li><strong>Sharpness is attack time.</strong> An LRA is a resonant mass-spring: it must ring up to amplitude and ring back down, and that rise/fall is the "slight roundness" every Superstrike reviewer reports. A non-resonant actuator with a &lt;2 ms rise attacks like a real leaf-spring snap.</li>
+    <li><strong>The release is half the illusion.</strong> A real switch produces a second, lighter event on the way back up. Nearly every haptic implementation skips it; ours fires a distinct release waveform.</li>
+    <li><strong>The press needs a rigid backstop.</strong> Force building into something immovable is what sells the illusion (the trackpad trick). Any flex in the plate or shell reads as mush — the CNC'd flexure with a hard stop is load-bearing for feel, not just structure.</li>
+    <li><strong>Sound fuses with feel.</strong> Audiotactile integration is documented right in the 200–400 Hz band. The acoustic tick is set by plate/shell resonance and is a design variable, not an accident — target: quiet but defined.</li>
+  </ul>
+</section>
+
+<!-- ============================================================ -->
+<section>
+  <h2>02 · Stack</h2>
+  <h3>Locked architecture</h3>
+  <div class="tw">
+    <table>
+      <thead><tr><th style="width:24%">Block</th><th style="width:29%">Part</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>MCU / radio</td>
+          <td class="p">nRF54L15</td>
+          <td>128 MHz M33, ~200 µs per ESB packet, headroom past 1 kHz so the board never caps the project. Zephyr / nRF Connect SDK. Prototype on the DK.</td>
+        </tr>
+        <tr>
+          <td>Tracking</td>
+          <td class="p">PAW3950 module</td>
+          <td><strong>Selected 8/13:</strong> 0.7 mm lift-off, 750 IPS, native 8K — the sensor half of the 8K commitment. Bought <strong>as a module with its matched lens</strong> (lens Z-height is the #1 DIY tracking failure). Fallback if unsourceable: PAW3395.</td>
+        </tr>
+        <tr>
+          <td>Click sensing</td>
+          <td class="p">Hall (TMAG5273) <em>or</em><br>inductive (LDC1101 ×2)</td>
+          <td>Bench fork — see §03. LDC2114 disqualified 8/13: 160 SPS max scan rate can't feed a gaming click. LDC1101 (~180 kSPS) is the honest inductive contender.</td>
+        </tr>
+        <tr>
+          <td>Click actuator</td>
+          <td class="p">Piezo (BOS1901-driven)<br><em>vs</em> LRA (DRV2605L)</td>
+          <td>Bench fork — see §03. Piezo is favored on physics; LRA is the proven fallback; a DIY voice coil is the wildcard.</td>
+        </tr>
+        <tr>
+          <td>Scroll</td>
+          <td class="p">EM detent module</td>
+          <td>Toothed steel rim + two coils: current direction toggles ratchet/freespin, no clutch. Brass-rim flywheel, magnetic encoder. §04.</td>
+        </tr>
+        <tr>
+          <td>Power</td>
+          <td class="p">300–400 mAh LiPo<br>BQ25100 · MAX17048<br>TPS61099 boost</td>
+          <td>Charger with load-share, fuel gauge for honest battery %, boost rail for actuator drive. Cost-trim candidates if a build needs to get cheaper, but they stay for v1.</td>
+        </tr>
+        <tr>
+          <td>Receiver</td>
+          <td class="p">nRF52840 Dongle → HS-USB dongle</td>
+          <td>~$10 stock dongle at 1 kHz for v1. <strong>8K is committed</strong> (staged: 1 kHz ship → 4 kHz on the High-Speed dongle → 8 kHz streaming protocol) — the ceiling is USB Full-Speed's 1 ms floor, so the upgrade is a receiver build, not a new mouse. Full plan on the Radio tab.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="call">
+    <h4>The one EMI problem this build owns</h4>
+    <p>Piezo drive means switching 60–190 V edges centimetres from a 2.4 GHz antenna. Distance, a dedicated ground pour under the drivers, and (if needed) a shield can are the plan — and it's why the layout in §05 puts the HV corner as far from the antenna as the shell allows. This is a real layout problem, not a cost problem; flag it before the first board spin.</p>
+  </div>
+
+  <div class="call">
+    <h4>If the LRA wins the bench-off</h4>
+    <p>DRV2605L has a <strong>fixed I²C address (0x5A)</strong> — two of them can't share a bus. One per TWIM instance, no mux in the click path.</p>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section>
+  <h2>03 · Bench forks</h2>
+  <h3>Two decisions the P1 rig makes for us</h3>
+  <p>Both are feel judgments, so both get settled by blind pressing on identical plate geometry — plus a measured number (accelerometer on the plate for attack time, GPIO-to-scope for latency) so the winner is defensible.</p>
+
+  <div class="fork">
+    <div class="opt">
+      <span class="tag">Fork A — travel sensing</span>
+      <h4>Hall vs inductive</h4>
+      <p><strong>Hall</strong> (TMAG5273 or ratiometric analog + magnet on the stem): read straight into the nRF's ADC, sample rate limited only by the ADC, and the driver + calibration code transfers directly to the keyboard project later. Needs temperature compensation; puts magnets near the battery.</p>
+      <p><strong>Inductive</strong> (LDC1101 ×2 + PCB coil + steel tab): the coil is free copper, no magnets, robust to stray fields — the reference implementation. <em>Revised 8/13:</em> the LDC2114 originally slated here was disqualified — its 160 SPS max scan rate (6.25 ms/sample) can't feed a 1.5 ms click budget. The LDC1101 samples up to ~180 kSPS but is single-channel, raw-output silicon: one per button, and baseline tracking moves into our firmware.</p>
+      <ul class="pc">
+        <li class="pro"><span>+</span><span>Tie-breaker: if they feel the same, Hall wins — it unifies both projects</span></li>
+      </ul>
+    </div>
+
+    <div class="opt">
+      <span class="tag">Fork B — actuator</span>
+      <h4>Piezo vs LRA (vs voice coil)</h4>
+      <p><strong>Piezo</strong>: non-resonant, &lt;2 ms to peak, full 1–400 Hz haptic band with independent frequency/amplitude, and 4–10× <em>less</em> power than an LRA (capacitive load + energy-recovery drivers). Directly attacks the "roundness" complaint. Cost penalty is qty-1 economics we mostly dodge; the HV/EMI callout in §02 is the real price.</p>
+      <p><strong>LRA</strong> (wideband, ~150–175 Hz, 8×3 mm): cheap, proven, closed-loop drive with auto-resonance and braking. The fallback that definitely works.</p>
+      <p><strong>Voice coil</strong> (DIY: magnet wire + N35 magnet + CNC flexure): non-resonant like piezo, low-voltage like LRA, buildable in-house for pocket change. Worth one weekend on the rig.</p>
+    </div>
+  </div>
+
+  <div class="verdict">
+    <h4>How it runs</h4>
+    <p>One printed jig, one plate geometry, every sensor and actuator candidate mounted interchangeably. Press blind, log attack time and latency, pick. Everything else in this document is solved engineering — <strong>this rig is the project.</strong></p>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section>
+  <h2>04 · Scroll</h2>
+  <h3>Electromagnetic detents, software coast</h3>
+  <p>No spring arm, no clutch. A toothed steel rim rides between two coils: drive the coils the <strong>same</strong> direction and flux routes through the teeth — the wheel gets pulled into notch positions (real restoring torque, not friction). Drive them <strong>opposed</strong> and the fields cancel at the gap — the wheel spins free. Mode toggle is a current flip: instant, silent, nothing moves. Full walkthrough with diagrams lives in the anatomy reference, §03.</p>
+  <ul class="feat">
+    <li><strong>Auto-shift:</strong> firmware already knows wheel velocity from the encoder — flick hard and it drops into freespin, slow down and the ratchet re-engages. Or bind it to a button. Or both.</li>
+    <li><strong>Braking:</strong> energizing the coils against rotation makes coast time a software curve, not a bearing property. One-second or four-second spin-downs, per profile.</li>
+    <li><strong>Software detents:</strong> count, strength, and asymmetry per application — including detents snapped to content (one per video frame, one per spreadsheet row) and force endstops at the bottom of a page.</li>
+    <li><strong>Flywheel:</strong> light printed hub, dense brass ring at the rim (m·r² — put the mass where the radius is). CNC lathe job. 5–8 g of the weight budget, worth every gram.</li>
+    <li><strong>Encoder:</strong> magnetic (diametral magnet on the shaft end + on-axis encoder IC). Contactless — a wiper encoder would wear out and miss counts at spinner RPM. Output capped in firmware so freespin doesn't firehose the host.</li>
+    <li><strong>Middle click</strong> uses the same Hall-plus-haptic scheme as the mains — the zero-microswitch rule holds everywhere.</li>
+  </ul>
+</section>
+
+<!-- ============================================================ -->
+<section>
+  <h2>05 · Internals</h2>
+  <h3>Layout — what goes where, and why</h3>
+  <p>Rough placement, not final routing — but every position below is load-bearing for feel, RF, or balance, so the shape iterations in P4 pack around this arrangement rather than reflowing it.</p>
+
+  <figure>
+    <div class="diagram">
+      <svg viewBox="0 0 880 640" role="img" aria-label="Top-down internal layout of the mouse. Front at top: USB-C and charger at the nose, antenna keep-out zone front-right, MCU behind them. Piezo patches and Hall magnets under each button plate. Electromagnetic scroll module and flywheel on the centerline, PAW3950 sensor at the grip centroid, battery on the midline behind it, high-voltage piezo drivers mid-left far from the antenna, side-button daughterboard on the left wall, SWD pads at the board's rear, and the rear of the shell kept empty.">
+        <defs>
+          <pattern id="hS" width="8" height="8" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+            <line x1="0" y1="0" x2="0" y2="8" stroke="var(--sig)" stroke-width="1.3" opacity=".55"/>
+          </pattern>
+          <pattern id="hW" width="8" height="8" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+            <line x1="0" y1="0" x2="0" y2="8" stroke="var(--warn)" stroke-width="1.3" opacity=".55"/>
+          </pattern>
+        </defs>
+
+        <!-- shell outline -->
+        <path d="M430,34 C335,34 282,98 272,192 C262,292 280,402 318,492 C352,570 508,570 542,492 C580,402 598,292 588,192 C578,98 525,34 430,34 Z"
+              fill="var(--surface)" stroke="var(--ink)" stroke-width="2.4"/>
+        <text x="430" y="596" text-anchor="middle" font-family="'Helvetica Neue', system-ui, sans-serif" font-size="11.5" fill="var(--ink-mute)">FRONT AT TOP · plan view</text>
+
+        <!-- mainboard -->
+        <rect x="296" y="56" width="268" height="412" rx="26" fill="var(--sunken)" opacity=".55"/>
+        <rect x="296" y="56" width="268" height="412" rx="26" fill="none" stroke="var(--rule)" stroke-width="1.4"/>
+
+        <!-- button plates (above, dashed) -->
+        <rect x="298" y="64" width="110" height="150" rx="16" fill="none" stroke="var(--ink-mute)" stroke-width="1.5" stroke-dasharray="7 5"/>
+        <rect x="452" y="64" width="110" height="150" rx="16" fill="none" stroke="var(--ink-mute)" stroke-width="1.5" stroke-dasharray="7 5"/>
+
+        <!-- USB-C + charger -->
+        <rect x="402" y="30" width="56" height="20" rx="8" fill="var(--sunken)" stroke="var(--ink)" stroke-width="1.8"/>
+        <rect x="406" y="58" width="22" height="14" rx="2" fill="var(--surface)" stroke="var(--ink-soft)" stroke-width="1.4"/>
+
+        <!-- antenna keep-out -->
+        <polygon points="470,50 545,84 528,132 462,96" fill="url(#hS)" stroke="var(--sig)" stroke-width="1.6"/>
+        <path d="M478,78 h12 v12 h12 v-12 h12 v12" fill="none" stroke="var(--sig)" stroke-width="2"/>
+        <path d="M468,128 L478,104" stroke="var(--sig)" stroke-width="1.6"/>
+
+        <!-- MCU -->
+        <rect x="392" y="128" width="76" height="48" rx="4" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.8"/>
+        <text x="430" y="156" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="11.5" font-weight="700" fill="var(--ink)">nRF54L15</text>
+
+        <!-- piezo patches + magnets -->
+        <rect x="328" y="158" width="44" height="24" rx="3" fill="var(--sig)" opacity=".25"/>
+        <rect x="328" y="158" width="44" height="24" rx="3" fill="none" stroke="var(--sig)" stroke-width="1.6"/>
+        <rect x="488" y="158" width="44" height="24" rx="3" fill="var(--sig)" opacity=".25"/>
+        <rect x="488" y="158" width="44" height="24" rx="3" fill="none" stroke="var(--sig)" stroke-width="1.6"/>
+        <circle cx="352" cy="208" r="5" fill="var(--ink)"/>
+        <circle cx="508" cy="208" r="5" fill="var(--ink)"/>
+
+        <!-- scroll module -->
+        <rect x="412" y="178" width="36" height="92" rx="9" fill="var(--sunken)" stroke="var(--ink)" stroke-width="1.8"/>
+        <path d="M430,184 v80" stroke="var(--ink-soft)" stroke-width="1.4" stroke-dasharray="4 3"/>
+        <rect x="390" y="198" width="18" height="34" rx="3" fill="var(--sig)" opacity=".25"/>
+        <rect x="390" y="198" width="18" height="34" rx="3" fill="none" stroke="var(--sig)" stroke-width="1.5"/>
+        <rect x="452" y="198" width="18" height="34" rx="3" fill="var(--sig)" opacity=".25"/>
+        <rect x="452" y="198" width="18" height="34" rx="3" fill="none" stroke="var(--sig)" stroke-width="1.5"/>
+        <circle cx="400" cy="262" r="6" fill="none" stroke="var(--ink)" stroke-width="1.8"/>
+        <path d="M406,262 H412" stroke="var(--ink)" stroke-width="1.6"/>
+        <rect x="412" y="276" width="36" height="12" rx="2" fill="var(--surface)" stroke="var(--ink-soft)" stroke-width="1.4"/>
+
+        <!-- HV zone -->
+        <rect x="296" y="292" width="68" height="48" rx="5" fill="url(#hW)" stroke="var(--warn)" stroke-width="1.8"/>
+
+        <!-- sensor -->
+        <rect x="410" y="312" width="40" height="40" rx="4" fill="var(--surface)" stroke="var(--ink)" stroke-width="2"/>
+        <path d="M414,332 h32 M430,316 v32" stroke="var(--ink-soft)" stroke-width="1.3"/>
+        <circle cx="430" cy="332" r="4.5" fill="none" stroke="var(--ink)" stroke-width="1.6"/>
+
+        <!-- battery + gauge -->
+        <rect x="368" y="372" width="124" height="84" rx="6" fill="var(--sunken)" stroke="var(--ink)" stroke-width="1.8"/>
+        <path d="M378,384 h30 M378,394 h30" stroke="var(--ink-mute)" stroke-width="1.6"/>
+        <rect x="346" y="380" width="16" height="16" rx="2" fill="var(--surface)" stroke="var(--ink-soft)" stroke-width="1.4"/>
+
+        <!-- side daughterboard -->
+        <rect x="282" y="240" width="14" height="104" rx="3" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.6"/>
+        <path d="M296,290 h40" stroke="var(--ink-soft)" stroke-width="2" stroke-dasharray="5 3"/>
+
+        <!-- SWD -->
+        <circle cx="412" cy="444" r="3.5" fill="var(--ink-soft)"/>
+        <circle cx="430" cy="444" r="3.5" fill="var(--ink-soft)"/>
+        <circle cx="448" cy="444" r="3.5" fill="var(--ink-soft)"/>
+
+        <!-- rear note -->
+        <text x="430" y="510" text-anchor="middle" font-family="'Helvetica Neue', system-ui, sans-serif" font-size="11.5" font-style="italic" fill="var(--ink-mute)">aft of the board: shell only — no mass under the palm</text>
+
+        <!-- ===== labels: right ===== -->
+        <g font-family="'Helvetica Neue', system-ui, sans-serif" font-size="12" fill="var(--ink)">
+          <path d="M458,42 L634,48" stroke="var(--rule)" stroke-width="1" fill="none"/>
+          <text x="640" y="52">USB-C + charge IC</text>
+
+          <path d="M543,100 L634,96" stroke="var(--rule)" stroke-width="1" fill="none"/>
+          <text x="640" y="100" fill="var(--sig)" font-weight="600">Antenna keep-out — no copper, no metal</text>
+          <text x="640" y="116" fill="var(--ink-mute)" font-size="11">plates are polymer at the tips; flexures stay aft</text>
+
+          <path d="M532,170 L634,168" stroke="var(--rule)" stroke-width="1" fill="none"/>
+          <text x="640" y="172">Piezo patch, bonded under the plate</text>
+
+          <path d="M513,208 L634,210" stroke="var(--rule)" stroke-width="1" fill="none"/>
+          <text x="640" y="214">Hall magnet on the plate stem</text>
+
+          <path d="M470,216 L634,246" stroke="var(--rule)" stroke-width="1" fill="none"/>
+          <text x="640" y="250">Detent coils flank the steel rim</text>
+
+          <path d="M450,332 L634,332" stroke="var(--rule)" stroke-width="1" fill="none"/>
+          <text x="640" y="336">PAW3950 — under the grip centroid</text>
+
+          <path d="M492,412 L634,408" stroke="var(--rule)" stroke-width="1" fill="none"/>
+          <text x="640" y="412">Battery — midline, aft of the sensor</text>
+          <text x="640" y="428" fill="var(--ink-mute)" font-size="11">fuel gauge at its edge</text>
+
+          <path d="M452,444 L634,470" stroke="var(--rule)" stroke-width="1" fill="none"/>
+          <text x="640" y="474">SWD pads at the board's rear</text>
+        </g>
+
+        <!-- ===== labels: left ===== -->
+        <g font-family="'Helvetica Neue', system-ui, sans-serif" font-size="12" fill="var(--ink)" text-anchor="end">
+          <path d="M330,80 L246,80" stroke="var(--rule)" stroke-width="1" fill="none"/>
+          <text x="240" y="84">Button plates above (dashed)</text>
+
+          <path d="M298,118 L246,116" stroke="var(--rule)" stroke-width="1" fill="none"/>
+          <text x="240" y="120" fill="var(--ink-mute)" font-size="11">mainboard outline</text>
+
+          <path d="M392,150 L246,144" stroke="var(--rule)" stroke-width="1" fill="none"/>
+          <text x="240" y="148">nRF54L15 — radio toward the nose</text>
+
+          <path d="M328,170 L246,172" stroke="var(--rule)" stroke-width="1" fill="none"/>
+          <text x="240" y="176">Left piezo patch</text>
+
+          <path d="M412,224 L246,226" stroke="var(--rule)" stroke-width="1" fill="none"/>
+          <text x="240" y="230">Wheel slot — brass-rim flywheel</text>
+
+          <path d="M396,264 L246,268" stroke="var(--rule)" stroke-width="1" fill="none"/>
+          <text x="240" y="272">Magnetic encoder · middle click below</text>
+
+          <path d="M282,294 L246,296" stroke="var(--rule)" stroke-width="1" fill="none"/>
+          <text x="240" y="300">Side-button daughterboard, FFC</text>
+
+          <path d="M296,318 L246,320" stroke="var(--rule)" stroke-width="1" fill="none"/>
+          <text x="240" y="326" fill="var(--warn)" font-weight="600">HV zone — BOS1901 ×2 + boost</text>
+          <text x="240" y="342" fill="var(--ink-mute)" font-size="11">farthest corner from the antenna</text>
+        </g>
+      </svg>
+    </div>
+    <figcaption>Plan view, front at top. Teal hatching is the RF keep-out — treated as a component. Amber hatching is the high-voltage piezo corner, placed diagonal-opposite the antenna. Dashed outlines sit above the board plane. The rear third of the shell deliberately holds nothing.</figcaption>
+  </figure>
+
+  <figure>
+    <div class="diagram">
+      <svg viewBox="0 0 760 320" role="img" aria-label="Side section of the vertical stack: desk, PTFE skates, bottom shell as the datum, standoffs, mainboard, sensor and lens reaching down through the shell aperture to 2.4 millimetres above the desk, battery on the board, brass-rim flywheel protruding through the top shell, and a piezo patch bonded under the button plate.">
+        <defs>
+          <pattern id="hD" width="7" height="7" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+            <line x1="0" y1="0" x2="0" y2="7" stroke="var(--ink-mute)" stroke-width="1.2" opacity=".6"/>
+          </pattern>
+          <marker id="ard" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
+            <path d="M0,0 L6,3 L0,6 z" fill="var(--sig)"/>
+          </marker>
+        </defs>
+
+        <!-- desk -->
+        <line x1="60" y1="282" x2="700" y2="282" stroke="var(--ink)" stroke-width="2"/>
+        <rect x="60" y="283" width="640" height="10" fill="url(#hD)"/>
+
+        <!-- skates -->
+        <rect x="90" y="270" width="120" height="12" rx="2" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.5"/>
+        <rect x="560" y="270" width="90" height="12" rx="2" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.5"/>
+
+        <!-- bottom shell (datum), aperture cut 350-410 -->
+        <rect x="80" y="242" width="270" height="28" fill="var(--sunken)" stroke="var(--sig)" stroke-width="2.2"/>
+        <rect x="410" y="242" width="270" height="28" fill="var(--sunken)" stroke="var(--sig)" stroke-width="2.2"/>
+
+        <!-- standoffs -->
+        <rect x="140" y="222" width="12" height="20" fill="var(--surface)" stroke="var(--ink-soft)" stroke-width="1.3"/>
+        <rect x="600" y="222" width="12" height="20" fill="var(--surface)" stroke="var(--ink-soft)" stroke-width="1.3"/>
+
+        <!-- PCB -->
+        <rect x="120" y="204" width="520" height="18" fill="var(--sig)" opacity=".3"/>
+        <rect x="120" y="204" width="520" height="18" fill="none" stroke="var(--ink)" stroke-width="1.6"/>
+
+        <!-- sensor + lens -->
+        <rect x="352" y="222" width="56" height="22" fill="var(--ink)"/>
+        <polygon points="360,244 400,244 393,266 367,266" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.6"/>
+        <!-- dimension: lens face 266 → desk 282 -->
+        <path d="M393,266 H428 M410,282 H428" stroke="var(--sig)" stroke-width="1"/>
+        <path d="M424,268 V280" stroke="var(--sig)" stroke-width="1.4" marker-start="url(#ard)" marker-end="url(#ard)"/>
+        <text x="436" y="266" font-family="ui-monospace, Menlo, monospace" font-size="11.5" font-weight="700" fill="var(--sig)">2.4 ± 0.1 mm</text>
+
+        <!-- battery -->
+        <rect x="170" y="152" width="180" height="52" rx="4" fill="var(--sunken)" stroke="var(--ink)" stroke-width="1.6"/>
+        <text x="260" y="182" text-anchor="middle" font-family="'Helvetica Neue', system-ui, sans-serif" font-size="12" fill="var(--ink)">battery</text>
+
+        <!-- flywheel -->
+        <circle cx="545" cy="160" r="78" fill="none" stroke="var(--warn)" stroke-width="5"/>
+        <circle cx="545" cy="160" r="58" fill="none" stroke="var(--ink-soft)" stroke-width="1.4"/>
+        <circle cx="545" cy="160" r="4" fill="var(--ink)"/>
+
+        <!-- top shell, gap for wheel -->
+        <path d="M70,240 C100,90 300,55 470,60" fill="none" stroke="var(--ink)" stroke-width="2.4"/>
+        <path d="M618,72 C662,98 690,155 692,240" fill="none" stroke="var(--ink)" stroke-width="2.4"/>
+
+        <!-- piezo under plate + press arrow -->
+        <rect x="238" y="76" width="60" height="12" rx="2" fill="var(--sig)" opacity=".3"/>
+        <rect x="238" y="76" width="60" height="12" rx="2" fill="none" stroke="var(--sig)" stroke-width="1.5"/>
+        <path d="M268,28 V58" stroke="var(--ink)" stroke-width="2" marker-end="url(#ard)"/>
+        <text x="268" y="20" text-anchor="middle" font-family="'Helvetica Neue', system-ui, sans-serif" font-size="11.5" fill="var(--ink)">press</text>
+
+        <!-- labels -->
+        <g font-family="'Helvetica Neue', system-ui, sans-serif" font-size="11.5" fill="var(--ink)">
+          <text x="96" y="306" fill="var(--ink-mute)">PTFE skates</text>
+          <text x="92" y="261" fill="var(--sig)" font-weight="700" font-size="12">bottom shell — the datum</text>
+          <text x="130" y="199" font-size="12">mainboard</text>
+          <path d="M156,222 L120,214 " stroke="none"/>
+          <text x="300" y="308" text-anchor="end">sensor + lens through the aperture</text>
+          <path d="M367,262 L304,300" stroke="var(--rule)" stroke-width="1" fill="none"/>
+          <text x="620" y="308" text-anchor="middle">brass-rim flywheel</text>
+          <path d="M578,225 L616,296" stroke="var(--rule)" stroke-width="1" fill="none"/>
+          <text x="700" y="56" text-anchor="end">top shell / skin</text>
+          <path d="M650,86 L696,60" stroke="var(--rule)" stroke-width="1" fill="none"/>
+          <text x="120" y="56" text-anchor="start">piezo under the plate</text>
+          <path d="M240,82 L128,60" stroke="var(--rule)" stroke-width="1" fill="none"/>
+        </g>
+      </svg>
+    </div>
+    <figcaption>Side section, front at right — vertical dimensions exaggerated, not to scale. Every height chains off the bottom shell: the sensor's 2.4 mm lens-to-desk gap pins the PCB height, the PCB pins the battery, the flywheel diameter pins the roof. Change any link and the chain re-solves — which is why chassis and internals live in one parametric CAD model.</figcaption>
+  </figure>
+
+  <h4>Placement rationale</h4>
+  <ul class="why">
+    <li><b>Sensor · grip centroid</b><span>The sensor sets the cursor's rotation center — the biggest single feel decision. Frozen first; everything else packs around it.</span></li>
+    <li><b>MCU · front-center</b><span>The antenna feed is the fussiest trace on the board, so the radio side faces the nose and stays short. The sensor SPI can afford to run aft.</span></li>
+    <li><b>Antenna · the nose</b><span>Farthest point from the palm (mostly water) and the battery (metal). The keep-out is a component: no copper, no metal, and plate hardware stays aft of it.</span></li>
+    <li><b>HV drivers · mid-left</b><span>Diagonal-opposite the antenna, on their own ground pour. Distance is the first EMI defense; a shield can is the fallback.</span></li>
+    <li><b>Battery · midline, aft of sensor</b><span>Mass at the grip keeps balance under the fingers and rotational inertia low; midline avoids a yaw bias. Also clear of the RF zone and shell flex.</span></li>
+    <li><b>Actuators · on the plates</b><span>Bonded to each plate's underside, soft-mounted to the cradle — the click must come from the plate, not the chassis. Isolation is what makes the illusion local.</span></li>
+    <li><b>Scroll · dead center</b><span>The heaviest rotating part sits on the centerline so flicks don't feel handed. Coils flank the rim; the encoder reads the shaft end.</span></li>
+    <li><b>Side buttons · FFC daughterboard</b><span>Wall geometry changes with every skin. A flex link means re-shaping a shell never touches the mainboard.</span></li>
+    <li><b>Rear · empty</b><span>The hump is pure shell. No mass under the palm heel — balance stays where the hand actually works.</span></li>
+    <li><b>USB-C · nose / SWD · rear</b><span>Cable strain lands on the board's strongest edge; debug pads stay reachable with the shell on.</span></li>
+  </ul>
+</section>
+
+<!-- ============================================================ -->
+<section>
+  <h2>06 · Budget</h2>
+  <h3>Where the grams go</h3>
+  <div class="tw">
+    <table>
+      <thead><tr><th>Item</th><th class="n" style="text-align:right">Est.</th></tr></thead>
+      <tbody>
+        <tr><td>Chassis (rigid, internal)</td><td class="n">14 g</td></tr>
+        <tr><td>Skin (per-owner outer shell)</td><td class="n">10 g</td></tr>
+        <tr><td>Mainboard, populated</td><td class="n">10 g</td></tr>
+        <tr><td>Scroll module — flywheel, coils, bearings</td><td class="n">9 g</td></tr>
+        <tr><td>Battery, 300 mAh</td><td class="n">6 g</td></tr>
+        <tr><td>Piezo pair</td><td class="n">3 g</td></tr>
+        <tr><td>Sensor module</td><td class="n">1 g</td></tr>
+        <tr><td>Daughterboard + FFC</td><td class="n">1 g</td></tr>
+        <tr><td>Feet, screws, plates, misc</td><td class="n">4 g</td></tr>
+        <tr class="tot"><td>Projected</td><td class="n">≈58 g</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>The flywheel is the one luxury in the table — and it's the scroll feel, so it stays. ~17 g of margin under the cap; don't spend it until all six track, click, and connect.</p>
+</section>
+
+<!-- ============================================================ -->
+<section>
+  <h2>07 · Cost</h2>
+  <h3>Six units, optimized where it doesn't hurt</h3>
+  <div class="tw">
+    <table>
+      <thead><tr><th>Block</th><th class="n" style="text-align:right">Per unit @ qty 6</th></tr></thead>
+      <tbody>
+        <tr><td>PAW3950 module</td><td class="n">$30</td></tr>
+        <tr><td>Actuators + drivers (piezo path; LRA path ~$12)</td><td class="n">$16–24</td></tr>
+        <tr><td>Power set — cell, charger, gauge, boost</td><td class="n">$10</td></tr>
+        <tr><td>Scroll — encoder IC, bearings, magnet wire, magnets</td><td class="n">$10</td></tr>
+        <tr><td>nRF54L15</td><td class="n">$4</td></tr>
+        <tr><td>Click sensing (Hall pair)</td><td class="n">$3</td></tr>
+        <tr><td>Passives, USB-C, connectors, ESD</td><td class="n">$6</td></tr>
+        <tr><td>PCB share (panelized order)</td><td class="n">$6</td></tr>
+        <tr><td>Feet (cut from sheet), filament, hardware</td><td class="n">$7</td></tr>
+        <tr class="tot"><td>Per finished mouse (+ $10 dongle)</td><td class="n">≈$90–115</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Program total including prototyping, eval boards, board spins, and mistakes: still <strong>$800–2,000</strong>. The unit BOM is not where the money goes — the bench is.</p>
+  <h4>Levers already identified</h4>
+  <ul class="plain">
+    <li><strong>TI samples via myTI</strong> — the engineer registers with the .edu address; LDC1101, TMAG5273, DRV2605L, TPS61099, BQ25100 are all TI. Samples cover the bench and first spin; the six production sets get bought properly.</li>
+    <li><strong>LCSC over DigiKey</strong> for everything it stocks — routinely 30–60% cheaper, and it's JLCPCB's own inventory.</li>
+    <li><strong>Panelize every PCB order</strong> — bench boards, breakouts, and test coupons ride along with each spin. Fewer orders beats cheaper parts.</li>
+    <li><strong>DIY the mechanical</strong> — feet from a PTFE sheet, hand-wound detent coils, printed jigs; flywheel, flexures, and trigger plates from CNC offcuts.</li>
+    <li><strong>Student unlocks</strong> — university lab access (the spectrum analyzer matters for the HV/EMI problem), possible capstone budget and advisor, JLCPCB/PCBWay sponsorship if the hardware goes open-source.</li>
+  </ul>
+</section>
+
+<!-- ============================================================ -->
+<section>
+  <h2>08 · Shells</h2>
+  <h3>One chassis, six skins</h3>
+  <p>All the locked geometry — board mounts, sensor aperture, scroll cradle, plate flexures — lives in a rigid internal <strong>chassis</strong>, identical across all six units. The outer <strong>skin</strong> is a separate printed part per owner. Re-shaping a skin never touches electronics, and six people get six fits from one mainboard design.</p>
+  <ul class="feat">
+    <li><strong>Capture the grip, not the hand:</strong> each owner squeezes a clay or foam blank in their natural grip; iPhone LiDAR scans it; the scan drives that skin's parameters. An open hand is the wrong shape.</li>
+    <li><strong>Skins are code:</strong> CadQuery, parameterized on the component envelope plus hand measurements — a shape change is a re-run, not a remodel.</li>
+    <li><strong>Iterate in PLA, finish in ASA / PA-CF:</strong> grip-feel test shells cost an hour each; five or six rounds per person is normal.</li>
+    <li><strong>Texture in the print:</strong> fuzzy-skin on grip zones for test shells; modeled texture (rounded bumps ≥0.5 mm, sweat channels) for finals. Reliefs cut shallow-first — a scallop that suggests a finger position forgives; a groove that mandates one punishes. Cut reliefs into the solid <em>before</em> hollowing so wall thickness survives.</li>
+    <li><strong>Undercut grips are legal:</strong> no mold to eject from — a pinky shelf the finger hooks under is printable and impossible commercially.</li>
+  </ul>
+</section>
+
+<!-- ============================================================ -->
+<section>
+  <h2>09 · Sequence</h2>
+  <h3>Phases</h3>
+  <ol class="phases">
+    <li>
+      <span class="num">P0</span>
+      <div><h4>Tracking, wired</h4><p>nRF54L15-DK + PAW3950 module as a USB HID mouse over a cable. Proves the sensor driver and report path.</p></div>
+    </li>
+    <li class="key">
+      <span class="num">P1</span>
+      <div><h4>Bench rig — both forks</h4><p>Runs in parallel with P0. One jig, one plate geometry; Hall and inductive sensing side by side, piezo vs LRA vs voice coil interchangeable. Blind press-off plus measured attack and latency. This rig decides whether the mouse is good.</p></div>
+    </li>
+    <li>
+      <span class="num">P2</span>
+      <div><h4>The link</h4><p>ESB mouse ↔ dongle at 1 kHz, plus the latency rig (GPIO on click-detect into a scope) so every later change is measured, not argued.</p></div>
+    </li>
+    <li>
+      <span class="num">P3</span>
+      <div><h4>Mainboard</h4><p>Custom PCB per §05, panelized with the scroll test board and breakouts. The engineer's phase; the HV corner gets the spectrum-analyzer check here.</p></div>
+    </li>
+    <li>
+      <span class="num">P4</span>
+      <div><h4>Chassis + six skins</h4><p>Hand captures for all six owners, parametric skins, print iterations until each grip is right.</p></div>
+    </li>
+    <li>
+      <span class="num">P5</span>
+      <div><h4>Config software</h4><p>WebHID in the browser — DPI, lift-off, actuation curves, per-button press/release waveforms, scroll detent profiles, coast curves. No installer, no account.</p></div>
+    </li>
+    <li>
+      <span class="num">P6</span>
+      <div><h4>Frontier — 8K (committed)</h4><p>Staged: 4 kHz first on the new High-Speed-USB receiver (existing ACK protocol still fits a 250 µs slot), then 8 kHz via the streaming protocol (no per-packet ACKs, redundant deltas). Mouse hardware already qualifies — nRF54L15 + PAW3950 were chosen for this. Plus coil-brake tuning, content-aware detents, and whatever the rig taught us. Battery reality: 8K is a per-profile mode, not the default.</p></div>
+    </li>
+  </ol>
+</section>
+
+<!-- ============================================================ -->
+<section>
+  <h2>10 · Open items</h2>
+  <h3>Before P1 hardware is ordered</h3>
+  <ul class="plain">
+    <li><s>Confirm LDC2114 fast-mode sample rate</s> — resolved 8/13: 160 SPS max, disqualified. Inductive fork now runs on LDC1101 ×2; source them for the P1 rig.</li>
+    <li>Source BOS1901 (or DRV8662) and two piezo actuator candidates; order two wideband LRAs for the bench-off — longest lead time on the list.</li>
+    <li>PAW3950 selected 8/13 — verify module (lens-included) sourcing; fall back to PAW3395 only if unobtainable.</li>
+    <li>Identify the High-Speed-USB MCU for the eventual 8 K dongle.</li>
+    <li>Register myTI (.edu), scope a capstone conversation, apply for JLCPCB/PCBWay sponsorship if going open-hardware.</li>
+  </ul>
+</section>
+
+</div><!-- /view-spec -->
+
+<div id="view-layers" role="tabpanel" aria-labelledby="tab-layers" hidden>
+<section style="padding-top:44px">
+  <h2>View</h2>
+  <h3>The current mouse, in layers</h3>
+  <p>One machine, four levels of dress. Levels are cumulative — each adds onto the one before, the way the mouse actually assembles. Layers 1–3 are identical across all six units; only layer 4 differs per owner.</p>
+
+  <div class="lvls" role="group" aria-label="Detail level">
+    <button data-lvl="1" aria-pressed="true"><span class="k">1</span>Board</button>
+    <button data-lvl="2" aria-pressed="false"><span class="k">2</span>Mechanisms</button>
+    <button data-lvl="3" aria-pressed="false"><span class="k">3</span>Chassis</button>
+    <button data-lvl="4" aria-pressed="false"><span class="k">4</span>Skin</button>
+  </div>
+  <p class="lvlnote">Plan view, front at top. The dashed silhouette is the eventual skin, ghosted for context.</p>
+
+  <figure>
+    <div class="diagram">
+      <svg id="layersvg" viewBox="0 0 620 640" style="min-width:480px" role="img" aria-label="Layered plan view of the mouse. Level one: the mainboard with MCU, sensor, battery, power, high-voltage corner and antenna keep-out. Level two adds button plates, piezo patches, Hall magnets, the electromagnetic scroll module and the side-button daughterboard. Level three adds the rigid chassis frame, screw bosses, scroll cradle, flexure anchors and sensor aperture ring. Level four covers everything with the per-owner skin: grip texture, wheel opening, button split lines and a pinky shelf.">
+        <defs>
+          <pattern id="hS2" width="8" height="8" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+            <line x1="0" y1="0" x2="0" y2="8" stroke="var(--sig)" stroke-width="1.3" opacity=".55"/>
+          </pattern>
+          <pattern id="hW2" width="8" height="8" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+            <line x1="0" y1="0" x2="0" y2="8" stroke="var(--warn)" stroke-width="1.3" opacity=".55"/>
+          </pattern>
+          <pattern id="dots" width="9" height="9" patternUnits="userSpaceOnUse">
+            <circle cx="3" cy="3" r="1.3" fill="var(--ink-soft)" opacity=".7"/>
+          </pattern>
+        </defs>
+
+        <!-- base: ghost silhouette, always visible -->
+        <path d="M310,34 C215,34 162,98 152,192 C142,292 160,402 198,492 C232,570 388,570 422,492 C460,402 478,292 468,192 C458,98 405,34 310,34 Z"
+              fill="none" stroke="var(--rule)" stroke-width="1.8" stroke-dasharray="9 7"/>
+        <text x="310" y="600" text-anchor="middle" font-family="'Helvetica Neue', system-ui, sans-serif" font-size="11.5" fill="var(--ink-mute)">FRONT AT TOP · plan view · levels are cumulative</text>
+
+        <!-- ============ LEVEL 1: BOARD ============ -->
+        <g data-lvl="1">
+          <rect x="176" y="56" width="268" height="412" rx="26" fill="var(--sunken)" opacity=".55"/>
+          <rect x="176" y="56" width="268" height="412" rx="26" fill="none" stroke="var(--rule)" stroke-width="1.4"/>
+          <!-- USB-C + charger -->
+          <rect x="282" y="30" width="56" height="20" rx="8" fill="var(--sunken)" stroke="var(--ink)" stroke-width="1.8"/>
+          <rect x="286" y="58" width="22" height="14" rx="2" fill="var(--surface)" stroke="var(--ink-soft)" stroke-width="1.4"/>
+          <!-- antenna keep-out -->
+          <polygon points="350,50 425,84 408,132 342,96" fill="url(#hS2)" stroke="var(--sig)" stroke-width="1.6"/>
+          <path d="M358,78 h12 v12 h12 v-12 h12 v12" fill="none" stroke="var(--sig)" stroke-width="2"/>
+          <!-- MCU -->
+          <rect x="272" y="128" width="76" height="48" rx="4" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.8"/>
+          <text x="310" y="156" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="11.5" font-weight="700" fill="var(--ink)">nRF54L15</text>
+          <!-- HV corner -->
+          <rect x="176" y="292" width="68" height="48" rx="5" fill="url(#hW2)" stroke="var(--warn)" stroke-width="1.8"/>
+          <!-- sensor -->
+          <rect x="290" y="312" width="40" height="40" rx="4" fill="var(--surface)" stroke="var(--ink)" stroke-width="2"/>
+          <path d="M294,332 h32 M310,316 v32" stroke="var(--ink-soft)" stroke-width="1.3"/>
+          <circle cx="310" cy="332" r="4.5" fill="none" stroke="var(--ink)" stroke-width="1.6"/>
+          <!-- battery + gauge -->
+          <rect x="248" y="372" width="124" height="84" rx="6" fill="var(--sunken)" stroke="var(--ink)" stroke-width="1.8"/>
+          <path d="M258,384 h30 M258,394 h30" stroke="var(--ink-mute)" stroke-width="1.6"/>
+          <text x="310" y="420" text-anchor="middle" font-family="'Helvetica Neue', system-ui, sans-serif" font-size="12" fill="var(--ink)">battery</text>
+          <rect x="226" y="380" width="16" height="16" rx="2" fill="var(--surface)" stroke="var(--ink-soft)" stroke-width="1.4"/>
+          <!-- SWD -->
+          <circle cx="292" cy="444" r="3.5" fill="var(--ink-soft)"/>
+          <circle cx="310" cy="444" r="3.5" fill="var(--ink-soft)"/>
+          <circle cx="328" cy="444" r="3.5" fill="var(--ink-soft)"/>
+        </g>
+
+        <!-- ============ LEVEL 2: MECHANISMS ============ -->
+        <g data-lvl="2" style="opacity:0">
+          <!-- plates -->
+          <rect x="178" y="64" width="110" height="150" rx="16" fill="none" stroke="var(--ink-mute)" stroke-width="1.5" stroke-dasharray="7 5"/>
+          <rect x="332" y="64" width="110" height="150" rx="16" fill="none" stroke="var(--ink-mute)" stroke-width="1.5" stroke-dasharray="7 5"/>
+          <!-- piezo patches -->
+          <rect x="208" y="158" width="44" height="24" rx="3" fill="var(--sig)" opacity=".25"/>
+          <rect x="208" y="158" width="44" height="24" rx="3" fill="none" stroke="var(--sig)" stroke-width="1.6"/>
+          <rect x="368" y="158" width="44" height="24" rx="3" fill="var(--sig)" opacity=".25"/>
+          <rect x="368" y="158" width="44" height="24" rx="3" fill="none" stroke="var(--sig)" stroke-width="1.6"/>
+          <!-- magnets -->
+          <circle cx="232" cy="208" r="5" fill="var(--ink)"/>
+          <circle cx="388" cy="208" r="5" fill="var(--ink)"/>
+          <!-- scroll module -->
+          <rect x="292" y="178" width="36" height="92" rx="9" fill="var(--sunken)" stroke="var(--ink)" stroke-width="1.8"/>
+          <path d="M310,184 v80" stroke="var(--ink-soft)" stroke-width="1.4" stroke-dasharray="4 3"/>
+          <rect x="270" y="198" width="18" height="34" rx="3" fill="var(--sig)" opacity=".25"/>
+          <rect x="270" y="198" width="18" height="34" rx="3" fill="none" stroke="var(--sig)" stroke-width="1.5"/>
+          <rect x="332" y="198" width="18" height="34" rx="3" fill="var(--sig)" opacity=".25"/>
+          <rect x="332" y="198" width="18" height="34" rx="3" fill="none" stroke="var(--sig)" stroke-width="1.5"/>
+          <circle cx="280" cy="262" r="6" fill="none" stroke="var(--ink)" stroke-width="1.8"/>
+          <path d="M286,262 H292" stroke="var(--ink)" stroke-width="1.6"/>
+          <rect x="292" y="276" width="36" height="12" rx="2" fill="var(--surface)" stroke="var(--ink-soft)" stroke-width="1.4"/>
+          <!-- daughterboard -->
+          <rect x="162" y="240" width="14" height="104" rx="3" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.6"/>
+          <path d="M176,290 h40" stroke="var(--ink-soft)" stroke-width="2" stroke-dasharray="5 3"/>
+        </g>
+
+        <!-- ============ LEVEL 3: CHASSIS ============ -->
+        <g data-lvl="3" style="opacity:0">
+          <rect x="164" y="48" width="292" height="430" rx="30" fill="none" stroke="var(--ink-soft)" stroke-width="2.2"/>
+          <!-- bosses -->
+          <g stroke="var(--ink-soft)" stroke-width="1.6" fill="none">
+            <circle cx="192" cy="82" r="7"/><path d="M187,82 h10 M192,77 v10"/>
+            <circle cx="428" cy="82" r="7"/><path d="M423,82 h10 M428,77 v10"/>
+            <circle cx="192" cy="436" r="7"/><path d="M187,436 h10 M192,431 v10"/>
+            <circle cx="428" cy="436" r="7"/><path d="M423,436 h10 M428,431 v10"/>
+          </g>
+          <!-- scroll cradle -->
+          <rect x="262" y="168" width="96" height="116" rx="12" fill="none" stroke="var(--ink-soft)" stroke-width="1.8"/>
+          <!-- flexure anchors -->
+          <rect x="200" y="216" width="24" height="7" rx="2" fill="var(--ink-soft)"/>
+          <rect x="396" y="216" width="24" height="7" rx="2" fill="var(--ink-soft)"/>
+          <!-- aperture ring -->
+          <circle cx="310" cy="332" r="26" fill="none" stroke="var(--ink-soft)" stroke-width="1.8"/>
+        </g>
+
+        <!-- ============ LEVEL 4: SKIN ============ -->
+        <g data-lvl="4" style="opacity:0">
+          <path d="M310,34 C215,34 162,98 152,192 C142,292 160,402 198,492 C232,570 388,570 422,492 C460,402 478,292 468,192 C458,98 405,34 310,34 Z"
+                fill="var(--sunken)" opacity=".88"/>
+          <path d="M310,34 C215,34 162,98 152,192 C142,292 160,402 198,492 C232,570 388,570 422,492 C460,402 478,292 468,192 C458,98 405,34 310,34 Z"
+                fill="none" stroke="var(--ink)" stroke-width="2.6"/>
+          <!-- grip texture flanks -->
+          <path d="M156,240 C150,300 156,360 172,410 L196,400 C182,355 178,300 182,248 Z" fill="url(#dots)"/>
+          <path d="M464,240 C470,300 464,360 448,410 L424,400 C438,355 442,300 438,248 Z" fill="url(#dots)"/>
+          <!-- button split lines -->
+          <path d="M310,40 C310,95 310,150 310,208" fill="none" stroke="var(--ink-soft)" stroke-width="1.5"/>
+          <path d="M186,212 C230,222 390,222 434,212" fill="none" stroke="var(--ink-soft)" stroke-width="1.5"/>
+          <!-- wheel opening -->
+          <rect x="296" y="182" width="28" height="64" rx="12" fill="var(--ground)" stroke="var(--ink)" stroke-width="1.6"/>
+          <!-- pinky shelf -->
+          <path d="M448,300 C458,330 458,360 450,388" fill="none" stroke="var(--sig)" stroke-width="2.2" stroke-dasharray="6 4"/>
+          <text x="472" y="348" font-family="'Helvetica Neue', system-ui, sans-serif" font-size="11" fill="var(--sig)">pinky shelf</text>
+        </g>
+      </svg>
+    </div>
+  </figure>
+
+  <div class="linfo" data-info="1">
+    <h4>Level 1 — the board</h4>
+    <p class="role">Everything electrical. This layer is identical across all six units, and every position on it is load-bearing for RF, feel, or balance.</p>
+    <ul class="plain">
+      <li>nRF54L15 with its radio side facing the nose; the hatched teal zone is the antenna keep-out — no copper, no metal, ever.</li>
+      <li>PAW3950 at the grip centroid — the cursor's rotation center, frozen before anything else is placed.</li>
+      <li>Battery on the midline aft of the sensor, fuel gauge at its edge; balance stays under the fingers.</li>
+      <li>Amber corner: BOS1901 ×2 + boost — the high-voltage piezo drivers, diagonal-opposite the antenna.</li>
+      <li>USB-C and charge IC at the nose; SWD debug pads at the board's rear.</li>
+    </ul>
+  </div>
+
+  <div class="linfo" data-info="2" hidden>
+    <h4>Level 2 — the mechanisms</h4>
+    <p class="role">The moving parts. Still identical across all six.</p>
+    <ul class="plain">
+      <li>Button plates (dashed — they float above the board) with piezo patches bonded to their undersides and Hall magnets on their stems.</li>
+      <li>The electromagnetic scroll: detent coils flanking the toothed steel rim, magnetic encoder on the shaft end, middle click beneath, brass-rim flywheel under the slot.</li>
+      <li>Side-button daughterboard on the left wall, linked to the mainboard by FFC — it moves freely when skins change shape.</li>
+    </ul>
+  </div>
+
+  <div class="linfo" data-info="3" hidden>
+    <h4>Level 3 — the chassis</h4>
+    <p class="role">The rigid frame that holds layers 1 and 2 in a fixed relationship. Identical ×6, printed dense and stiff.</p>
+    <ul class="plain">
+      <li>Frame and four screw bosses — every critical vertical dimension in the mouse is measured from this part.</li>
+      <li>Scroll cradle, flexure anchor bars with hard stops, and the sensor aperture ring.</li>
+      <li>Stiffness here is feel: any flex under the plates reads as a mushy click, so this layer takes the ribs and the walls.</li>
+    </ul>
+  </div>
+
+  <div class="linfo" data-info="4" hidden>
+    <h4>Level 4 — the skin</h4>
+    <p class="role">The only layer that differs per person. Six shapes, one chassis underneath.</p>
+    <ul class="plain">
+      <li>Printed grip texture on both flanks — rounded bumps with sweat channels, fuzzy-skin on test prints.</li>
+      <li>Wheel opening and button split lines are cut into the skin, not the chassis.</li>
+      <li>Right-flank pinky shelf, undercut so the finger hooks under it — printable, impossible to injection-mold.</li>
+      <li>Weight is a skin parameter too: denser infill where an owner wants heft, same chassis regardless.</li>
+    </ul>
+  </div>
+</section>
+</div><!-- /view-layers -->
+
+<div id="view-parts" role="tabpanel" aria-labelledby="tab-parts" hidden>
+<section style="padding-top:44px">
+  <h2>Catalog</h2>
+  <h3>Every part in the mouse</h3>
+  <p>Each block: what the part does, our pick, one or two close alternates, and what the two reference products use — the <strong>Logitech G Pro X2 Superstrike</strong> (the mouse we're chasing) and the <strong>Apple Magic Mouse USB-C</strong> (the current Apple mouse, which solves the same problems in nearly opposite ways). All prices are <em>estimates</em>: "qty 6" is what we'd realistically pay per unit through hobbyist channels; "~100k" is typical volume pricing, to show where mass production changes the answer. Commercial internals marked <em>undocumented</em> are inferred from teardowns of sibling products, not confirmed.</p>
+
+  <div class="part">
+    <h4>MCU + radio — the brain and the transmitter, one chip</h4>
+    <p>Runs the firmware loop (read sensors → build report → transmit), hosts the 2.4 GHz radio.</p>
+    <div class="tw"><table>
+      <thead><tr><th style="width:24%">Option</th><th>Notes</th><th class="n" style="text-align:right">Qty 6</th><th class="n" style="text-align:right">~100k</th></tr></thead>
+      <tbody>
+        <tr class="pick"><td>nRF54L15</td><td>128 MHz M33, ~200 µs/ESB packet, headroom past 1 kHz. Our pick so the board never caps the project.</td><td class="n">$5</td><td class="n">$2</td></tr>
+        <tr><td>nRF52840</td><td>The proven open-source-mouse standard; caps comfort at ~1 kHz. Safe fallback.</td><td class="n">$4</td><td class="n">$1.50</td></tr>
+        <tr><td>nRF54H20</td><td>Bigger sibling; has High-Speed USB — interesting for the 8K dongle more than the mouse.</td><td class="n">$7</td><td class="n">$3</td></tr>
+        <tr class="cmp"><td>Superstrike</td><td>Undocumented; Lightspeed mice have historically used Nordic nRF52-family parts.</td><td class="n">—</td><td class="n">—</td></tr>
+        <tr class="cmp"><td>Apple</td><td>Bluetooth (spec sheet still lists BT 3.0) via integrated combo silicon — chases battery life, not latency.</td><td class="n">—</td><td class="n">—</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="part">
+    <h4>Tracking sensor — the camera that measures desk movement</h4>
+    <p>Images surface texture thousands of times a second and cross-correlates frames into dX/dY. DPI is just the output multiplier.</p>
+    <div class="tw"><table>
+      <thead><tr><th style="width:24%">Option</th><th>Notes</th><th class="n" style="text-align:right">Qty 6</th><th class="n" style="text-align:right">~100k</th></tr></thead>
+      <tbody>
+        <tr class="pick"><td>PAW3950 module</td><td>Selected 8/13: native 8K, 0.7 mm lift-off, 750 IPS. Bought with matched lens — lens Z-height is the #1 DIY tracking failure.</td><td class="n">$30</td><td class="n">$7 bare</td></tr>
+        <tr><td>PAW3395 module</td><td>The fallback if 3950 modules can't be sourced: 26K DPI, 650 IPS, everywhere and cheap. Costs the native-8K path.</td><td class="n">$18</td><td class="n">$4 bare</td></tr>
+        <tr><td>PMW3389 module</td><td>Last-gen flagship, everywhere, cheap. Fine for bench rigs and spares.</td><td class="n">$12</td><td class="n">$2.50</td></tr>
+        <tr class="cmp"><td>Superstrike</td><td>HERO 2 — in-house: 44K DPI, 888 IPS, 88 G, sub-micron claim. In-house = no supplier margin.</td><td class="n">—</td><td class="n">—</td></tr>
+        <tr class="cmp"><td>Apple</td><td>Laser tracking (~1300 DPI class) — accuracy-on-more-surfaces goal, not speed.</td><td class="n">—</td><td class="n">—</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="part">
+    <h4>Click travel sensing — how the mouse knows you pressed</h4>
+    <p>Reads plate travel (~0.3 mm) as a continuous analog value. Contactless; contributes nothing to feel. Fork A at the bench.</p>
+    <div class="tw"><table>
+      <thead><tr><th style="width:24%">Option</th><th>Notes</th><th class="n" style="text-align:right">Qty 6</th><th class="n" style="text-align:right">~100k</th></tr></thead>
+      <tbody>
+        <tr class="pick"><td>TMAG5273 ×2</td><td>Hall IC + magnet on stem, straight into the ADC. Transfers directly to the keyboard project.</td><td class="n">$2</td><td class="n">$0.50</td></tr>
+        <tr><td>LDC1101 ×2</td><td>Inductive: free PCB coil + steel tab, no magnets, ~180 kSPS over SPI. (Replaced LDC2114 8/13 — 160 SPS max, disqualified.)</td><td class="n">$5</td><td class="n">$1.40</td></tr>
+        <tr><td>SS49E-class analog Hall ×2</td><td>Pennies, dumb, works. Needs its own temp compensation in firmware.</td><td class="n">$0.30</td><td class="n">$0.06</td></tr>
+        <tr class="cmp"><td>Superstrike</td><td>Inductive (HITS): PCB coil + moving metal sheet per button — the LDC-style approach, productized.</td><td class="n">—</td><td class="n">—</td></tr>
+        <tr class="cmp"><td>Apple</td><td>Neither — one mechanical microswitch under the whole shell; the entire body is the button lever.</td><td class="n">—</td><td class="n">—</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="part">
+    <h4>Click actuator + driver — the manufactured snap</h4>
+    <p>Fires the click sensation as a waveform the moment sensed travel crosses threshold. Fork B at the bench; feel is the product.</p>
+    <div class="tw"><table>
+      <thead><tr><th style="width:24%">Option</th><th>Notes</th><th class="n" style="text-align:right">Qty 6</th><th class="n" style="text-align:right">~100k</th></tr></thead>
+      <tbody>
+        <tr class="pick"><td>Piezo ×2 + BOS1901 ×2</td><td>Non-resonant, &lt;2 ms attack, full 1–400 Hz band, 4–10× less power. Brings the HV zone with it.</td><td class="n">$28</td><td class="n">$6</td></tr>
+        <tr><td>Wideband LRA ×2 + DRV2605L ×2</td><td>The proven fallback; resonant rise = the "roundness" ceiling. Battery-voltage, no HV zone.</td><td class="n">$16</td><td class="n">$3</td></tr>
+        <tr><td>DIY voice coil ×2 + H-bridge</td><td>Wire + magnet + the flexure we're cutting anyway. Non-resonant, low-voltage. The wildcard.</td><td class="n">$4</td><td class="n">$3 (custom VCM)</td></tr>
+        <tr class="cmp"><td>Superstrike</td><td>LRA per button + driver — and "slight roundness even at max" is the recurring review note.</td><td class="n">—</td><td class="n">—</td></tr>
+        <tr class="cmp"><td>Apple</td><td>None in the mouse (real switch). Apple's trackpads use voice-coil-class Taptic Engines — the premium answer.</td><td class="n">—</td><td class="n">—</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="part">
+    <h4>Plates + flexures — the button's spring and transmission</h4>
+    <p>The flexure sets press weight (its bend) and click fidelity (its stiffness everywhere else). One part, two feel jobs.</p>
+    <div class="tw"><table>
+      <thead><tr><th style="width:24%">Option</th><th>Notes</th><th class="n" style="text-align:right">Qty 6</th><th class="n" style="text-align:right">~100k</th></tr></thead>
+      <tbody>
+        <tr class="pick"><td>CNC spring steel flexure + printed plate</td><td>Free via the CNC contact, from offcuts. Iterate thickness to tune press weight.</td><td class="n">~$0</td><td class="n">$0.30 stamped</td></tr>
+        <tr><td>Titanium flexure</td><td>Better fatigue life, lighter; harder to machine. Try if steel feels dead.</td><td class="n">~$0</td><td class="n">$0.80</td></tr>
+        <tr class="cmp"><td>Superstrike</td><td>Molded plate, thin steel trigger sheet on the stem, molded living hinge.</td><td class="n">—</td><td class="n">—</td></tr>
+        <tr class="cmp"><td>Apple</td><td>The whole top shell rocks on a hinge as one giant plate.</td><td class="n">—</td><td class="n">—</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="part">
+    <h4>Scroll encoder — rotation into counts</h4>
+    <p>Two signals 90° out of phase; order gives direction, edges give distance. Must survive flywheel RPM.</p>
+    <div class="tw"><table>
+      <thead><tr><th style="width:24%">Option</th><th>Notes</th><th class="n" style="text-align:right">Qty 6</th><th class="n" style="text-align:right">~100k</th></tr></thead>
+      <tbody>
+        <tr class="pick"><td>Magnetic on-axis (MA702 / AS5600-class)</td><td>Contactless, high resolution — enables content-snapped detents. Needs a diametral magnet on the shaft.</td><td class="n">$3</td><td class="n">$0.60</td></tr>
+        <tr><td>Optical encoder module</td><td>Contactless, proven in mice; coarser resolution than magnetic.</td><td class="n">$1.50</td><td class="n">$0.40</td></tr>
+        <tr><td>Mechanical (TTC Gold-class)</td><td>The industry default. Wipers wear and bounce — wrong for a flywheel. Bench use only.</td><td class="n">$1</td><td class="n">$0.15</td></tr>
+        <tr class="cmp"><td>Superstrike</td><td>Undocumented; conventional gaming wheel, almost certainly mechanical or optical.</td><td class="n">—</td><td class="n">—</td></tr>
+        <tr class="cmp"><td>Apple</td><td>No wheel at all — capacitive multi-touch surface; "scroll momentum" is pure software. Our coast curves, their way.</td><td class="n">—</td><td class="n">—</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="part">
+    <h4>Detent system — the tick your finger feels per scroll step</h4>
+    <p>Restoring torque toward notch positions, not friction. Ours is toggleable ratchet/freespin with zero moving mode parts.</p>
+    <div class="tw"><table>
+      <thead><tr><th style="width:24%">Option</th><th>Notes</th><th class="n" style="text-align:right">Qty 6</th><th class="n" style="text-align:right">~100k</th></tr></thead>
+      <tbody>
+        <tr class="pick"><td>EM coils ×2 + toothed steel rim (DIY)</td><td>Hand-wound coils, CNC rim. Current direction = mode; coils also brake. Nothing to buy off-shelf anyway.</td><td class="n">$1.50</td><td class="n">$2.50 module</td></tr>
+        <tr><td>Conventional sprung ratchet</td><td>Comes free inside mechanical encoders. Fixed feel, wears, no freespin. The boring insurance.</td><td class="n">$0</td><td class="n">$0</td></tr>
+        <tr class="cmp"><td>Superstrike</td><td>Standard fixed ratchet. (Logitech's MagSpeed EM wheel lives in the MX line, not here.)</td><td class="n">—</td><td class="n">—</td></tr>
+        <tr class="cmp"><td>Apple</td><td>None — no wheel, detents don't exist. Haptic-free glass.</td><td class="n">—</td><td class="n">—</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="part">
+    <h4>Flywheel + bearings — the coast</h4>
+    <p>Angular momentum = mass × radius². Light hub, dense rim, good bearings; coils turn coast time into software.</p>
+    <div class="tw"><table>
+      <thead><tr><th style="width:24%">Option</th><th>Notes</th><th class="n" style="text-align:right">Qty 6</th><th class="n" style="text-align:right">~100k</th></tr></thead>
+      <tbody>
+        <tr class="pick"><td>Brass rim + printed hub + MR52 bearings ×2</td><td>CNC lathe job from offcuts; 5–8 g budgeted. Bearings are the only real cost.</td><td class="n">$4</td><td class="n">$1</td></tr>
+        <tr><td>Steel rim</td><td>Cheaper stock, slightly less dense than brass; fine substitute.</td><td class="n">$3</td><td class="n">$0.80</td></tr>
+        <tr class="cmp"><td>Superstrike / Apple</td><td>Neither has one. This part exists because we decided scroll should be fun.</td><td class="n">—</td><td class="n">—</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="part">
+    <h4>Side + auxiliary buttons — thumb keys, DPI, power</h4>
+    <p>On a daughterboard + FFC so skins can reshape freely. Honest tension: full switchless purity here costs real money for buttons that aren't latency-critical.</p>
+    <div class="tw"><table>
+      <thead><tr><th style="width:24%">Option</th><th>Notes</th><th class="n" style="text-align:right">Qty 6</th><th class="n" style="text-align:right">~100k</th></tr></thead>
+      <tbody>
+        <tr class="pick"><td>Low-force tactile switches</td><td>Pragmatic: side buttons bounce-debounce fine at their stakes. Zero-microswitch rule bends here, deliberately.</td><td class="n">$1</td><td class="n">$0.20</td></tr>
+        <tr><td>Hall + shared haptic</td><td>Full purity: adjustable side-button actuation too. +$3/unit and firmware work. Decide after mains feel right.</td><td class="n">$4</td><td class="n">$1</td></tr>
+        <tr class="cmp"><td>Superstrike</td><td>Conventional switches on a daughterboard.</td><td class="n">—</td><td class="n">—</td></tr>
+        <tr class="cmp"><td>Apple</td><td>None — gestures on the touch surface instead.</td><td class="n">—</td><td class="n">—</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="part">
+    <h4>Battery — the fixed-shape energy brick</h4>
+    <p>Incompressible, must not sit under shell flex, hates heat. Sized by the battery-life target we still owe ourselves.</p>
+    <div class="tw"><table>
+      <thead><tr><th style="width:24%">Option</th><th>Notes</th><th class="n" style="text-align:right">Qty 6</th><th class="n" style="text-align:right">~100k</th></tr></thead>
+      <tbody>
+        <tr class="pick"><td>300–400 mAh LiPo pouch w/ PCM</td><td>~6 g. Protection circuit on the cell is non-negotiable. Buy, never build.</td><td class="n">$5</td><td class="n">$1.20</td></tr>
+        <tr><td>500 mAh</td><td>+2–3 g for ~30–60% more life. If the P2 power numbers ask for it.</td><td class="n">$6</td><td class="n">$1.50</td></tr>
+        <tr class="cmp"><td>Superstrike</td><td>LiPo, up to ~90 h at 1 kHz (drops hard at 8K).</td><td class="n">—</td><td class="n">—</td></tr>
+        <tr class="cmp"><td>Apple</td><td>1,986 mAh — a month-plus per charge. What optimizing for BT idle instead of polling buys.</td><td class="n">—</td><td class="n">—</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="part">
+    <h4>Power management — charger, gauge, rails</h4>
+    <p>Charges safely from USB-C, runs while charging, reports honest %, and keeps the actuator rail stiff under click transients.</p>
+    <div class="tw"><table>
+      <thead><tr><th style="width:24%">Option</th><th>Notes</th><th class="n" style="text-align:right">Qty 6</th><th class="n" style="text-align:right">~100k</th></tr></thead>
+      <tbody>
+        <tr class="pick"><td>BQ25100 + MAX17048 + TPS61099</td><td>Charger w/ load-share, fuel gauge, boost. All TI/ADI — all sampleable.</td><td class="n">$4</td><td class="n">$1.10</td></tr>
+        <tr><td>MCP73831, no gauge</td><td>The cost-trim: −$2.50/unit, battery % becomes a voltage guess. Fine for a budget variant.</td><td class="n">$1.50</td><td class="n">$0.40</td></tr>
+        <tr class="cmp"><td>Superstrike / Apple</td><td>Equivalent integrated blocks; Apple's is part of its custom PMIC.</td><td class="n">—</td><td class="n">—</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="part">
+    <h4>PCB — the flat rigid slab everything lives on</h4>
+    <p>4-layer for a real ground plane under the RF section. Outline is free-form — design the board to the mouse, not the mouse to the board.</p>
+    <div class="tw"><table>
+      <thead><tr><th style="width:24%">Option</th><th>Notes</th><th class="n" style="text-align:right">Qty 6</th><th class="n" style="text-align:right">~100k</th></tr></thead>
+      <tbody>
+        <tr class="pick"><td>JLCPCB 4-layer, panelized</td><td>Mainboard + daughterboard + bench coupons per order. Controlled impedance for the antenna feed.</td><td class="n">$6</td><td class="n">$0.60</td></tr>
+        <tr><td>2-layer</td><td>Cheaper, but RF layout gets hard and the EMI margins shrink. Not worth it here.</td><td class="n">$3</td><td class="n">$0.30</td></tr>
+        <tr class="cmp"><td>Superstrike / Apple</td><td>Multilayer + flex assemblies; Apple's is largely one rigid-flex.</td><td class="n">—</td><td class="n">—</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="part">
+    <h4>Feet — the only part touching the world</h4>
+    <p>Glide and stiction live here; highest feel-per-dollar in the whole BOM. Edge rounding matters as much as material.</p>
+    <div class="tw"><table>
+      <thead><tr><th style="width:24%">Option</th><th>Notes</th><th class="n" style="text-align:right">Qty 6</th><th class="n" style="text-align:right">~100k</th></tr></thead>
+      <tbody>
+        <tr class="pick"><td>Virgin PTFE sheet, self-cut</td><td>One $12 sheet = dozens of sets; iterate size/shape/placement freely.</td><td class="n">$1</td><td class="n">$0.15 die-cut</td></tr>
+        <tr><td>Aftermarket (Corepad-class)</td><td>Consistent, pre-rounded edges, but fixed shapes for mice that aren't ours.</td><td class="n">$8</td><td class="n">—</td></tr>
+        <tr><td>Glass skates</td><td>Different feel entirely (harder, faster on some pads). A cheap experiment later.</td><td class="n">$10</td><td class="n">—</td></tr>
+        <tr class="cmp"><td>Superstrike</td><td>PTFE. Apple: two plastic rails — famously the worst glide in the industry.</td><td class="n">—</td><td class="n">—</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="part">
+    <h4>Shell — chassis + per-owner skin</h4>
+    <p>Rigid identical chassis ×6; printed skin per hand. Where our economics beat everyone: zero tooling.</p>
+    <div class="tw"><table>
+      <thead><tr><th style="width:24%">Option</th><th>Notes</th><th class="n" style="text-align:right">Qty 6</th><th class="n" style="text-align:right">~100k</th></tr></thead>
+      <tbody>
+        <tr class="pick"><td>ASA or PA-CF print</td><td>~$4 material per unit, infinite shape freedom, undercuts legal, weight tunable per skin.</td><td class="n">$4</td><td class="n">—</td></tr>
+        <tr><td>Resin (SLA) skin</td><td>Finer surface, heavier, more brittle. Maybe for a "premium finish" skin.</td><td class="n">$7</td><td class="n">—</td></tr>
+        <tr class="cmp"><td>Injection molding (their world)</td><td>~$1–2/part after $40–100k tooling — unbeatable at 100k, absurd at 6.</td><td class="n">—</td><td class="n">$1.50 + NRE</td></tr>
+        <tr class="cmp"><td>Apple</td><td>Aluminum base + polycarbonate/acrylic top. Pretty, 99 g, nobody's hand consulted.</td><td class="n">—</td><td class="n">—</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="part">
+    <h4>Dongle — the other half of the radio link</h4>
+    <p>Receives ESB, speaks USB HID to the host. Owns the polling ceiling: Full-Speed USB = 1 kHz max, High-Speed = 8 kHz.</p>
+    <div class="tw"><table>
+      <thead><tr><th style="width:24%">Option</th><th>Notes</th><th class="n" style="text-align:right">Qty 6</th><th class="n" style="text-align:right">~100k</th></tr></thead>
+      <tbody>
+        <tr class="pick"><td>nRF52840 Dongle (PCA10059)</td><td>$10, flash and go, 1 kHz. The v1 answer; full detail on the Radio tab.</td><td class="n">$10</td><td class="n">$3 custom</td></tr>
+        <tr><td>Custom HS dongle (nRF54H20 or STM32F723 + nRF radio)</td><td>The 4K/8K unlock, P6. Verify nRF54H20's HS-USB path before committing.</td><td class="n">$25 est.</td><td class="n">$5</td></tr>
+        <tr class="cmp"><td>Superstrike</td><td>Lightspeed 8K receiver — exactly this pattern, productized.</td><td class="n">—</td><td class="n">—</td></tr>
+        <tr class="cmp"><td>Apple</td><td>No dongle — Bluetooth direct. Simplest possible UX, worst possible latency story.</td><td class="n">—</td><td class="n">—</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="call">
+    <h4>Reading the two reference columns</h4>
+    <p>The Superstrike column is us with a factory: same architecture (inductive sensing + haptic click + proprietary 2.4 GHz), commodity-priced. The Apple column is the opposite philosophy on every row — Bluetooth over dongle, month-long battery over milliseconds, touch surface over wheel, one real switch over zero. Where we differ from Logitech it's by choice (piezo over LRA, EM detents, hand-fit skins); where we differ from Apple it's the entire premise.</p>
+  </div>
+</section>
+</div><!-- /view-parts -->
+
+<div id="view-kbd" role="tabpanel" aria-labelledby="tab-kbd" hidden>
+<section style="padding-top:44px">
+  <h2>Sibling project</h2>
+  <h3>Every part in the keyboard</h3>
+  <p>The deferred second build: a Wooting-style magnetic analog keyboard, quiet but with a perfect feel. Reference product throughout: the <strong>Wooting 80HE</strong> — 75% layout, Lekker V2 magnetic switches (custom manufacturer, not Gateron), per-key Hall sensing, 8 kHz wired, gasket-mounted PC plate, screw-in stabilizers. Everything the mouse project develops in Hall sensing, calibration, plate-resonance tuning, wireless, and WebHID config transfers here directly — that overlap is deliberate. Prices estimated as before; a keyboard has ~82 of some parts, so per-switch pennies multiply.</p>
+
+  <div class="part">
+    <h4>Switches — the magnetic linear heart</h4>
+    <p>A magnet in the stem moves toward a sensor on the PCB. No electrical contacts at all: no bounce, no debounce, no wear-out, and travel is a continuous analog value — the keyboard version of our mouse click.</p>
+    <div class="tw"><table>
+      <thead><tr><th style="width:26%">Option</th><th>Notes</th><th class="n" style="text-align:right">Set of ~85</th><th class="n" style="text-align:right">~100k/switch</th></tr></thead>
+      <tbody>
+        <tr class="pick"><td>Gateron KS-20 family (Jade / Nebula)</td><td>The widely-sourceable magnetic linear; smooth, well-documented magnet strength, MX stems.</td><td class="n">$50–70</td><td class="n">$0.30</td></tr>
+        <tr><td>Wooting Lekker V2</td><td>The reference: 40 gf actuation, 60 gf bottom-out, 4.0 mm travel, 0.1–4.0 mm adjustable actuation, 100M rating.</td><td class="n">$60+</td><td class="n">—</td></tr>
+        <tr><td>TTC / other magnetic linears</td><td>Growing field; audition for smoothness and wobble before committing a set.</td><td class="n">$45–60</td><td class="n">$0.25</td></tr>
+        <tr class="cmp"><td>vs classic mechanical (MX)</td><td>Contacts + fixed actuation point + debounce latency — everything this project exists to delete.</td><td class="n">$30–50</td><td class="n">$0.15</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="part">
+    <h4>Per-key sensing — one Hall sensor under every stem</h4>
+    <p>~82 linear Hall sensors feeding analog muxes into the MCU's ADC. The scan loop reads every key's depth continuously — this is the code that shares DNA with the mouse's click sensing.</p>
+    <div class="tw"><table>
+      <thead><tr><th style="width:26%">Option</th><th>Notes</th><th class="n" style="text-align:right">Full board</th><th class="n" style="text-align:right">~100k/board</th></tr></thead>
+      <tbody>
+        <tr class="pick"><td>SS49E-class linear Hall ×82 + 74HC4067 mux ×6</td><td>The standard analog-keyboard recipe. Per-key calibration in firmware flattens sensor variance.</td><td class="n">$14</td><td class="n">$3</td></tr>
+        <tr><td>Higher-grade linear Halls</td><td>Lower noise → finer rapid-trigger thresholds. Worth it on WASD cluster only, maybe.</td><td class="n">$25</td><td class="n">$6</td></tr>
+        <tr class="cmp"><td>Wooting</td><td>Per-key Hall sensing with per-key calibration — same architecture, productized.</td><td class="n">—</td><td class="n">—</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="part">
+    <h4>Controller — scanning 82 analog channels fast</h4>
+    <p>Wired 8K needs High-Speed USB (Full-Speed caps at 1 kHz — same wall as the mouse dongle). Wireless needs the Nordic radio. Both at once is the interesting design question.</p>
+    <div class="tw"><table>
+      <thead><tr><th style="width:26%">Option</th><th>Notes</th><th class="n" style="text-align:right">Qty 1</th><th class="n" style="text-align:right">~100k</th></tr></thead>
+      <tbody>
+        <tr class="pick"><td>nRF54L15 (wireless-first, 1 kHz)</td><td>Same chip, same ESB stack, same dongle family as the mouse. Our natural v1.</td><td class="n">$5</td><td class="n">$2</td></tr>
+        <tr><td>RP2350 (wired dev mule)</td><td>Cheap, great ADC throughput via PIO tricks, easy bring-up for the sensing rig.</td><td class="n">$1.50</td><td class="n">$0.80</td></tr>
+        <tr><td>STM32F7/H7-class (wired 8K)</td><td>HS USB for the full Wooting-matching wired mode. Could live alongside the Nordic.</td><td class="n">$8</td><td class="n">$3</td></tr>
+        <tr class="cmp"><td>Wooting</td><td>Undocumented ARM-class controller; wired-only, 8 kHz, 0.125 ms.</td><td class="n">—</td><td class="n">—</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="part">
+    <h4>PCB + plate + mounting — the mechanical voice of the board</h4>
+    <p>Magnetic switches have no pins to solder, so the PCB is sensor-only and every switch is removable by nature. The plate material and mounting style set the sound signature — this is where "quiet but perfect" gets engineered, same physics as the mouse's click acoustics.</p>
+    <div class="tw"><table>
+      <thead><tr><th style="width:26%">Option</th><th>Notes</th><th class="n" style="text-align:right">Qty 1</th><th class="n" style="text-align:right">~100k</th></tr></thead>
+      <tbody>
+        <tr class="pick"><td>Gasket-mount, PC plate, silicone sandwich</td><td>The 80HE recipe: soft bounce, muted low "thock," no ping. Matches the quiet goal.</td><td class="n">$35</td><td class="n">$6</td></tr>
+        <tr><td>FR4 plate</td><td>Between PC (soft) and alu (bright); cheap — it's just PCB material.</td><td class="n">$12</td><td class="n">$2</td></tr>
+        <tr><td>Aluminum plate, top-mount</td><td>Stiffer, brighter, more "clacky" — the opposite of the stated goal, listed for contrast.</td><td class="n">$25</td><td class="n">$4</td></tr>
+        <tr class="cmp"><td>Wooting</td><td>Gasket-mounted PC plate + silicone sandwich pad. We'd copy this and tune from there.</td><td class="n">—</td><td class="n">—</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="part">
+    <h4>Stabilizers + keycaps — the touch points</h4>
+    <p>Stabilizers keep long keys (space, enter, shift) from rattling — the #1 cheap-keyboard tell. Keycap material sets both feel and acoustics.</p>
+    <div class="tw"><table>
+      <thead><tr><th style="width:26%">Option</th><th>Notes</th><th class="n" style="text-align:right">Qty 1</th><th class="n" style="text-align:right">~100k</th></tr></thead>
+      <tbody>
+        <tr class="pick"><td>Screw-in stabs, hand-lubed + PBT dye-sub caps</td><td>Screw-in eliminates rattle; PBT doesn't shine with wear and sounds deeper than ABS.</td><td class="n">$12 + $35</td><td class="n">$1.50 + $4</td></tr>
+        <tr><td>ABS doubleshot caps</td><td>Sharper legends, brighter sound, shines over time. Preference call.</td><td class="n">$40</td><td class="n">$5</td></tr>
+        <tr class="cmp"><td>Wooting</td><td>Screw-in stabilizers, PBT caps — same picks.</td><td class="n">—</td><td class="n">—</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="part">
+    <h4>Case, wireless, and config — where we diverge from Wooting</h4>
+    <p>Wooting ships wired-only in a molded case with a browser-based configurator. We'd print the case (same freedom as the mouse skins), add the Nordic radio + dongle from the mouse program, and extend the same WebHID app to cover both devices.</p>
+    <div class="tw"><table>
+      <thead><tr><th style="width:26%">Option</th><th>Notes</th><th class="n" style="text-align:right">Qty 1</th><th class="n" style="text-align:right">~100k</th></tr></thead>
+      <tbody>
+        <tr class="pick"><td>Printed case + 3,000–4,000 mAh LiPo + shared dongle stack</td><td>Keyboard batteries are easy — huge case volume, modest draw at 1 kHz.</td><td class="n">$20</td><td class="n">$5</td></tr>
+        <tr class="cmp"><td>Wooting</td><td>Wired USB-C only; Wootility configurator runs on WebHID in the browser — the exact stack we already chose for the mouse. Convergent evolution, encouraging.</td><td class="n">—</td><td class="n">—</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="call">
+    <h4>What the mouse hands the keyboard</h4>
+    <p>Hall sensing driver + per-channel calibration, rapid-trigger threshold logic, plate-resonance tuning method (tap + FFT), the ESB wireless stack and dongle, and the WebHID config app. If the mouse's Fork A lands on Hall — the tie-breaker says it should — the keyboard's hardest firmware is already written and bench-proven before this project even starts.</p>
+  </div>
+</section>
+</div><!-- /view-kbd -->
+
+<div id="view-radio" role="tabpanel" aria-labelledby="tab-radio" hidden>
+<section style="padding-top:44px">
+  <h2>Deep dive</h2>
+  <h3>Radio, antennas, and dongles</h3>
+  <p>The goal, stated precisely: <strong>no delay or loss a human can feel.</strong> That decomposes into three measurable things — low <em>latency</em> (the trip takes little time), low <em>jitter</em> (every trip takes the <em>same</em> time — humans notice inconsistency far more than a constant offset), and loss recovery faster than perception (a retried packet that arrives 400 µs late never existed, as far as your hand knows).</p>
+
+  <h4>Why proprietary 2.4 GHz (ESB) and not Bluetooth</h4>
+  <p>Bluetooth is a negotiated protocol: the host controls connection intervals, and consistent sub-millisecond timing is somewhere between awkward and impossible — it's why the Magic Mouse is a month-per-charge device and not a gaming device. Nordic's Enhanced ShockBurst is barely a protocol at all: our firmware owns every microsecond — when packets fly, how retries work, which channels to use. Every serious gaming mouse (Lightspeed included) made the same call. The cost is the dongle in the box; the payoff is that timing becomes engineering instead of negotiation.</p>
+
+  <h4>The full latency chain — where the microseconds go</h4>
+  <div class="tw"><table>
+    <thead><tr><th>Hop</th><th>What happens</th><th class="n" style="text-align:right">Budget (est.)</th></tr></thead>
+    <tbody>
+      <tr><td class="p">Sense</td><td>Hall/ADC read of click travel, or motion delta from PAW3950 over SPI</td><td class="n">10–50 µs</td></tr>
+      <tr><td class="p">Pack</td><td>Firmware assembles the HID report (buttons bitfield + dX/dY + wheel)</td><td class="n">&lt;10 µs</td></tr>
+      <tr><td class="p">Air</td><td>ESB packet, 2 Mbps PHY: transmit + ACK round trip</td><td class="n">~200–300 µs</td></tr>
+      <tr><td class="p">Dongle</td><td>Receive, translate to USB HID, queue for next USB service</td><td class="n">&lt;50 µs</td></tr>
+      <tr><td class="p">USB</td><td>Host polls the interrupt endpoint — Full-Speed: every 1 ms; High-Speed: every 125 µs</td><td class="n">0–1000 µs (FS)</td></tr>
+    </tbody>
+  </table></div>
+  <p>Read the last row twice: at 1 kHz the <strong>USB service interval dominates the whole chain</strong> — everything else together is ~0.3 ms while USB alone can add up to 1 ms of waiting. That's why the 4K/8K upgrade is a dongle project (High-Speed USB shrinks that row 8×), and why the mouse side barely changes. It's also why <em>synchronizing</em> matters: firing our radio packet just before the USB poll (rather than randomly within the window) converts up to a millisecond of jitter into a constant — "motion sync," and we get to implement it properly because we own both ends.</p>
+
+  <h4>Packets, retries, and dodging Wi-Fi</h4>
+  <ul class="feat">
+    <li><strong>Every packet is ACKed.</strong> No ACK within ~a hundred µs → retransmit immediately. At 1 kHz there's room for 2–3 retries inside a single polling window — a lost packet is usually repaired before the host would ever have asked for it.</li>
+    <li><strong>Channel agility:</strong> 2.4 GHz is shared with every Wi-Fi network and microwave nearby. The link keeps a ranked channel map (Wi-Fi ch. 1/6/11 leave known quiet gaps), monitors failure rate per channel, and hops when a channel sours — the dongle coordinates so both ends move together.</li>
+    <li><strong>Payloads stay tiny</strong> (≤10 bytes) — shorter airtime means lower collision odds and cheaper retries. The keyboard adds a second report type (key bitmap + analog values on change) on the same scheme.</li>
+    <li><strong>TX-then-tap:</strong> the click packet transmits ~200 µs before the haptic fires, so the most important packet flies in electrical silence. Free, in firmware.</li>
+  </ul>
+
+  <h4>Antenna options — the part that's actually a black art</h4>
+  <div class="tw"><table>
+    <thead><tr><th style="width:26%">Option</th><th>Notes</th><th class="n" style="text-align:right">Cost</th></tr></thead>
+    <tbody>
+      <tr class="pick"><td>PCB trace antenna (meandered IFA)</td><td>Etched copper — free, proven (it's what commercial mice use), needs the keep-out honored and one tuning pass. Nordic publishes reference geometries to copy exactly.</td><td class="n">$0</td></tr>
+      <tr><td>Ceramic chip antenna</td><td>Tiny footprint, slightly lossier, more tolerant of nearby plastic. The fallback if the nose gets crowded.</td><td class="n">$0.40</td></tr>
+      <tr><td>Wire monopole</td><td>Best raw performance, ugly integration. Bench-rig and dongle-extender use.</td><td class="n">$0.05</td></tr>
+    </tbody>
+  </table></div>
+  <p><strong>Tuning is not optional:</strong> an antenna is only as good as its matching network, and the matching shifts when the shell, hand, and battery arrive around it. The plan: measure with a VNA (university lab) <em>with the shell on and a hand on the mouse</em>, adjust the two or three matching components, re-measure. One afternoon, and it's the difference between the −40 dBm link margin story being true or theoretical. The keyboard is easier — bigger board, more distance from hands to antenna placement options.</p>
+
+  <h4>The dongles</h4>
+  <ul class="feat">
+    <li><strong>v1 — nRF52840 Dongle ($10):</strong> ESB on one side, USB HID at 1 kHz on the other. Both mouse and keyboard v1 live here.</li>
+    <li><strong>One dongle, both devices:</strong> ESB supports multiple pipes — mouse on pipe 0, keyboard on pipe 1, one USB device with two HID interfaces. Two packets per millisecond is well within air budget. Fewer dongles, and inter-device tricks (mouse-click-plus-key macros) become possible at the receiver.</li>
+    <li><strong>Frontier — High-Speed USB receiver (P6):</strong> 125 µs microframes unlock 4–8 kHz. Candidates: nRF54H20 (radio + HS USB in one — verify the datasheet path first) or an STM32F723-class MCU bridging to a Nordic radio. This is where "8K" actually lives.</li>
+    <li><strong>Placement matters more than specs:</strong> a dongle behind a metal PC case can lose 20+ dB versus one on a short USB extender at desk level with line-of-sight to the mouse. Ship each unit with a $2 extender and the radio problem halves.</li>
+  </ul>
+
+  <h4>The 8K commitment — staged path</h4>
+  <p><strong>Decided 8/13: 8K polling is a committed goal, not a maybe.</strong> The chain audit says most of it is already paid for: the nRF54L15 has the 125 µs loop headroom, the PAW3950 is native-8K, and both click-sensing forks sample far faster than 8 kHz. What remains is two projects:</p>
+  <ul class="feat">
+    <li><strong>Protocol redesign (firmware):</strong> the 1 kHz send-ACK-retry scheme can't fit a 125 µs slot (the ACK round trip alone is ~200–300 µs). 8K switches to streaming — transmit every slot on the faster nRF54 proprietary PHY, no per-packet ACKs, each packet carrying the last few deltas so loss self-heals. A few weekends of protocol work, tuned on the P2 latency rig.</li>
+    <li><strong>The High-Speed dongle (hardware):</strong> the real build — nRF54H20 (radio + HS USB in one, verify the SDK path) or STM32F723-class + Nordic radio bridge. Custom board, 90 Ω differential-pair routing, microframe HID firmware. A couple months of evenings, ~$50–100 in prototypes.</li>
+    <li><strong>The free intermediate:</strong> once the HS dongle exists, <strong>4 kHz needs no protocol change</strong> — a 250 µs slot still fits the proven ACK scheme. Ship 1 kHz → 4 kHz → 8 kHz, each step validated on the rig before anyone depends on it.</li>
+    <li><strong>Battery honesty:</strong> 8K radio duty collapses battery life (the Superstrike's 90 h at 1 kHz is a fraction at 8K; ours will behave the same). 8K ships as a per-profile toggle, 1 kHz stays the daily default.</li>
+    <li><strong>Perspective:</strong> the prize is ~0.9 ms of staleness removed — real, measurable, and dessert. Click latency (P1–P2) remains where feel actually lives, which is why 8K is sequenced last rather than first.</li>
+  </ul>
+
+  <h4>The acceptance targets — "smooth" as numbers</h4>
+  <div class="tw"><table>
+    <thead><tr><th>Metric</th><th>Target</th><th>Why this number</th></tr></thead>
+    <tbody>
+      <tr><td class="p">Click → USB report</td><td class="n">&lt; 1.5 ms @ 1 kHz</td><td>Sensor-to-host beating a wired mechanical mouse's debounce alone</td></tr>
+      <tr><td class="p">Jitter (std dev)</td><td class="n">&lt; 200 µs</td><td>Consistency is what hands feel; motion sync makes this achievable</td></tr>
+      <tr><td class="p">Packet loss (1 m, desk)</td><td class="n">&lt; 0.1% pre-retry</td><td>With 2–3 in-window retries → effectively zero delivered loss</td></tr>
+      <tr><td class="p">Recovery from burst loss</td><td class="n">&lt; 2 ms</td><td>Below any human perception threshold for a cursor hiccup</td></tr>
+      <tr><td class="p">Haptics-on vs haptics-off PER</td><td class="n">No measurable difference</td><td>The EMI acceptance gate from the Spec tab, as a link metric</td></tr>
+    </tbody>
+  </table></div>
+  <p>All verified on the P2 latency rig (GPIO on click-detect → scope → USB analyzer), not asserted. Every number here is an estimate until that rig exists — that's the point of building it early.</p>
+</section>
+</div><!-- /view-radio -->
+
+<section class="brief" id="handoff">
+  <h2>Continuity</h2>
+  <h3>Project brief — for resuming in a fresh session</h3>
+  <p style="font-size:15px; color:var(--ink-soft)">If this HTML file (or its text) is handed to an assistant with no prior context: this block is the project state. Read it, then continue as the project's firmware + CAD lead.</p>
+  <div class="mono-block">PROJECT: Custom haptic mouse ×6 ("hapticmouse") + deferred Wooting-style keyboard.
+OWNER: Cale (builder; does firmware/CAD with assistant help; explains-things-simply preferred,
+  he's learning electronics as he goes). ENGINEER: college student (2nd/3rd yr) — owns all
+  physical/PCB/electronics work; hand him specs, not tutorials. Also available: large-format
+  3D printer, CNC shop contact, university lab access (scope, spectrum analyzer, VNA).
+
+REPO: /Users/caponaroni/hapticmouse — docs/spec.html (THIS FILE, canonical, tabs:
+  Spec/Layers/Parts/Keyboard/Radio), docs/anatomy.html (mouse teardown reference),
+  docs/BUILD_SPEC.md (changelog pointer). Artifacts published on claude.ai (private).
+
+GOAL: Six switchless wireless mice, hand-fit per owner. ≤75 g cap (~58 g projected),
+  8K polling COMMITTED (staged: ship 1 kHz → 4 kHz on HS-USB dongle, same protocol →
+  8 kHz streaming protocol, no per-packet ACKs; 8K = per-profile mode, 1 kHz default),
+  zero microswitches, click feel to BEAT the Logitech G Pro X2 Superstrike (61 g, $179,
+  LRA-based, reviewers report "slight roundness"). Maybe sell later; not soon.
+
+LOCKED: nRF54L15 + ESB → nRF52840 dongle (v1) → custom HS-USB dongle (nRF54H20 or
+  STM32F723+radio; verify 54H20 HS-USB SDK path) · PAW3950 module (selected 8/13;
+  fallback 3395 only if unsourceable) · chassis+skin shell
+  architecture (identical guts ×6, per-owner printed skins from clay-grip LiDAR scans)
+  · EM-detent scroll (toothed rim + 2 coils, current flip = ratchet/freespin, brass-rim
+  flywheel, magnetic encoder, coil braking) · BQ25100/MAX17048/TPS61099 power ·
+  WebHID config app · TX-then-tap firmware sequencing.
+
+OPEN FORKS (P1 bench rig decides, blind press-off + measured attack/latency):
+  A: click sensing — Hall TMAG5273 vs inductive LDC1101 ×2 (tie → Hall; transfers to
+     kbd). NOTE: LDC2114 disqualified 8/13 — 160 SPS max scan rate, touch-button chip.
+  B: actuator — piezo+BOS1901 (favored; brings HV/EMI corner) vs wideband LRA+DRV2605L
+     (fallback) vs DIY voice coil (wildcard; kills HV zone if it wins)
+
+KEY PHYSICS ESTABLISHED: fingertip band 50–500 Hz peaks ~250 Hz; LRA "roundness" =
+  resonant rise time (not missing treble); piezo <2 ms attack, 4–10× LESS power;
+  sharpness = attack time; release waveform matters; stiff flexure = click fidelity;
+  EMI plan = minimum kit (layout + rail filter + distance) with unpopulated shield-can
+  footprints as escalation insurance; USB Full-Speed = hard 1 kHz ceiling.
+
+PHASES: P0 tracking wired · P1 bench rig (THE project) · P2 link + latency rig ·
+  P3 mainboard · P4 chassis + 6 skins · P5 WebHID app · P6 frontier 8K.
+NEXT ACTIONS: pin targets (click gf, travel, battery hrs, latency); design P1 jig CAD;
+  order actuator candidates (LRA lead time!) + LDC1101s + PAW3950 module sourcing check;
+  myTI reg (.edu); verify nRF54H20 HS-USB; name the six owners; no DESIGN_TODO.md yet.
+
+STYLE: reference-building phase — no code until Cale says build. Cost-optimize without
+  cutting feel. He asks beginner questions — answer them properly, correct his model
+  gently, use analogies. Keyboard is parked: reference-only until mouse P1 is done.</div>
+</section>
+
+<footer>Haptic Mouse · Build Spec v0.4 · layout is pre-CAD and estimates are pre-bench — both will move.</footer>
+
+</div>
+
+<script>
+  // tabs — generic: any [role=tab] with aria-controls
+  const tabs = [...document.querySelectorAll('.tabs [role=tab]')].map(btn => ({
+    btn, panel: document.getElementById(btn.getAttribute('aria-controls'))
+  }));
+  tabs.forEach(t => t.btn.addEventListener('click', () => {
+    tabs.forEach(o => {
+      const on = o === t;
+      o.btn.setAttribute('aria-selected', on);
+      o.panel.hidden = !on;
+    });
+  }));
+
+  // layer stepper — cumulative reveal
+  const lvlBtns = document.querySelectorAll('.lvls button');
+  const layers  = document.querySelectorAll('#layersvg g[data-lvl]');
+  const infos   = document.querySelectorAll('.linfo');
+  const setLvl = n => {
+    layers.forEach(g => { g.style.opacity = (+g.dataset.lvl <= n) ? 1 : 0; });
+    lvlBtns.forEach(b => b.setAttribute('aria-pressed', +b.dataset.lvl === n));
+    infos.forEach(i => { i.hidden = (+i.dataset.info !== n); });
+  };
+  lvlBtns.forEach(b => b.addEventListener('click', () => setLvl(+b.dataset.lvl)));
+</script>

@@ -11,6 +11,13 @@
 - **Pad manufacturing:** magnetization write jig built on the existing 3D printer gantry (electromagnet write head, coil + steel core, gantry provides positioning).
 - **Prior art:** survey found no existing products, patents, or published research on this exact combination (passive patterned pad + in-mouse TMR read). Note: the repo went public 2026-08-18, which starts the US 1-year patent filing clock and forfeits most foreign filing rights.
 
+## Sensor count & geometry (settled 2026-08-18)
+
+- **How many sites:** solving (X, Y, yaw) needs three independent readings — the triangle is the minimum-plus-margin. Added sites buy two different things: noise averaging (weak — 4→6 sites ≈ 20% precision, imperceptible) and **redundancy during tilted lifts and pad-edge overhang** (real — sensors lose signal at different moments as the mouse lifts; with 4 sites, any 3 survivors still solve full motion, so tracking stays clean deeper into every lift). Redundancy plateaus at 4. The binding cost of extra sites is not weight or BOM (~$10, fractions of a gram each) but **ADC channels** — 3 sites already push the nRF54L15 SAADC; 4+ commits to an external ADC. Decision: **triangle for M2** (bench sled doesn't lift), **rectangle is the likely production answer**, decided by real lift-off data, never six.
+- **Baseline (spacing):** yaw resolution improves linearly with site separation, so a tight cluster is the worst layout. But perimeter placement fails three ways: shell curvature raises the air gap (exponential signal cost), spread sensors die at different moments during tilted lifts, and they leave the pattern first at pad edges. Rule: **spread the sites as wide as the flat central belly allows (~20–30 mm baselines), never out to the shell edge.** For M2, spacing is a test variable — mount sites on a printed plate with bolt patterns at ~15/25/35 mm and measure.
+- **Never collinear:** sites in a straight line can go blind to rotation. Any real triangle/rectangle satisfies this; guard against a "simplified" in-row layout.
+- **Free feature unlocked by multi-site solving:** with full rigid-body motion known, the cursor's rotation center becomes a per-profile *software* choice (report motion as if the sensor sat under the fingertips, the grip centroid, anywhere) — with a single optical sensor it is welded to physical placement, and spec.html §05 calls that the biggest single feel decision. Structural advantage of the magnetic route; worth a spec.html callout if M2 passes.
+
 ## Independent physics audit (2026-08-18)
 
 Checked from first principles, not from the planning chats:

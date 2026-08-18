@@ -54,6 +54,20 @@ Build the write jig (electromagnet head on the 3D printer gantry), write a check
 
 **Total: ~$280, or ~$225 after the TI in-amp samples — and $55 of that is the DK the mouse build needs anyway.** Longest lead items: TMR sensors (order first) and the AS5311 board.
 
+## Pad durability, damage, and repair
+
+**No maintenance in normal use.** The magnetic layer is ferrite — a ceramic. No rust, no wear from contactless reading, self-demagnetization measured in fractions of a percent per decade, and the layer sits protected under the textile skin (which wears like any cloth pad and can be a replaceable part of the stack). Temperature swings, cleaning, and water are all non-events.
+
+**The one hazard: strong magnets placed on the pad.** A MagSafe phone or magnetic charger laid directly on the surface can locally overwrite the pattern. Damage is graceful, not fatal — a scarred patch reads as a dead zone the user notices immediately; the rest of the pad tracks fine. Note: the pad *cannot* heal itself and folding it onto itself does nothing — ferrite's surface field is far below ferrite's coercivity (the same reason two fridge magnets don't erase each other), and any transfer would be mirrored anyway.
+
+**Repair options, ranked:**
+
+1. **Write jig rewrite (builders; the M2 jig).** Pad back on the gantry, re-run the write pass over the scar. Minutes, perfect, free. The v1 answer.
+2. **Repair tile (candidate customer solution — bench-test during M2, ~$10).** A small rigid tile carrying the pattern in NdFeB (much stronger than ferrite) pressed onto the damaged spot overwrites it by contact — and a patterned tile *self-aligns*: hovering near the pad it snaps into phase with the surrounding intact pattern, because aligned is the energy minimum. The pad seats its own repair tool. Open question for the bench: does the tile scramble anything while sliding into position? Zero electronics if it works.
+3. **Repair puck in the mouse (v2+ concept — the mouse heals the pad).** The mouse already knows where it is (sensors over intact pattern) and what the pattern should be. Architecture: a Superlight/POWERPLAY-style circular bay in the underside rear shell. Permanently in the mouse: the bay, a twist-lock ring, and 2–4 spring-contact pads to the mainboard (<1 g, <$1 — racing weight preserved). In the swap-in puck: write coil + core, pulse capacitor, driver. **Repair mode requires the USB-C cable** — wall power feeds the pulse cap (no LiPo current spikes) and the radio stays silent during magnetic pulses. Geometry cooperates: bay at the rear, sensors at the grip centroid, so the sensors ride intact pattern while the known-offset write head crosses the scar, with yaw giving exact head position.
+
+**Bay pays for itself in v1 regardless of M2's outcome:** the same bay holds a dongle garage (standard in this mouse class), optional weight pucks, or a blank cover — and reserving the contact pads future-proofs it for the repair puck or an inductive-charging puck. Queue for the P4 chassis CAD.
+
 ## Relationship to the mouse build
 
 Nothing here blocks or changes mouse P0–P6. The DK is shared. If M2 succeeds, magnetic tracking targets mouse v2 with a proper spec section, the ADC question gets a real answer, and the pad becomes its own product line. If it fails, the writeup goes in this file and the optical mouse never notices.

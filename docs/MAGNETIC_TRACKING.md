@@ -74,6 +74,18 @@ Build the write jig (electromagnet head on the 3D printer gantry), write a check
 
 **Bay pays for itself in v1 regardless of M2's outcome:** the same bay holds a dongle garage (standard in this mouse class), optional weight pucks, or a blank cover — and reserving the contact pads future-proofs it for the repair puck or an inductive-charging puck. Queue for the P4 chassis CAD.
 
+## Sourcing (live-researched 2026-08-18, ship-to Tulsa)
+
+Findings that amend the generic purchase list above:
+
+- **Dev kit:** official nRF54L15-DK is **$39 at DigiKey** (not ~$55), in stock, 2–4 days. Cheap "nRF54L15" listings are bare modules with **no debugger** — and the chip has no USB peripheral, so they can't even be flashed without a separate SWD probe (J-Link EDU Mini is now ~$76, killing that math). Buy the DK. Smart cart: DK $39 + nRF52840 Dongle $10 (needed for mouse P2 anyway) + $1 filler = free shipping at $50.
+- **TMR sensors:** bare AAT003-10E is $5.37 (DigiKey, 2,500+ stock) but it's a 2.5 mm TDFN reflow part — hostile to hand assembly. **The practical buy is NVE's AAT003-10E-EVB01 breakout ($19.95, NVE webstore, ~46 in stock): sensor pre-soldered, 0.1" headers, sin/cos analog out.** One board = one complete site. Budget alternative/second candidate: **Sensitec AA745 Evalboard, $11.70 at DigiKey Marketplace** (AMR, sin/cos, pre-mounted). Prefer AAT003 (40 kΩ) over AAT001 (1.25 MΩ — output impedance too high to drive an in-amp directly).
+- **Calibrated 2 mm strip: NOT at DigiKey/Mouser at all.** Best source is **NVE's own 2 mm-pitch strip, p/n 12591, $30 — only 2 in stock**, same order as the sensor boards (one NVE order covers both; strip is matched to their sensor ecosystem). Cheap fallback: eBay China "MS20 2mm" tape from $15, 2–4 weeks. Caution: RLS MS10 scales are 2 mm pole *length* = 4 mm period — likely wrong; verify before buying that route.
+- **In-amps:** INA333 — LCSC $0.51 ea (genuine, 1–3 wk), Arrow $2.57 ea (2-day), **myTI .edu samples free**. AD8226 MSOP is out of stock until mid-Sept (SOIC variant in stock if needed). Amazon AD623/INA333 breakout modules ($7–12, next-day) work for a bench but are commonly re-marked clones — fine at our bandwidth, don't trust datasheet noise specs.
+- **Optical ground truth:** no US-stocked hobbyist module exists right now (Joe's PMW3389 module OOS; PMW3360 $31.42 from Canada, 1–3 wk — the long-pole order). **Cheapest real option: $0 — strap any existing mouse to the sled and log its HID counts.** Fastest bought option: a used Logitech G305-class donor (~$30, overnight).
+- **Jig + materials (all Amazon, overnight on Prime):** magnet wire $12, IRLZ44N 12-pk $7, UF4007 125-pk $6, pre-built PWM/MOSFET driver module $7 (beginner-easy option), 4700 µF/35 V caps ~$9, magnet sheets 4-pk $5.99, viewing film 3×4" $9.49, NdFeB 10×10×3 blocks 10-pk $9.99, EVA foam $12, lycra $10, 3M Super 77 $10. Steel core bolt: plain zinc grade-2 from a Tulsa hardware store (~$2) — **not stainless, often non-magnetic**. Bench PSU $32 if no ATX supply is on hand.
+- **Order sequencing:** NVE order first (strip stock = 2), optical module first if buying (longest lead), DigiKey second, Amazon last (overnight).
+
 ## Relationship to the mouse build
 
 Nothing here blocks or changes mouse P0–P6. The DK is shared. If M2 succeeds, magnetic tracking targets mouse v2 with a proper spec section, the ADC question gets a real answer, and the pad becomes its own product line. If it fails, the writeup goes in this file and the optical mouse never notices.

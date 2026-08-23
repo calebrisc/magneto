@@ -105,6 +105,18 @@ Recorded 2026-08-19 from a design session. Requires nothing beyond the planned M
 - **Aim analytics (companion concept, Cale enthusiastic 8/19):** every existing aim tool sees only outputs (crosshair path, hit/miss); Magneto uniquely sees inputs — absolute drift-free hand position (→ pad-zone weakness heatmaps: "control degrades in far-right third, re-center before holds there"), grip rotation from yaw sensing (wrist-contamination in flicks), and continuous grip *pressure* from the inductive click channel (tension/tilt detection: pressure-vs-overshoot correlation). Flicks decompose into ballistic vs correction phases with real velocity profiles. Outcome tagging stays VAC-clean via CS's official Game State Integration feed + demo files — no game memory ever. Haptics close the loop in real time (tick on grip-pressure spike).
 - **Other known-angle wins:** re-peeking exact off-angles, blind/flashed turns to a known heading (open-loop proprioception — impossible on relative mice), exact 180° checks, absolute pitch as a physical head-height line. Community lineup packs are plausible (a pack = angles + a stated anchor landmark + standing-spot descriptions).
 
+## Measured flick speed (Cale, 2026-08-23)
+
+Raw-count capture on this Mac (Viper V2 Pro, DPI=1600 read via Razer protocol; CGEventTap
+with acceleration disabled, CPI calibrated ≈1314 effective): **peak 1.5 m/s** (59 in/s) over
+10 ms, 1.34 m/s sustained over 50 ms. Cross-validates video analysis of Medal clips
+(~2,000°/s ≈ same hand speed through his 0.95 sens / 1600 DPI). Design implications:
+at 4 mm pitch this is 375 stripes/s — trivial for TMR, even OK for digital 3D Hall
+(~8 samples/stripe at 3 kHz). The 5 m/s design point survives as the *low-sens-user*
+requirement (40 cm/360 player making the same screen flick), not Cale's own. Method note:
+reading the mouse's HID interface directly (hidapi) starves macOS's own client and
+disables the mouse in bursts — use a listen-only event tap with accel disabled instead.
+
 ## Relationship to the mouse build
 
 Nothing here blocks or changes mouse P0–P6. The DK is shared. If M2 succeeds, magnetic tracking targets mouse v2 with a proper spec section, the ADC question gets a real answer, and the pad becomes its own product line. If it fails, the writeup goes in this file and the optical mouse never notices.

@@ -105,6 +105,38 @@ Recorded 2026-08-19 from a design session. Requires nothing beyond the planned M
 - **Aim analytics (companion concept, Cale enthusiastic 8/19):** every existing aim tool sees only outputs (crosshair path, hit/miss); Magneto uniquely sees inputs — absolute drift-free hand position (→ pad-zone weakness heatmaps: "control degrades in far-right third, re-center before holds there"), grip rotation from yaw sensing (wrist-contamination in flicks), and continuous grip *pressure* from the inductive click channel (tension/tilt detection: pressure-vs-overshoot correlation). Flicks decompose into ballistic vs correction phases with real velocity profiles. Outcome tagging stays VAC-clean via CS's official Game State Integration feed + demo files — no game memory ever. Haptics close the loop in real time (tick on grip-pressure spike).
 - **Other known-angle wins:** re-peeking exact off-angles, blind/flashed turns to a known heading (open-loop proprioception — impossible on relative mice), exact 180° checks, absolute pitch as a physical head-height line. Community lineup packs are plausible (a pack = angles + a stated anchor landmark + standing-spot descriptions).
 
+## Aim analytics: validated + architecture locked (2026-08-23 session)
+
+Prototyped the input-analytics loop end-to-end on a $0 event-tap logger (Cale, CS, one-bot
+drills, ~400 kills). Everything below was measured, coached, re-measured in one afternoon:
+
+- **The loop works:** counter-strafe release→shot spread tightened 3.7× (IQR 168→45 ms) in
+  one targeted 3-min drill. Measure → find leak → drill → verify.
+- **Findings that became feature specs:** accuracy-window timing is the dominant variable
+  (1-shot rate 22% firing <60 ms after key release vs 88% at 60–120 ms; run-stops need
+  ~130 ms); mode detection distinguishes settled pre-aim (77% 1-shot) vs tail-flick
+  (25% naive, 46% with correct trigger timing — the entry-frag mode worth coaching, not
+  eliminating); panic-tap fidget detection (15% of presses); overshoot detector reads
+  reversals only (undershoot-glide scores clean — document the metric's meaning).
+- **Practice-mode timing haptics (trainer only):** buzz during the accuracy window keyed
+  off strafe-key release. Guidance-not-automation, no game state, no input injection —
+  but always-on in comp would poison the VAC-clean positioning: ship strictly as a
+  practice-mode feature. Needs key events → companion path or keyboard project.
+
+**Architecture (privacy-first, Wooting-style):**
+1. **Onboard input journaling is a firmware requirement.** Mouse journals derived events
+   (stops, flick profiles, click timings) to flash — KB/hr scale; consider $0.30 SPI
+   flash for weeks of sessions. Nothing runs on the PC during play. No screen capture, ever.
+2. **Web app over WebHID** (user-initiated, zero install, Chrome-class browsers): pulls the
+   journal, renders input-side analytics. This tier is game-agnostic — hands are hands.
+3. **Outcome enrichment per game, all user-initiated in-browser:** CS2 = drag demo file
+   onto page (WASM parser; clock-sync by cross-correlating click train with weapon_fire
+   train, ~1-tick accuracy) + optional GSI + Leetify API join ("works with Leetify", don't
+   compete with the demo layer). Valorant = Riot match API via OAuth (per-round hitbox
+   damage; no demos, no OCR). Other games = input-only tier.
+4. **Optional small helper app only for live tiers** (practice haptics, real-time key
+   timing). Strictly opt-in; core product never needs it.
+
 ## Measured flick speed (Cale, 2026-08-23)
 
 Raw-count capture on this Mac (Viper V2 Pro, DPI=1600 read via Razer protocol; CGEventTap

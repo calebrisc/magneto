@@ -1,0 +1,495 @@
+<title>Fab Lab Tulsa Playbook</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --bg: #f4f6f7;
+    --surface: #ffffff;
+    --ink: #1b2127;
+    --muted: #5b6672;
+    --faint: #8a95a1;
+    --line: #dde3e8;
+    --line-soft: #e9edf1;
+    --accent: #d95f18;
+    --accent-text: #b84c0c;
+    --accent-soft: #fbeadf;
+    --mid: #35648c;
+    --mid-soft: #e4edf4;
+    --skip: #8a95a1;
+    --warn-bg: #fdf3e3;
+    --warn-line: #e7c88a;
+    --warn-ink: #7a5410;
+    --chip-bg: #eef1f4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #15181c;
+      --surface: #1d2127;
+      --ink: #e6e9ec;
+      --muted: #9aa4ae;
+      --faint: #6d7883;
+      --line: #313841;
+      --line-soft: #272d34;
+      --accent: #f07a30;
+      --accent-text: #f28a48;
+      --accent-soft: #3a2517;
+      --mid: #6da3cd;
+      --mid-soft: #1f2d3a;
+      --skip: #6d7883;
+      --warn-bg: #2e2617;
+      --warn-line: #6b5522;
+      --warn-ink: #e3bf76;
+      --chip-bg: #262c33;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #15181c;
+    --surface: #1d2127;
+    --ink: #e6e9ec;
+    --muted: #9aa4ae;
+    --faint: #6d7883;
+    --line: #313841;
+    --line-soft: #272d34;
+    --accent: #f07a30;
+    --accent-text: #f28a48;
+    --accent-soft: #3a2517;
+    --mid: #6da3cd;
+    --mid-soft: #1f2d3a;
+    --skip: #6d7883;
+    --warn-bg: #2e2617;
+    --warn-line: #6b5522;
+    --warn-ink: #e3bf76;
+    --chip-bg: #262c33;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+    font-size: 15.5px;
+    line-height: 1.55;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 40px 20px 72px; }
+
+  header.masthead { margin-bottom: 26px; }
+  .kicker {
+    font-family: "Chakra Petch", "IBM Plex Sans", sans-serif;
+    font-size: 12px; font-weight: 600;
+    letter-spacing: .14em; text-transform: uppercase;
+    color: var(--accent-text);
+    margin: 0 0 6px;
+  }
+  h1 {
+    font-family: "Chakra Petch", "IBM Plex Sans", sans-serif;
+    font-size: clamp(26px, 4.5vw, 36px);
+    font-weight: 700;
+    line-height: 1.12;
+    margin: 0 0 10px;
+    text-wrap: balance;
+  }
+  .standfirst { color: var(--muted); max-width: 62ch; margin: 0; }
+
+  /* Tabs */
+  .tabs {
+    display: flex; gap: 6px;
+    margin: 28px 0 0;
+    border-bottom: 2px solid var(--line);
+  }
+  .tab {
+    appearance: none; border: none; background: none;
+    font-family: "Chakra Petch", "IBM Plex Sans", sans-serif;
+    font-size: 15px; font-weight: 600;
+    letter-spacing: .04em;
+    color: var(--muted);
+    padding: 10px 16px 12px;
+    margin-bottom: -2px;
+    border-bottom: 3px solid transparent;
+    cursor: pointer;
+  }
+  .tab:hover { color: var(--ink); }
+  .tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+  .tab[aria-selected="true"] {
+    color: var(--ink);
+    border-bottom-color: var(--accent);
+  }
+
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .verdict {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--accent);
+    border-radius: 6px;
+    padding: 14px 18px;
+    margin: 26px 0 30px;
+    max-width: none;
+  }
+  .verdict strong { font-weight: 600; }
+
+  /* Tier sections */
+  .tier { margin: 0 0 30px; }
+  .tier-head {
+    display: flex; align-items: baseline; gap: 10px;
+    margin-bottom: 4px;
+  }
+  .tier-name {
+    font-family: "Chakra Petch", "IBM Plex Sans", sans-serif;
+    font-size: 13px; font-weight: 700;
+    letter-spacing: .12em; text-transform: uppercase;
+    margin: 0;
+  }
+  .tier-sub { color: var(--faint); font-size: 13.5px; }
+  .tier.crucial .tier-name { color: var(--accent-text); }
+  .tier.middle .tier-name { color: var(--mid); }
+
+  .rows { border-top: 1px solid var(--line); }
+  .row {
+    display: grid;
+    grid-template-columns: 14px 200px 1fr;
+    gap: 8px 18px;
+    padding: 14px 2px;
+    border-bottom: 1px solid var(--line-soft);
+    align-items: start;
+  }
+  .dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    margin-top: 7px;
+  }
+  .crucial .dot { background: var(--accent); }
+  .middle .dot { background: none; border: 2.5px solid var(--mid); width: 9px; height: 9px; }
+
+  .tool { min-width: 0; }
+  .tool-name {
+    font-family: "Chakra Petch", "IBM Plex Sans", sans-serif;
+    font-weight: 600; font-size: 15px;
+    margin: 0 0 3px;
+  }
+  .plain {
+    display: inline-block;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11.5px;
+    color: var(--muted);
+    background: var(--chip-bg);
+    border-radius: 4px;
+    padding: 2px 7px;
+    line-height: 1.45;
+  }
+  .why { margin: 0; color: var(--ink); }
+  .why .sub { color: var(--muted); }
+
+  .flag {
+    display: inline-block;
+    background: var(--warn-bg);
+    border: 1px solid var(--warn-line);
+    color: var(--warn-ink);
+    font-size: 13px;
+    border-radius: 5px;
+    padding: 2px 9px;
+    margin-top: 6px;
+  }
+
+  /* Elsewhere strip */
+  .elsewhere {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 14px 18px 15px;
+    margin-top: 34px;
+  }
+  .elsewhere h3 {
+    font-family: "Chakra Petch", "IBM Plex Sans", sans-serif;
+    font-size: 12px; font-weight: 700;
+    letter-spacing: .12em; text-transform: uppercase;
+    color: var(--faint);
+    margin: 0 0 8px;
+  }
+  .elsewhere ul { margin: 0; padding-left: 18px; color: var(--muted); }
+  .elsewhere li { margin: 3px 0; }
+  .elsewhere li strong { color: var(--ink); font-weight: 600; }
+
+  footer.note {
+    margin-top: 40px;
+    color: var(--faint);
+    font-size: 13px;
+    border-top: 1px solid var(--line);
+    padding-top: 14px;
+  }
+
+  @media (max-width: 620px) {
+    .row { grid-template-columns: 12px 1fr; }
+    .row .why { grid-column: 2; }
+    .tabs { overflow-x: auto; }
+  }
+</style>
+
+<div class="wrap">
+  <header class="masthead">
+    <p class="kicker">Fab Lab Tulsa &middot; membership $40&ndash;125 / yr</p>
+    <h1>What the lab is for, per build</h1>
+    <p class="standfirst">The lab's machines, sorted by whether they actually move each build forward. <span style="color:var(--accent-text); font-weight:600">Crucial</span> is the reason to join &middot; <span style="color:var(--mid); font-weight:600">Middle</span> is useful but has alternatives &middot; anything not listed doesn't touch the build. Training classes are required before touching any machine, so do the certifications early &mdash; the class schedule, not the fee, is the real bottleneck.</p>
+  </header>
+
+  <div class="tabs" role="tablist" aria-label="Peripheral">
+    <button class="tab" id="tab-mouse" role="tab" aria-selected="true" aria-controls="panel-mouse">Mouse</button>
+    <button class="tab" id="tab-pad" role="tab" aria-selected="false" aria-controls="panel-pad">Mousepad</button>
+    <button class="tab" id="tab-kb" role="tab" aria-selected="false" aria-controls="panel-kb">Keyboard</button>
+  </div>
+
+  <!-- ============ MOUSE ============ -->
+  <section class="panel active" id="panel-mouse" role="tabpanel" aria-labelledby="tab-mouse">
+    <div class="verdict">
+      <strong>The play:</strong> cheapest membership tier, fiber-laser certification ASAP, and treat the lab as "the place that cuts my steel" plus free networking. Everything else there is convenience, not dependency.
+    </div>
+
+    <div class="tier crucial">
+      <div class="tier-head"><h2 class="tier-name">Crucial</h2><span class="tier-sub">the reason to join</span></div>
+      <div class="rows">
+        <div class="row crucial">
+          <span class="dot"></span>
+          <div class="tool">
+            <p class="tool-name">Fiber laser (50W)</p>
+            <span class="plain">cuts thin metal sheet with precision</span>
+          </div>
+          <p class="why">Makes the two parts you can't make at home: the <strong>springy steel plates</strong> the buttons press on (click feel lives here) and the <strong>toothed steel rim</strong> inside the scroll wheel that the magnetic detents grab. Feel-tuning takes many revisions &mdash; online metal-cutting services run ~$30&ndash;60 and a week <em>per revision</em>; here a revision is minutes and pennies of steel. <span class="sub">This one machine is the membership.</span></p>
+        </div>
+      </div>
+    </div>
+
+    <div class="tier middle">
+      <div class="tier-head"><h2 class="tier-name">Middle</h2><span class="tier-sub">real value, but alternatives exist</span></div>
+      <div class="rows">
+        <div class="row middle">
+          <span class="dot"></span>
+          <div class="tool">
+            <p class="tool-name">Electronics bench</p>
+            <span class="plain">soldering irons, power supplies, meters</span>
+          </div>
+          <p class="why">Covers every soldering job on the build &mdash; but a $25 iron at home does the same and skips the drive. Matters as backup, and as where you happen to be during laser sessions.</p>
+        </div>
+        <div class="row middle">
+          <span class="dot"></span>
+          <div class="tool">
+            <p class="tool-name">3D printers</p>
+            <span class="plain">plastic parts, layer by layer</span>
+          </div>
+          <p class="why">You own one. Theirs are backup capacity and possibly nicer materials for final shells and per-owner skins.</p>
+        </div>
+        <div class="row middle">
+          <span class="dot"></span>
+          <div class="tool">
+            <p class="tool-name">Vinyl cutter</p>
+            <span class="plain">computer-guided blade for sheet material</span>
+          </div>
+          <p class="why">Cuts solder-paste stencils for board assembly and the adhesive layers under the feet. Cheap workarounds exist for both.</p>
+        </div>
+        <div class="row middle">
+          <span class="dot"></span>
+          <div class="tool">
+            <p class="tool-name">The people</p>
+            <span class="plain">mentors, other builders, local contacts</span>
+          </div>
+          <p class="why">Folks who've seen your mistakes before &mdash; and if this becomes a business, the kind of room where local sponsor and manufacturing contacts happen. Hard to price, genuinely not nothing.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="elsewhere">
+      <h3>Notes</h3>
+      <ul>
+        <li><strong>Never cut the skates (PTFE feet) on a laser.</strong> Lasered PTFE releases genuinely toxic fumes &mdash; most shops ban the material outright. Skates get cut on the vinyl cutter or by hand.</li>
+      </ul>
+    </div>
+
+    <div class="elsewhere">
+      <h3>Still needed elsewhere</h3>
+      <ul>
+        <li><strong>Fine-pitch chip assembly</strong> &mdash; home hotplate + stencil, or let the board factory place parts.</li>
+        <li><strong>Radio instruments</strong> &mdash; TinySA + LiteVNA, ~$220 total, when antenna and noise work arrives.</li>
+        <li><strong>Lathe work</strong> (brass flywheel) &mdash; machine shop or a business contact.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ============ MOUSEPAD ============ -->
+  <section class="panel" id="panel-pad" role="tabpanel" aria-labelledby="tab-pad" hidden>
+    <div class="verdict">
+      <strong>The play:</strong> the lab is nearly a complete factory for this build &mdash; the big laser cuts every layer of the pad to final size and screen printing makes the surface look like a product. Only the magnetic pattern itself happens at home.
+    </div>
+
+    <div class="tier crucial">
+      <div class="tier-head"><h2 class="tier-name">Crucial</h2><span class="tier-sub">the reason to join</span></div>
+      <div class="rows">
+        <div class="row crucial">
+          <span class="dot"></span>
+          <div class="tool">
+            <p class="tool-name">CO2 laser (60W)</p>
+            <span class="plain">cuts plastic, foam, fabric &mdash; 3&times;4 ft bed</span>
+          </div>
+          <p class="why">The bed fits a <strong>full-size pad with room to spare</strong>. Cleanly cuts every layer of the stack &mdash; foam base, magnetic sheet, textile skin &mdash; to final dimensions, and heat-seals fabric edges as it cuts. This is the difference between craft-knife prototypes and parts that look manufactured.</p>
+        </div>
+        <div class="row crucial">
+          <span class="dot"></span>
+          <div class="tool">
+            <p class="tool-name">Screen printing</p>
+            <span class="plain">graphics printed on fabric</span>
+          </div>
+          <p class="why">Surface art on the textile skin &mdash; how the pad stops looking like a science project and starts looking like a product. Also the path to small-batch branded runs.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="tier middle">
+      <div class="tier-head"><h2 class="tier-name">Middle</h2><span class="tier-sub">real value, but alternatives exist</span></div>
+      <div class="rows">
+        <div class="row middle">
+          <span class="dot"></span>
+          <div class="tool">
+            <p class="tool-name">Vinyl cutter</p>
+            <span class="plain">computer-guided blade for sheet material</span>
+          </div>
+          <p class="why">Adhesive layers between the stack's sheets, masks for multi-color printing, edge trim. Scissors-and-patience is the fallback.</p>
+        </div>
+        <div class="row middle">
+          <span class="dot"></span>
+          <div class="tool">
+            <p class="tool-name">3D printers</p>
+            <span class="plain">plastic parts, layer by layer</span>
+          </div>
+          <p class="why">Alignment jigs and test fixtures for assembling the stack flat and square. Your home printer covers this too.</p>
+        </div>
+        <div class="row middle">
+          <span class="dot"></span>
+          <div class="tool">
+            <p class="tool-name">The people</p>
+            <span class="plain">mentors, other builders, local contacts</span>
+          </div>
+          <p class="why">A textile-and-print crowd overlaps a makerspace heavily &mdash; useful eyes for material sourcing and finish quality.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="elsewhere">
+      <h3>Still needed elsewhere</h3>
+      <ul>
+        <li><strong>Magnetic patterning</strong> &mdash; the write jig on the home 3D-printer gantry puts the invisible pattern into the sheet; the lab has no magnetics gear.</li>
+        <li><strong>Production patterning</strong> &mdash; factory-magnetized material for real volume; the home jig is for prototypes and R&amp;D.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ============ KEYBOARD ============ -->
+  <section class="panel" id="panel-kb" role="tabpanel" aria-labelledby="tab-kb" hidden>
+    <div class="verdict">
+      <strong>The play:</strong> a keyboard is mostly a case and a plate wrapped around a circuit board &mdash; and case-and-plate fabrication is exactly what this shop does best. The CNC and lasers carry the build; the electronics happen at home.
+    </div>
+
+    <div class="tier crucial">
+      <div class="tier-head"><h2 class="tier-name">Crucial</h2><span class="tier-sub">the reason to join</span></div>
+      <div class="rows">
+        <div class="row crucial">
+          <span class="dot"></span>
+          <div class="tool">
+            <p class="tool-name">ShopBot CNC</p>
+            <span class="plain">computer-guided router for wood, plastic, aluminum</span>
+          </div>
+          <p class="why">The <strong>case</strong> &mdash; the heavy body everything mounts into &mdash; is the defining part of how a keyboard feels and sounds, and machining one from aluminum or hardwood is exactly this machine's job. Outsourced CNC cases are the single most expensive part of custom keyboard builds; this brings iteration in-house.</p>
+        </div>
+        <div class="row crucial">
+          <span class="dot"></span>
+          <div class="tool">
+            <p class="tool-name">CO2 laser (60W)</p>
+            <span class="plain">cuts plastic, foam, fabric &mdash; not metal</span>
+          </div>
+          <p class="why">The <strong>plate</strong> (the sheet the switches snap into) in acrylic or POM, plus the foam gasket strips that give the board its cushioned mounting, and internal dampening foam &mdash; all fast, precise laser cuts.
+            <span class="flag">&#9888; Skip polycarbonate in the laser &mdash; it chars and discolors; acrylic and POM cut beautifully.</span>
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="tier middle">
+      <div class="tier-head"><h2 class="tier-name">Middle</h2><span class="tier-sub">real value, but alternatives exist</span></div>
+      <div class="rows">
+        <div class="row middle">
+          <span class="dot"></span>
+          <div class="tool">
+            <p class="tool-name">Fiber laser (50W)</p>
+            <span class="plain">cuts thin metal sheet</span>
+          </div>
+          <p class="why">The premium-path plate &mdash; thin steel or aluminum instead of plastic &mdash; and engraved metal badges/accents. Plastic plates from the CO2 laser are the simpler starting point.</p>
+        </div>
+        <div class="row middle">
+          <span class="dot"></span>
+          <div class="tool">
+            <p class="tool-name">3D printers</p>
+            <span class="plain">plastic parts, layer by layer</span>
+          </div>
+          <p class="why">Case prototypes before committing to CNC time, plus small internals &mdash; feet, cable channels, brackets. Home printer covers it too.</p>
+        </div>
+        <div class="row middle">
+          <span class="dot"></span>
+          <div class="tool">
+            <p class="tool-name">Electronics bench</p>
+            <span class="plain">soldering irons, power supplies, meters</span>
+          </div>
+          <p class="why">Stabilizer mods, wiring, rework &mdash; all doable with a $25 home iron; the bench is backup and convenience.</p>
+        </div>
+        <div class="row middle">
+          <span class="dot"></span>
+          <div class="tool">
+            <p class="tool-name">Vinyl cutter</p>
+            <span class="plain">computer-guided blade for sheet material</span>
+          </div>
+          <p class="why">Solder-paste stencils for board assembly, thin gasket material, decals.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="elsewhere">
+      <h3>Still needed elsewhere</h3>
+      <ul>
+        <li><strong>Circuit board + switch electronics</strong> &mdash; board factory makes and mostly assembles it; finish at home.</li>
+        <li><strong>Switches, stabilizers, keycaps</strong> &mdash; bought parts; no machine makes these.</li>
+        <li><strong>Anodizing / metal finishing</strong> for an aluminum case &mdash; outside service.</li>
+      </ul>
+    </div>
+  </section>
+
+  <footer class="note">
+    Machine list per Fab Lab Tulsa's published equipment page (60W CO2 laser, 50W fiber laser, 3&times;4 ft bed, ShopBot, vinyl cutter, printers, electronics station, screen printing). Membership tiers from $40/yr student. Confirm current hours-package pricing and class calendar with the lab.
+  </footer>
+</div>
+
+<script>
+  (function () {
+    var tabs = document.querySelectorAll('.tab');
+    var panels = document.querySelectorAll('.panel');
+    function select(tab) {
+      tabs.forEach(function (t) {
+        var on = t === tab;
+        t.setAttribute('aria-selected', on ? 'true' : 'false');
+      });
+      panels.forEach(function (p) {
+        var on = p.id === tab.getAttribute('aria-controls');
+        p.classList.toggle('active', on);
+        if (on) { p.removeAttribute('hidden'); } else { p.setAttribute('hidden', ''); }
+      });
+      try { localStorage.setItem('fablab-tab', tab.id); } catch (e) {}
+    }
+    tabs.forEach(function (t) {
+      t.addEventListener('click', function () { select(t); });
+      t.addEventListener('keydown', function (e) {
+        var list = Array.prototype.slice.call(tabs);
+        var i = list.indexOf(t);
+        if (e.key === 'ArrowRight') { var n = list[(i + 1) % list.length]; n.focus(); select(n); }
+        if (e.key === 'ArrowLeft') { var p = list[(i - 1 + list.length) % list.length]; p.focus(); select(p); }
+      });
+    });
+    try {
+      var saved = localStorage.getItem('fablab-tab');
+      if (saved) { var el = document.getElementById(saved); if (el) select(el); }
+    } catch (e) {}
+  })();
+</script>

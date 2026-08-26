@@ -9,12 +9,20 @@ import csv, json, math, sys, bisect, statistics as st, html
 
 CPI = 1314.0
 
+def cap_time_col(fieldnames):
+    """Capture timestamp column + seconds-per-unit. Mac writes mach ticks
+    under t_ticks; Windows writes perf_counter nanoseconds under t_ns."""
+    if fieldnames and 't_ns' in fieldnames: return 't_ns', 1e-9
+    return 't_ticks', 125/3/1e9
+
 def load(gsi_path, cap_path, anchor):
-    rows=[json.loads(l) for l in open(gsi_path) if l.strip()]
+    rows=[json.loads(l) for l in open(gsi_path, encoding='utf-8') if l.strip()]
     moves=[]; clicks=[]; ups=[]; keyups=[]
     t0=None
-    for r in csv.DictReader(open(cap_path)):
-        t=int(r['t_ticks'])*125/3/1e9
+    rd=csv.DictReader(open(cap_path))
+    tcol, scale = cap_time_col(rd.fieldnames)
+    for r in rd:
+        t=int(r[tcol])*scale
         if t0 is None: t0=t
         w=anchor+(t-t0)
         k=r['kind']
@@ -169,7 +177,7 @@ td{{padding:7px 8px 7px 0;border-bottom:1px solid var(--rule)}}
                  f"<td>{fmt_ms(p['stop_kill']) if p['stop_kill'] else '·'}</td></tr>")
     R.append("</table></div>")
     R.append("<p class=note>Window = 60–130 ms after strafe release. Generated locally from your own input journal + Game State Integration; no screen capture, no game memory.</p></div>")
-    open(out_path,'w').write('\n'.join(R))
+    open(out_path,'w',encoding='utf-8',newline='\n').write('\n'.join(R))
     return out_path, len(per), tot_kills
 
 if __name__=='__main__':

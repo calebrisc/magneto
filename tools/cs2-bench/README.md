@@ -25,14 +25,18 @@ localhost. VAC-clean by construction — nothing reads or touches game memory.
 
 ## Platform notes
 
-- The GSI listener and all analysis are cross-platform Python.
-- The input tap (`Quartz` event tap) and pointer-accel toggle (`defaults
-  write com.apple.mouse.scaling`) are **macOS-only**. A Windows port needs a
-  Raw Input (or `pynput`) logger writing the same `t_ticks,kind,dx,dy` CSV
-  schema and can skip the accel step (set "Enhance pointer precision" off
-  manually). Timestamp conversion `t_ticks*125/3/1e9` is mach-specific —
-  replace with QPC seconds on Windows and write seconds directly.
-- Deps: Python 3.12, `pyobjc-framework-Quartz` (macOS tap only).
+- The GSI listener and all analysis are cross-platform Python; the supervisor
+  picks the right input tap per platform at startup.
+- macOS tap: `Quartz` HID event tap; pointer accel toggled off during capture
+  (`defaults write com.apple.mouse.scaling`), restored after.
+- Windows tap: `win_input_tap.py` — Raw Input (`WM_INPUT`, `RIDEV_INPUTSINK`
+  on a message-only window), stdlib ctypes only. Sees pre-acceleration deltas
+  even while CS2 holds raw-input focus. No accel toggle; the supervisor warns
+  if "Enhance pointer precision" is on. Timestamps are `time.perf_counter_ns()`
+  and the capture header is `t_ns` (mac files keep `t_ticks` mach units);
+  readers pick the conversion from the header, so old and new captures mix.
+- Deps: Python 3.12; `pyobjc-framework-Quartz` on macOS only (Windows needs
+  no third-party packages).
 
 ## Counter-strafe metric
 

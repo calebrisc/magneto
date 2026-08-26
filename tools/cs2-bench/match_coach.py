@@ -24,8 +24,11 @@ def speak(text):
 def load_inputs():
     clicks=[]; ups=[]; keyups=[]; t0=None
     try:
-        for r in csv.DictReader(open(cap)):
-            t=int(r['t_ticks'])*125/3/1e9
+        rd=csv.DictReader(open(cap))
+        from report_gen import cap_time_col
+        tcol, scale = cap_time_col(rd.fieldnames)
+        for r in rd:
+            t=int(r[tcol])*scale
             if t0 is None: t0=t
             w=anchor+(t-t0)
             k=r['kind']

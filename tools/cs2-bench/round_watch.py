@@ -38,9 +38,12 @@ def input_stats(cap_path, anchor, a, b):
     t0 = None
     key_state = {}
     try:
-        for r in csv.DictReader(open(cap_path)):
+        rd = csv.DictReader(open(cap_path))
+        from report_gen import cap_time_col
+        tcol, scale = cap_time_col(rd.fieldnames)
+        for r in rd:
             try:
-                t = int(r["t_ticks"]) * 125 / 3 / 1e9
+                t = int(r[tcol]) * scale
             except Exception:
                 continue
             if t0 is None: t0 = t

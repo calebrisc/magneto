@@ -12,7 +12,11 @@ Usage: magneto_session.py [hours_to_run]
 """
 import json, time, os, sys, csv, threading, subprocess, atexit
 from http.server import HTTPServer, BaseHTTPRequestHandler
-import Quartz
+IS_WIN = os.name == "nt"
+if IS_WIN:
+    import win_input_tap
+else:
+    import Quartz
 import report_gen
 
 BASE = os.path.dirname(os.path.abspath(__file__))
@@ -30,7 +34,22 @@ state = {
 lock = threading.Lock()
 
 # ---------- pointer acceleration ----------
+# macOS: toggled off during capture, restored after. Windows: raw input deltas
+# are pre-acceleration so capture is clean either way, but the game feel isn't —
+# warn once if "Enhance pointer precision" is on instead of silently rewriting
+# a system setting.
 def accel_off():
+    if IS_WIN:
+        try:
+            import ctypes
+            params = (ctypes.c_int * 3)()
+            ctypes.windll.user32.SystemParametersInfoW(0x0003, 0, params, 0)  # SPI_GETMOUSE
+            if params[2]:
+                print("WARN: 'Enhance pointer precision' is ON "
+                      "(Settings > Bluetooth & devices > Mouse > Additional mouse settings "
+                      "> Pointer Options) — turn it off for consistent aim.", flush=True)
+        except Exception: pass
+        return
     try:
         out = subprocess.run(["defaults","read","-g","com.apple.mouse.scaling"],
                              capture_output=True, text=True).stdout.strip()
@@ -39,11 +58,19 @@ def accel_off():
     except Exception: pass
 
 def accel_restore():
+    if IS_WIN: return
     if state["accel_saved"] is not None:
         subprocess.run(["defaults","write","-g","com.apple.mouse.scaling",
                         "-float", state["accel_saved"]])
         state["accel_saved"] = None
 atexit.register(accel_restore)
+
+# ---------- platform tap control ----------
+def tap_set(on):
+    if IS_WIN:
+        win_input_tap.set_enabled(on)
+    elif tap_holder[0] is not None:
+        Quartz.CGEventTapEnable(tap_holder[0], on)
 
 # ---------- input tap (runs in its own thread/runloop) ----------
 WASD = {0:"a",1:"s",2:"d",13:"w",49:"j"}  # j = jump (space)
@@ -120,20 +147,18 @@ def capture_start(map_name):
     state["cap_path"] = base + ".cap.csv"
     state["anchor_path"] = base + ".anchor"
     f = open(state["cap_path"], "w", buffering=1)
-    f.write("t_ticks,kind,dx,dy\n")
+    f.write(("t_ns" if IS_WIN else "t_ticks") + ",kind,dx,dy\n")
     open(state["anchor_path"], "w").write(str(time.time()))
     with lock:
         state["cap_file"] = f
-    if tap_holder[0] is not None:
-        Quartz.CGEventTapEnable(tap_holder[0], True)
+    tap_set(True)
     accel_off()
     print(f"CAPTURE_START:{map_name}", flush=True)
 
 def capture_stop_and_report():
     with lock:
         f = state["cap_file"]; state["cap_file"] = None
-    if tap_holder[0] is not None:
-        Quartz.CGEventTapEnable(tap_holder[0], False)
+    tap_set(False)
     accel_restore()
     if f: f.close()
     gsi_f = state["gsi_file"]
@@ -181,7 +206,10 @@ def handle_gsi(g):
         if gf: gf.close()
         state["gsi_file"] = None
 
-threading.Thread(target=tap_thread, daemon=True).start()
+if IS_WIN:
+    win_input_tap.start(lambda: state["cap_file"])
+else:
+    threading.Thread(target=tap_thread, daemon=True).start()
 server = HTTPServer(("127.0.0.1", 3202), H)
 threading.Thread(target=server.serve_forever, daemon=True).start()
 print("supervisor up — waiting for CS2", flush=True)

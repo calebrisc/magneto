@@ -1,7 +1,0 @@
-default: m1_logger
-build_dir: /Users/caponaroni/hapticmouse/firmware/m1_logger/build
-domains:
-  - name: m1_logger
-    build_dir: /Users/caponaroni/hapticmouse/firmware/m1_logger/build/m1_logger
-flash_order:
-  - m1_logger

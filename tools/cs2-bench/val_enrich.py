@@ -81,10 +81,20 @@ def agg(windows):
     return tot
 
 
-# util conversion: ability casts (c/q/e/x in the capture) followed within 5 s
-# by a friendly kill — mine vs a teammate's. Casts that hit nobody still count
-# in the denominator; that's the point.
+# util conversion, bind-aware: an ability EQUIP (per sessions/binds.json) that
+# gets CONFIRMED by a fire click within the window — without a cancel key or
+# another equip stowing it first — counts as a cast. A cast converts if a
+# friendly kill lands within 5 s (mine vs a teammate's). Casts that hit nobody
+# still count in the denominator; that's the point. Known miss: abilities that
+# activate instantly on the equip key with no confirm click.
 def util_conversion():
+    try:
+        binds = json.load(open(os.path.join(BASE_DIR, "sessions", "binds.json")))
+    except Exception:
+        binds = {"equips": {"c": "ability", "q": "ability", "e": "ability",
+                            "x": "ult"}, "cancels": [], "confirm_window_s": 4}
+    equips, cancels = binds["equips"], set(binds.get("cancels", []))
+    win = binds.get("confirm_window_s", 4)
     kills_wall = []
     for rr in m.get("roundResults", []):
         for ps in rr.get("playerStats", []):
@@ -92,7 +102,7 @@ def util_conversion():
                 w = g0 + (k.get("gameTime") or 0) / 1000.0
                 kills_wall.append((w, k.get("killer")))
     kills_wall.sort()
-    casts = []
+    casts, pending = [], None  # pending = (slot, equip_wall_time)
     try:
         import csv as _csv
         from report_gen import cap_time_col
@@ -106,12 +116,23 @@ def util_conversion():
                 continue
             if t0 is None:
                 t0 = t
-            if row["kind"] in ("c", "q", "e", "x"):
-                casts.append(anchor + (t - t0))
+            w = anchor + (t - t0)
+            kind = row["kind"]
+            if pending and w - pending[1] > win:
+                pending = None
+            if kind in equips:
+                pending = (equips[kind], w)  # new equip replaces any pending
+            elif kind in cancels:
+                pending = None
+            elif kind in ("L", "R") and pending:
+                casts.append((pending[0], w))
+                pending = None
     except Exception:
         pass
-    out = {"casts": len(casts), "converted_self": 0, "converted_team": 0}
-    for ct in casts:
+    out = {"casts": len(casts), "converted_self": 0, "converted_team": 0,
+           "by_slot": {}}
+    for slot, ct in casts:
+        out["by_slot"][slot] = out["by_slot"].get(slot, 0) + 1
         window = [k for w, k in kills_wall if ct < w <= ct + 5]
         if any(k == ME for k in window):
             out["converted_self"] += 1

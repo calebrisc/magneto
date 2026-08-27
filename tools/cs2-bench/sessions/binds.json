@@ -1,0 +1,9 @@
+{
+  "_comment": "Auto-fetched from Riot player preferences (usw2.pp.sgp.pvp.net, Ares.PlayerSettings). Maps capture kinds to ability slots for cast detection. cancels = keys that stow an equipped ability.",
+  "player": "sin cuidado#bigd",
+  "sens": 0.24598847329616547,
+  "sens_ads_multiplier": 0.900987446308136,
+  "equips": {"m4": "grenade", "m5": "ability1", "c": "signature", "x": "ult"},
+  "cancels": ["q", "1", "2", "3"],
+  "confirm_window_s": 4
+}

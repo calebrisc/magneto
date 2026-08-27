@@ -30,11 +30,16 @@ MOUSE_MOVE_ABSOLUTE = 0x0001
 RI_MOUSE_LEFT_BUTTON_DOWN = 0x0001
 RI_MOUSE_LEFT_BUTTON_UP = 0x0002
 RI_MOUSE_RIGHT_BUTTON_DOWN = 0x0004
+RI_MOUSE_BUTTON_4_DOWN = 0x0040   # side buttons — ability binds live here
+RI_MOUSE_BUTTON_4_UP = 0x0080
+RI_MOUSE_BUTTON_5_DOWN = 0x0100
+RI_MOUSE_BUTTON_5_UP = 0x0200
 RI_KEY_BREAK = 0x0001
 HWND_MESSAGE = -3
 
 WASD = {0x41: "a", 0x53: "s", 0x44: "d", 0x57: "w", 0x20: "j",  # j = jump (space)
-        0x43: "c", 0x51: "q", 0x45: "e", 0x58: "x"}  # ability keys (Val util)
+        0x43: "c", 0x51: "q", 0x45: "e", 0x58: "x",  # ability/use/swap keys
+        0x31: "1", 0x32: "2", 0x33: "3"}  # weapon slots (cast-cancel detection)
 MODS = {0x10: "W2", 0x11: "C2"}  # shift = walkmod, ctrl = crouchmod
 
 LRESULT = ctypes.c_ssize_t
@@ -148,6 +153,14 @@ def _handle_input(lparam):
                 f.write(f"{t},Lu,0,0\n")
             if bf & RI_MOUSE_RIGHT_BUTTON_DOWN:
                 f.write(f"{t},R,0,0\n")
+            if bf & RI_MOUSE_BUTTON_4_DOWN:
+                f.write(f"{t},m4,0,0\n")
+            if bf & RI_MOUSE_BUTTON_4_UP:
+                f.write(f"{t},m4u,0,0\n")
+            if bf & RI_MOUSE_BUTTON_5_DOWN:
+                f.write(f"{t},m5,0,0\n")
+            if bf & RI_MOUSE_BUTTON_5_UP:
+                f.write(f"{t},m5u,0,0\n")
             if not (mo.usFlags & MOUSE_MOVE_ABSOLUTE) and (mo.lLastX or mo.lLastY):
                 f.write(f"{t},m,{mo.lLastX},{mo.lLastY}\n")
         elif ri.header.dwType == RIM_TYPEKEYBOARD:

@@ -81,6 +81,46 @@ def agg(windows):
     return tot
 
 
+# util conversion: ability casts (c/q/e/x in the capture) followed within 5 s
+# by a friendly kill — mine vs a teammate's. Casts that hit nobody still count
+# in the denominator; that's the point.
+def util_conversion():
+    kills_wall = []
+    for rr in m.get("roundResults", []):
+        for ps in rr.get("playerStats", []):
+            for k in ps.get("kills", []):
+                w = g0 + (k.get("gameTime") or 0) / 1000.0
+                kills_wall.append((w, k.get("killer")))
+    kills_wall.sort()
+    casts = []
+    try:
+        import csv as _csv
+        from report_gen import cap_time_col
+        rd = _csv.DictReader(open(cap))
+        tcol, scale = cap_time_col(rd.fieldnames)
+        t0 = None
+        for row in rd:
+            try:
+                t = int(row[tcol]) * scale
+            except Exception:
+                continue
+            if t0 is None:
+                t0 = t
+            if row["kind"] in ("c", "q", "e", "x"):
+                casts.append(anchor + (t - t0))
+    except Exception:
+        pass
+    out = {"casts": len(casts), "converted_self": 0, "converted_team": 0}
+    for ct in casts:
+        window = [k for w, k in kills_wall if ct < w <= ct + 5]
+        if any(k == ME for k in window):
+            out["converted_self"] += 1
+        elif any(k in mates for k in window):
+            out["converted_team"] += 1
+    out["unconverted"] = out["casts"] - out["converted_self"] - out["converted_team"]
+    return out
+
+
 mystats = players[ME].get("stats") or {}
 summary = {
     "map": info.get("mapId", "").rsplit("/", 1)[-1],
@@ -95,6 +135,7 @@ summary = {
                               > r["died_vs"]["mates_alive"] + 1),
     "pre_kill_input": agg(kill_windows),
     "pre_death_input": agg(death_windows),
+    "util": util_conversion(),
     "per_round": rounds_out,
 }
 print(json.dumps(summary, indent=1))

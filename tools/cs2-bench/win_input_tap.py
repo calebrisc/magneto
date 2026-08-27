@@ -33,7 +33,8 @@ RI_MOUSE_RIGHT_BUTTON_DOWN = 0x0004
 RI_KEY_BREAK = 0x0001
 HWND_MESSAGE = -3
 
-WASD = {0x41: "a", 0x53: "s", 0x44: "d", 0x57: "w", 0x20: "j"}  # j = jump (space)
+WASD = {0x41: "a", 0x53: "s", 0x44: "d", 0x57: "w", 0x20: "j",  # j = jump (space)
+        0x43: "c", 0x51: "q", 0x45: "e", 0x58: "x"}  # ability keys (Val util)
 MODS = {0x10: "W2", 0x11: "C2"}  # shift = walkmod, ctrl = crouchmod
 
 LRESULT = ctypes.c_ssize_t

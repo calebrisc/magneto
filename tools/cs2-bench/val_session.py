@@ -105,6 +105,7 @@ def capture_start(priv):
     state["start_w"] = time.time()
     open(state["anchor_path"], "w").write(str(state["start_w"]))
     state["val_file"] = open(state["val_path"], "a", buffering=1)
+    state["score"] = (0, 0)
     state["cap_file"] = f
     win_input_tap.set_enabled(True)
     print(f"CAPTURE_START:{state['map']}:{state['mode']}", flush=True)
@@ -160,9 +161,7 @@ def capture_stop_and_report():
     if f: f.close()
     vf = state["val_file"]; state["val_file"] = None
     if vf: vf.close()
-    priv = state["last_priv"] or {}
-    score = (priv.get("partyOwnerMatchScoreAllyTeam"),
-             priv.get("partyOwnerMatchScoreEnemyTeam"))
+    score = state.get("score") or (0, 0)
     try:
         out = write_report(state["cap_path"], state["start_w"], state["start_w"],
                            time.time(), state["map"], state["mode"], score,
@@ -182,15 +181,17 @@ def regen(base):
     name = os.path.basename(base)                      # <stamp>_val_<map>
     stamp = name.split("_val_")[0]
     map_ = name.split("_val_", 1)[1]
-    priv, mode = {}, "unknown"
+    priv, mode, score = {}, "unknown", (0, 0)
     try:
         for line in open(base + ".val.jsonl"):
             priv = json.loads(line)["private"]
+            sc = (priv.get("partyOwnerMatchScoreAllyTeam") or 0,
+                  priv.get("partyOwnerMatchScoreEnemyTeam") or 0)
+            if sum(sc) > sum(score):
+                score = sc
         mode = mode_name(priv)
     except Exception:
         pass
-    score = (priv.get("partyOwnerMatchScoreAllyTeam"),
-             priv.get("partyOwnerMatchScoreEnemyTeam"))
     out = write_report(base + ".cap.csv", anchor, anchor, end, map_, mode,
                        score, stamp)
     print(f"REPORT:{out}", flush=True)
@@ -224,6 +225,11 @@ def main():
             if state["cap_file"] is not None:
                 if priv is not None:
                     state["last_priv"] = priv
+                    # scores zero out on the end screen — keep the max seen
+                    sc = (priv.get("partyOwnerMatchScoreAllyTeam") or 0,
+                          priv.get("partyOwnerMatchScoreEnemyTeam") or 0)
+                    if sum(sc) > sum(state.get("score") or (0, 0)):
+                        state["score"] = sc
                     state["val_file"].write(json.dumps(
                         {"t_recv": time.time(), "private": priv}) + "\n")
                 if loop is not None and loop != "INGAME":

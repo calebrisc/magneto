@@ -80,9 +80,18 @@ def own_presence(port, pw, cache):
     return None
 
 
+# Riot uses internal codenames in matchMap; translate the known ones
+MAP_CODENAMES = {"bonsai": "split", "triad": "haven", "jam": "lotus",
+                 "infinity": "abyss", "plummet": "summit", "duality": "bind",
+                 "canyon": "fracture", "foxtrot": "breeze", "port": "icebox",
+                 "pitt": "pearl", "juliett": "sunset", "rook": "corrode",
+                 "rangev2": "range"}
+
+
 def map_name(priv):
     mm = (priv or {}).get("matchMap") or ""
-    return (mm.rsplit("/", 1)[-1] or "unknown").lower()
+    raw = (mm.rsplit("/", 1)[-1] or "unknown").lower()
+    return MAP_CODENAMES.get(raw, raw)
 
 
 def mode_name(priv):

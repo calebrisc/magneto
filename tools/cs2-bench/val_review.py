@@ -31,6 +31,20 @@ except Exception:
               for a in raw}
     json.dump(agents, open(AG_CACHE, "w"))
 
+# mapId -> display name (Riot uses internal codenames: Bonsai=Split, Triad=Haven)
+MAP_CACHE = os.path.join(MDIR, "_maps.json")
+try:
+    map_names = json.load(open(MAP_CACHE))
+except Exception:
+    raw = json.loads(urllib.request.urlopen(
+        "https://valorant-api.com/v1/maps", timeout=10).read())["data"]
+    map_names = {mm["mapUrl"]: mm["displayName"] for mm in raw if mm.get("mapUrl")}
+    json.dump(map_names, open(MAP_CACHE, "w"))
+
+
+def map_display(map_id):
+    return map_names.get(map_id, (map_id or "").rsplit("/", 1)[-1])
+
 matches = []
 for path in glob.glob(os.path.join(MDIR, "*.json")):
     if os.path.basename(path).startswith("_"):
@@ -80,7 +94,7 @@ for m in matches:
         return ("attack" if second == "defense" else "defense") if flip else second
 
     st = me.get("stats") or {}
-    r = {"map": info.get("mapId", "").rsplit("/", 1)[-1],
+    r = {"map": map_display(info.get("mapId", "")),
          "start": info.get("gameStartMillis"),
          "agent": ag[0], "role": ag[1],
          "won": bool(team_row.get("won")),

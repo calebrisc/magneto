@@ -59,11 +59,21 @@ def own_presence(port, pw, cache):
     if "puuid" not in cache:
         cache["puuid"] = api_get(port, pw, "/chat/v1/session")["puuid"]
     for p in api_get(port, pw, "/chat/v4/presences").get("presences", []):
-        if p.get("puuid") == cache["puuid"] and p.get("product") == "valorant":
-            try:
-                return json.loads(base64.b64decode(p.get("private") or ""))
-            except Exception:
-                return None
+        # 2026 client: no `product` field, puuid only inside `pid` ("<puuid>@na1...")
+        pu = p.get("puuid") or (p.get("pid") or "").split("@")[0]
+        if pu != cache["puuid"]:
+            continue
+        try:
+            priv = json.loads(base64.b64decode(p.get("private") or ""))
+        except Exception:
+            continue
+        # 2026 client nests match state under matchPresenceData; flatten so the
+        # rest of the code sees one schema (old top-level keys win nothing here)
+        mpd = priv.get("matchPresenceData")
+        if isinstance(mpd, dict):
+            priv = {**priv, **mpd}
+        if "sessionLoopState" in priv:
+            return priv
     return None
 
 

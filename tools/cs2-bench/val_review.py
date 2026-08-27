@@ -15,7 +15,8 @@ Usage: val_review.py <puuid>   (prints JSON: per-match rows + aggregates)
 import glob, json, os, sys, urllib.request
 
 BASE = os.path.dirname(os.path.abspath(__file__))
-MDIR = os.path.join(BASE, "sessions", "valmatches")
+MDIR = sys.argv[2] if len(sys.argv) > 2 else os.path.join(BASE, "sessions",
+                                                          "valmatches")
 ME = sys.argv[1]
 TRADE_S = 5.0
 
@@ -101,7 +102,9 @@ for m in matches:
          "score": f"{team_row.get('roundsWon')}-"
                   f"{(team_row.get('roundsPlayed') or 0) - (team_row.get('roundsWon') or 0)}",
          "k": st.get("kills"), "d": st.get("deaths"), "a": st.get("assists"),
-         "rounds": st.get("roundsPlayed"),
+         # surrendered games under-report roundsPlayed; trust the round list too
+         "rounds": max(st.get("roundsPlayed") or 0,
+                       len(m.get("roundResults") or [])),
          "dmg": 0, "fb": 0, "fd": 0, "fd_attack": 0, "fd_traded": 0,
          "deaths_traded": 0, "deaths_outnum": 0, "deaths_anchor": 0,
          "deaths_clutch": 0, "kast": 0, "multi": 0}

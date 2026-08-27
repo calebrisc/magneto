@@ -25,7 +25,10 @@ from round_watch import input_stats
 BASE = os.path.dirname(os.path.abspath(__file__))
 SESS = os.path.join(BASE, "sessions"); os.makedirs(SESS, exist_ok=True)
 REPORTS = os.path.join(BASE, "reports"); os.makedirs(REPORTS, exist_ok=True)
-RUN_HOURS = float(sys.argv[1]) if len(sys.argv) > 1 else 6.0
+try:
+    RUN_HOURS = float(sys.argv[1]) if len(sys.argv) > 1 else 6.0
+except ValueError:
+    RUN_HOURS = 6.0
 LOCKFILE = os.path.join(os.environ.get("LOCALAPPDATA", ""),
                         "Riot Games", "Riot Client", "Config", "lockfile")
 POLL_S = 2.5
@@ -112,8 +115,10 @@ def fmt_stats(s):
         return "<p class=note>no shots in window</p>"
     rows = [("shots", s["shots"]),
             ("strafe-release shots measured", s.get("cs_measured", 0)),
-            ("in 60–130 ms window", s.get("cs_inwin", 0)),
-            ("early (&lt;60 ms)", s.get("cs_early", 0)),
+            ("fast release&rarr;shot (&lt;60 ms)", s.get("cs_early", 0)),
+            ("60–130 ms release&rarr;shot", s.get("cs_inwin", 0)),
+            ("counter-strafed shots (CS habit)", s.get("cstrafe_shots", 0)),
+            ("&hellip;opposite key still held at shot", s.get("cstrafe_held_at_shot", 0)),
             ("moving shots", s.get("moving_shots", 0)),
             ("sprays (&ge;0.4 s)", s.get("sprays", 0)),
             ("peak flick (counts/s)", s.get("peak_flick_cps", 0)),
@@ -122,43 +127,73 @@ def fmt_stats(s):
     return f"<table>{tr}</table>"
 
 
+def write_report(cap_path, anchor, a, b, map_, mode, score, stamp):
+    whole = input_stats(cap_path, anchor, a, b)
+    mid = (a + b) / 2
+    h1 = input_stats(cap_path, anchor, a, mid)
+    h2 = input_stats(cap_path, anchor, mid, b)
+    out = os.path.join(REPORTS, f"{stamp}_val_{map_}.html")
+    dur = (b - a) / 60
+    doc = f"""<!doctype html><meta charset=utf-8>
+<title>val {html.escape(map_)} {stamp}</title>
+<style>body{{font:14px system-ui;margin:2em auto;max-width:640px;color:#222}}
+table{{border-collapse:collapse;margin:.5em 0}}td{{border:1px solid #ccc;
+padding:3px 10px}}h2{{margin-top:1.4em}}.note{{color:#777}}</style>
+<h1>Valorant — {html.escape(map_)}</h1>
+<p class=note>{html.escape(mode)} · {dur:.1f} min ·
+score {score[0]}–{score[1]} (ally–enemy, last seen)</p>
+<h2>Whole match</h2>{fmt_stats(whole)}
+<h2>First half</h2>{fmt_stats(h1)}
+<h2>Second half</h2>{fmt_stats(h2)}
+<p class=note>Input-only metrics (Valorant has no live event feed).
+Val stops on key release — fast release&rarr;shot is fine here (unlike CS);
+the habit to unlearn is counter-strafing: it's neutral at best, and shots
+with the opposite key still held are fired while self-inflicted-inaccurate.
+Timing buckets kept CS-identical for cross-game comparison.</p>"""
+    open(out, "w", encoding="utf-8").write(doc)
+    return out
+
+
 def capture_stop_and_report():
     win_input_tap.set_enabled(False)
     f = state["cap_file"]; state["cap_file"] = None
     if f: f.close()
     vf = state["val_file"]; state["val_file"] = None
     if vf: vf.close()
-    end_w = time.time()
-    a, b = state["start_w"], end_w
     priv = state["last_priv"] or {}
     score = (priv.get("partyOwnerMatchScoreAllyTeam"),
              priv.get("partyOwnerMatchScoreEnemyTeam"))
     try:
-        whole = input_stats(state["cap_path"], a, a, b)
-        mid = (a + b) / 2
-        h1 = input_stats(state["cap_path"], a, a, mid)
-        h2 = input_stats(state["cap_path"], a, mid, b)
-        out = os.path.join(REPORTS, f"{state['stamp']}_val_{state['map']}.html")
-        dur = (b - a) / 60
-        doc = f"""<!doctype html><meta charset=utf-8>
-<title>val {html.escape(state['map'])} {state['stamp']}</title>
-<style>body{{font:14px system-ui;margin:2em auto;max-width:640px;color:#222}}
-table{{border-collapse:collapse;margin:.5em 0}}td{{border:1px solid #ccc;
-padding:3px 10px}}h2{{margin-top:1.4em}}.note{{color:#777}}</style>
-<h1>Valorant — {html.escape(state['map'])}</h1>
-<p class=note>{html.escape(state['mode'])} · {dur:.1f} min ·
-score {score[0]}–{score[1]} (ally–enemy, last seen)</p>
-<h2>Whole match</h2>{fmt_stats(whole)}
-<h2>First half</h2>{fmt_stats(h1)}
-<h2>Second half</h2>{fmt_stats(h2)}
-<p class=note>Input-only metrics (Valorant has no live event feed).
-Strafe-release timing uses the CS 60–130 ms window for comparability —
-read it as a stop-shoot discipline proxy, not a Val-tuned constant.</p>"""
-        open(out, "w", encoding="utf-8").write(doc)
+        out = write_report(state["cap_path"], state["start_w"], state["start_w"],
+                           time.time(), state["map"], state["mode"], score,
+                           state["stamp"])
         print(f"REPORT:{out}", flush=True)
     except Exception as e:
         print(f"REPORT_FAILED:{e}", flush=True)
     state["last_priv"] = None
+
+
+def regen(base):
+    """Rebuild the report for an existing capture: regen <sessions/...base>
+    (path with or without the .cap.csv suffix)."""
+    base = base[:-len(".cap.csv")] if base.endswith(".cap.csv") else base
+    anchor = float(open(base + ".anchor").read().strip())
+    end = os.path.getmtime(base + ".cap.csv")
+    name = os.path.basename(base)                      # <stamp>_val_<map>
+    stamp = name.split("_val_")[0]
+    map_ = name.split("_val_", 1)[1]
+    priv, mode = {}, "unknown"
+    try:
+        for line in open(base + ".val.jsonl"):
+            priv = json.loads(line)["private"]
+        mode = mode_name(priv)
+    except Exception:
+        pass
+    score = (priv.get("partyOwnerMatchScoreAllyTeam"),
+             priv.get("partyOwnerMatchScoreEnemyTeam"))
+    out = write_report(base + ".cap.csv", anchor, anchor, end, map_, mode,
+                       score, stamp)
+    print(f"REPORT:{out}", flush=True)
 
 
 def main():
@@ -201,4 +236,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) > 2 and sys.argv[1] == "regen":
+        regen(sys.argv[2])
+    else:
+        main()

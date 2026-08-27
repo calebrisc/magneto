@@ -35,6 +35,7 @@ def newest_gsi():
 def input_stats(cap_path, anchor, a, b):
     """Aim/movement stats for wall-clock window [a, b]."""
     clicks, ups, strafe_ups, moves, moving_flags = [], [], [], [], []
+    strafe_up_keys, ad_presses = [], {"a": [], "d": []}
     t0 = None
     key_state = {}
     try:
@@ -53,15 +54,19 @@ def input_stats(cap_path, anchor, a, b):
                 if a <= w <= b: moves.append((w, abs(int(r["dx"]))))
             elif k == "L":
                 if a <= w <= b:
-                    clicks.append((w, bool(key_state.get("crouch"))))
+                    clicks.append((w, bool(key_state.get("crouch")),
+                                   bool(key_state.get("a")), bool(key_state.get("d"))))
                     moving_flags.append(any(key_state.get(x) for x in "wasd"))
             elif k == "Lu":
                 if a <= w <= b + 2: ups.append(w)
             elif k in ("a", "d", "w", "s"):
                 key_state[k] = True
+                if k in ("a", "d") and a - 1 <= w <= b: ad_presses[k].append(w)
             elif k in ("Au", "Du", "Wu", "Su"):
                 key_state[k[0].lower()] = False
-                if k in ("Au", "Du") and a - 1 <= w <= b: strafe_ups.append(w)
+                if k in ("Au", "Du") and a - 1 <= w <= b:
+                    strafe_ups.append(w)
+                    strafe_up_keys.append(k[0].lower())
             elif k == "C2":
                 key_state["crouch"] = True
             elif k == "C2u":
@@ -70,18 +75,27 @@ def input_stats(cap_path, anchor, a, b):
         pass
     if not clicks:
         return {"shots": 0}
-    crouch_shots = sum(1 for _, cr in clicks if cr)
+    crouch_shots = sum(1 for c in clicks if c[1])
+    # counter-strafe signature: opposite strafe key pressed within
+    # [-0.1 s, +0.15 s] of the release that precedes the shot
     delays = []
-    for c, cr in clicks:
+    cstrafe = cstrafe_held = 0
+    for c, cr, held_a, held_d in clicks:
         if cr: continue  # crouch spray-downs pollute duel-timing stats
         i = bisect.bisect_right(strafe_ups, c) - 1
         if i >= 0 and c - strafe_ups[i] < 0.4:
-            delays.append((c - strafe_ups[i]) * 1000)
+            rel_t = strafe_ups[i]
+            delays.append((c - rel_t) * 1000)
+            opp = "d" if strafe_up_keys[i] == "a" else "a"
+            if any(rel_t - 0.1 <= p <= rel_t + 0.15 for p in ad_presses[opp]):
+                cstrafe += 1
+                if (opp == "a" and held_a) or (opp == "d" and held_d):
+                    cstrafe_held += 1
     inwin = sum(1 for d in delays if 60 <= d < 130)
     early = sum(1 for d in delays if d < 60)
-    moving = sum(1 for (_, cr), f in zip(clicks, moving_flags) if f and not cr)
+    moving = sum(1 for c, f in zip(clicks, moving_flags) if f and not c[1])
     sprays = 0; longest = 0
-    for c, _ in clicks:
+    for c, *_ in clicks:
         u = [x for x in ups if x > c]
         if u:
             dur = u[0] - c
@@ -104,7 +118,8 @@ def input_stats(cap_path, anchor, a, b):
             "cs_measured": len(delays), "cs_inwin": inwin,
             "cs_early": early, "moving_shots": moving, "sprays": sprays,
             "longest_burst": longest, "peak_flick_cps": int(peak),
-            "total_dx": total_dx}
+            "total_dx": total_dx,
+            "cstrafe_shots": cstrafe, "cstrafe_held_at_shot": cstrafe_held}
 
 def main():
     st = load_state()

@@ -8,7 +8,8 @@ localhost. VAC-clean by construction — nothing reads or touches game memory.
 
 | File | Role |
 |---|---|
-| `magneto_session.py` | Supervisor. Embeds the GSI listener (port 3202), arms the input tap only while a match is live, disables pointer accel during capture, writes per-match capture files, emits an HTML report at match end. |
+| `magneto_session.py` | CS2 supervisor. Embeds the GSI listener (port 3202), arms the input tap only while a match is live, disables pointer accel during capture, writes per-match capture files, emits an HTML report at match end. |
+| `val_session.py` | Valorant supervisor (Windows). No GSI exists, so it polls the Riot Client local API (lockfile auth, presence `sessionLoopState`) to arm the same input tap only while INGAME; logs presence snapshots to `.val.jsonl` (map/queue/score) and emits an input-only HTML report at match end. Read-only localhost polling — no injection, no overlay, no game memory. |
 | `report_gen.py` | Match report generator (used by the supervisor). |
 | `round_watch.py` | Round watcher. Tails the newest capture, emits one `ROUND {json}` line per finished round (aim timing, moving shots, sprays, pre-death snapshot) then exits — built to wake a coaching agent per round. Steamid-gated: ignores spectated-teammate data after death. |
 | `window_stats.py` | Ad-hoc stats for the last N minutes (warmup use). |

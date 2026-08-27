@@ -95,7 +95,8 @@ for m in matches:
         return ("attack" if second == "defense" else "defense") if flip else second
 
     st = me.get("stats") or {}
-    r = {"map": map_display(info.get("mapId", "")),
+    r = {"match_id": info.get("matchId"),
+         "map": map_display(info.get("mapId", "")),
          "start": info.get("gameStartMillis"),
          "agent": ag[0], "role": ag[1],
          "won": bool(team_row.get("won")),
@@ -105,17 +106,34 @@ for m in matches:
          # surrendered games under-report roundsPlayed; trust the round list too
          "rounds": max(st.get("roundsPlayed") or 0,
                        len(m.get("roundResults") or [])),
-         "dmg": 0, "fb": 0, "fd": 0, "fd_attack": 0, "fd_traded": 0,
+         "dmg": 0, "recv": 0, "hits_h": 0, "hits_b": 0, "hits_l": 0,
+         "fb": 0, "fd": 0, "fd_attack": 0, "fd_traded": 0,
          "deaths_traded": 0, "deaths_outnum": 0, "deaths_anchor": 0,
          "deaths_clutch": 0, "kast": 0, "multi": 0}
 
+    real_rounds = 0
     for rr in m.get("roundResults", []):
+        # surrendered matches pad the score with synthetic rounds where
+        # nothing happened; they'd deflate per-round stats and inflate KAST
+        if not any(ps.get("kills") or ps.get("damage")
+                   for ps in rr.get("playerStats", [])):
+            continue
+        real_rounds += 1
         n = rr.get("roundNum", 0)
         side = my_side(n, rr)
         my_ps = next((p for p in rr.get("playerStats", [])
                       if p["subject"] == ME), None)
         if my_ps:
-            r["dmg"] += sum(d.get("damage", 0) for d in my_ps.get("damage", []))
+            for d in my_ps.get("damage", []):
+                r["dmg"] += d.get("damage", 0)
+                r["hits_h"] += d.get("headshots", 0)
+                r["hits_b"] += d.get("bodyshots", 0)
+                r["hits_l"] += d.get("legshots", 0)
+        for ps in rr.get("playerStats", []):
+            if ps["subject"] == ME:
+                continue
+            r["recv"] += sum(d.get("damage", 0) for d in ps.get("damage", [])
+                             if d.get("receiver") == ME)
         all_kills, seen = [], set()
         for ps in rr.get("playerStats", []):
             for k in ps.get("kills", []):
@@ -172,7 +190,13 @@ for m in matches:
                 r["deaths_clutch"] += 1
         if participated:
             r["kast"] += 1
+    r["rounds"] = max(min(r["rounds"], real_rounds), 1)
     r["adr"] = round(r["dmg"] / max(1, r["rounds"] or 0))
+    r["acs"] = round((st.get("score") or 0) / max(1, r["rounds"] or 0))
+    r["dddr"] = round((r["dmg"] - r["recv"]) / max(1, r["rounds"] or 0))
+    hits = r["hits_h"] + r["hits_b"] + r["hits_l"]
+    r["hs_pct"] = round(100 * r["hits_h"] / hits) if hits else None
+    r["dpk"] = round(r["dmg"] / max(1, r["k"] or 0))
     r["kast_pct"] = round(100 * r["kast"] / max(1, r["rounds"] or 0))
     # match verdict: separates "you underperformed" from "team lost around you"
     if r["adr"] <= 70 or r["kast_pct"] <= 55:
@@ -192,6 +216,18 @@ for r in rows:
     day = datetime.datetime.fromtimestamp((r["start"] or 0) / 1000).strftime("%Y%m%d")
     day_counts[day] = day_counts.get(day, 0) + 1
     r["session_game"] = day_counts[day]
+
+# RR per match, if a competitiveupdates dump sits next to the matches
+try:
+    mmr = json.load(open(os.path.join(MDIR, "_mmr.json")))
+    rr_by_id = {u.get("MatchID"): u for u in mmr.get("Matches", [])}
+    for r in rows:
+        u = rr_by_id.get(r["match_id"])
+        if u:
+            r["rr"] = u.get("RankedRatingEarned")
+            r["tier_after"] = u.get("TierAfterUpdate")
+except Exception:
+    pass
 
 
 def pct(a, b):

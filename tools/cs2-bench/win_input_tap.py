@@ -88,6 +88,31 @@ _get_file = None
 _key_down = {}  # VKey -> bool, to drop typematic auto-repeat
 _wndproc_ref = None  # keep the callback alive for the window's lifetime
 
+# The tap is system-wide (RIDEV_INPUTSINK) — gate on the game actually being
+# the foreground window, or alt-tabbed typing/mousing pollutes the capture.
+GAME_EXES = ("valorant-win64-shipping.exe", "cs2.exe")
+_fg = {"hwnd": None, "ok": False}
+VK_RETURN, VK_ESCAPE = 0x0D, 0x1B
+_typing = [False]  # in-game chat gate: Enter opens/sends, Esc cancels
+
+
+def _foreground_is_game():
+    hwnd = user32.GetForegroundWindow()
+    if hwnd != _fg["hwnd"]:
+        _fg["hwnd"] = hwnd
+        name = ""
+        pid = wt.DWORD()
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        h = kernel32.OpenProcess(0x1000, False, pid.value)  # QUERY_LIMITED_INFO
+        if h:
+            buf = ctypes.create_unicode_buffer(260)
+            size = wt.DWORD(260)
+            if kernel32.QueryFullProcessImageNameW(h, 0, buf, ctypes.byref(size)):
+                name = buf.value.rsplit("\\", 1)[-1].lower()
+            kernel32.CloseHandle(h)
+        _fg["ok"] = name in GAME_EXES
+    return _fg["ok"]
+
 
 def set_enabled(on):
     if on:
@@ -110,6 +135,8 @@ def _handle_input(lparam):
                               ctypes.sizeof(RAWINPUTHEADER)) != size.value:
         return
     ri = ctypes.cast(buf, ctypes.POINTER(RAWINPUT)).contents
+    if not _foreground_is_game():
+        return
     t = time.perf_counter_ns()
     try:
         if ri.header.dwType == RIM_TYPEMOUSE:
@@ -127,6 +154,15 @@ def _handle_input(lparam):
             kb = ri.data.keyboard
             vk = kb.VKey
             down = not (kb.Flags & RI_KEY_BREAK)
+            # in-game chat gate: drop keys while a chat line is being typed
+            if vk == VK_RETURN and down:
+                _typing[0] = not _typing[0]
+                return
+            if vk == VK_ESCAPE and down:
+                _typing[0] = False
+                return
+            if _typing[0]:
+                return
             k = WASD.get(vk)
             mod = MODS.get(vk)
             if k is None and mod is None:

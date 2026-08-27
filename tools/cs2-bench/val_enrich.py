@@ -102,7 +102,10 @@ def util_conversion():
                 w = g0 + (k.get("gameTime") or 0) / 1000.0
                 kills_wall.append((w, k.get("killer")))
     kills_wall.sort()
-    casts, pending = [], None  # pending = (slot, equip_wall_time)
+    casts, pending, charging = [], None, None
+    # pending = (slot, equip_time); charging = (slot, Ldown_time) — hold-to-
+    # charge abilities (Sova darts) fire on RELEASE, so cast time = Lu when
+    # one follows within 5 s; instant clicks only shift by ~100 ms, harmless
     try:
         import csv as _csv
         from report_gen import cap_time_col
@@ -120,13 +123,22 @@ def util_conversion():
             kind = row["kind"]
             if pending and w - pending[1] > win:
                 pending = None
+            if charging and w - charging[1] > 5:
+                casts.append((charging[0], charging[1]))  # never released: use Ldown
+                charging = None
             if kind in equips:
                 pending = (equips[kind], w)  # new equip replaces any pending
             elif kind in cancels:
+                pending = charging = None
+            elif kind == "R" and pending:
+                casts.append((pending[0], w))  # no Ru in captures: R fires now
                 pending = None
-            elif kind in ("L", "R") and pending:
-                casts.append((pending[0], w))
+            elif kind == "L" and pending:
+                charging = (pending[0], w)
                 pending = None
+            elif kind == "Lu" and charging:
+                casts.append((charging[0], w))
+                charging = None
     except Exception:
         pass
     out = {"casts": len(casts), "converted_self": 0, "converted_team": 0,

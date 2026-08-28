@@ -178,6 +178,17 @@ def capture_stop_and_report():
         print(f"REPORT:{out}", flush=True)
     except Exception as e:
         print(f"REPORT_FAILED:{e}", flush=True)
+    # autopilot: fetch Riot match details + enrich, detached (skip practice)
+    if state["mode"] not in ("range", "custom"):
+        try:
+            import subprocess
+            base = state["cap_path"][:-len(".cap.csv")]
+            subprocess.Popen([sys.executable,
+                              os.path.join(BASE, "postmatch.py"), base],
+                             stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL)
+        except Exception as e:
+            print(f"POSTMATCH_SPAWN_FAILED:{e}", flush=True)
     state["last_priv"] = None
 
 

@@ -48,6 +48,54 @@ Notes: aperture is **oval, height > width**, always. Ethnic ordering reported in
 
 Plan: use the ranges here to set the mechanism envelope, use SYMARE-1 meshes to sanity-check the wing/cup against real geometry, have the OU engineer request YEM to sweep the population in software, and validate on our own scans (iPhone photogrammetry or impression putty).
 
+## Cross-population check (added same day)
+
+Caveat first: "concha length" is defined differently between studies. 3D-scan studies (Korean/Caucasian) measure the **cavum** (the bowl) ≈ 15–17 mm. Photo/caliper studies (Indian, Nigerian, Vietnamese, Turkish, Italian) measure the **whole concha** top-of-cymba to bottom ≈ 25–29 mm. Compare only within a method.
+
+| Population | n | Method | Concha length | Concha width | Aperture H × W |
+|---|---|---|---|---|---|
+| Korean | 200 | 3D scan (cavum) | 17.2 ± 1.3 | 16.8 ± 1.8 | 12.9 × 9.2 (landmark def. generous) |
+| Caucasian | 96 | 3D scan (cavum) | 14.8 ± 1.3 | 16.7 ± 1.8 | 12.8 × 8.3 |
+| Taiwanese | 38 | CT | — | — | F 9.1 × 6.3 · M 9.6 × 6.8 |
+| Multi-study canal review (mostly Western) | — | casts/CT | — | — | 8.9–12.5 × 5.7–9.1 |
+| Central Indian | — | caliper (whole) | M 27.5 ± 1.8 · F 25.2 ± 2.3 | M 19.3 ± 2.0 · F 17.9 ± 1.9 | — |
+| Nigerian (Hausa/Igbo/Yoruba) | — | photo (whole) | M 29.1 ± 2.0 · F 29.2 ± 2.2 | — | — |
+| Vietnamese | 2000 | photo (whole) | F 26.9 ± 2.3 | F 15.9 ± 2.4 | — |
+| Maharashtrian Indian | 505 | photo (whole) | (tables in paper; smaller than Central Indian) | — | — |
+
+Ethnic ordering for canal size (Thomas et al., cited in the canal review): European > Asian > African, but "dimensional trends are fairly similar overall."
+
+### The math that matters
+
+Between-population differences in the **means** are ≤ 3–4 mm on every dimension where a same-method comparison exists (Korean vs Caucasian concha width: 0.1 mm; Indian vs Nigerian whole-concha length: ~2–4 mm; Taiwanese vs Western aperture: ~1–2 mm).
+
+Within-population spread is larger: ±2 SD ≈ **±3.6 mm** on concha width, **±4–5 mm** on aperture minor axis, **±2.6 mm** on cavum length. Observed ranges (min–max) are wider still: concha width 11.6–21.5 mm, aperture minor axis 4.7–14 mm.
+
+So: a mechanism that covers one population's observed **range** already contains every other population's **mean**. Shift the envelope outward ~2 mm on each end for the ethnic mean offsets and it covers roughly the 5th–95th percentile of every group measured. That is the design envelope to use:
+
+| Dimension | Design envelope |
+|---|---|
+| Cavum concha length | 11–23 mm |
+| Concha width | 10–24 mm |
+| Concha depth | 8–18 mm |
+| Aperture height | 7–18 mm |
+| Aperture width | 4.5–14 mm |
+| Aperture azimuth | 0°–55° |
+| Aperture elevation | −70° to +50° (one study; treat as soft) |
+
+### What is *not* verified
+
+- No cross-ethnic data on aperture **angles** or concha **rim shape** (notch width/depth, antihelix undercut). These are what a rigid part would care about; a compliant part cares less.
+- African-descent aperture size is only known as "smaller than Asian" from one citation; no numbers found. The 4.5 mm low end already assumes a small tail.
+- No population's 3D mesh is public at scale (SYMARE-1 = 10 people, York = academic license).
+
+### Is 3D required?
+
+For the **numbers**: no. Ranges above are enough to set spring travel, plateau force, cup cone range, nozzle OD.
+For the **shape**: partially. The wing hooks under the antihelix and the cup meets an oval at an angle — those contours aren't in any table. A compliant lattice tolerates shape error that a rigid part wouldn't, so 10–20 scans of *our own* people (varied ears, deliberately including small and large) is the real validation, not a 500-ear dataset. York Ear Model is a nice-to-have for sweeping shapes in software.
+
+Additional sources: Taiwanese CT study (Inter-Noise 2014, https://www.acoustics.asn.au/conference_proceedings/INTERNOISE2014/papers/p121.pdf); Nigerian ear morphometry (https://link.springer.com/article/10.1186/s42269-021-00665-0); Maharashtrian study (https://pmc.ncbi.nlm.nih.gov/articles/PMC6018292/); Vietnamese 2000-subject study (J Craniofac Surg 2022); Central Indian values as cited in the Maharashtrian paper.
+
 ## Sources
 
 - Lee W., Jung H., Bok I., Kim C., Kwon O., Choi T., You H. "Anthropometric analysis of 3D ear scans of Koreans and Caucasians for ear product design." *Ergonomics* 61(11), 2018. https://www.tandfonline.com/doi/full/10.1080/00140139.2018.1493150 — slides: https://www.slideshare.net/WonsupLee1/3d-ear-anthropometry-for-earphone-design

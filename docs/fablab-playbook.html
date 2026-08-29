@@ -235,6 +235,7 @@
     <button class="tab" id="tab-mouse" role="tab" aria-selected="true" aria-controls="panel-mouse">Mouse</button>
     <button class="tab" id="tab-pad" role="tab" aria-selected="false" aria-controls="panel-pad">Mousepad</button>
     <button class="tab" id="tab-kb" role="tab" aria-selected="false" aria-controls="panel-kb">Keyboard</button>
+    <button class="tab" id="tab-iem" role="tab" aria-selected="false" aria-controls="panel-iem">IEM</button>
   </div>
 
   <!-- ============ MOUSE ============ -->
@@ -457,8 +458,78 @@
     </div>
   </section>
 
+
+  <section class="panel" id="panel-iem" role="tabpanel" aria-labelledby="tab-iem" hidden>
+    <div class="verdict">
+      <strong>The play:</strong> the lab makes the whole IEM except the one hero part. The resin printer produces shells, fit prototypes, and elastomer lattice tips the same day; the fiber laser can cut a titanium <em>flexure</em> wing. The 3D-printed titanium gyroid wing needs a metal powder-bed machine the lab doesn't have &mdash; that stays a bureau part (~$40&ndash;80 each one-off, $15&ndash;30 at batch) and membership doesn't change its price.
+    </div>
+
+    <div class="tier crucial">
+      <div class="tier-head"><h2 class="tier-name">Crucial</h2><span class="tier-sub">the reason to join</span></div>
+      <div class="rows">
+        <div class="row crucial">
+          <span class="dot"></span>
+          <div class="tool">
+            <p class="tool-name">Formlabs Form 3 (resin)</p>
+            <span class="plain">high-detail resin printer, elastomer resins available</span>
+          </div>
+          <p class="why">This is how ChiFi IEM <strong>shells</strong> are actually made &mdash; Tough/Durable resin, same-day. Also prints <strong>wing fit prototypes</strong> to nail geometry before paying for titanium, and the <strong>lattice cup tips</strong> in Elastic 50A / Flexible 80A for seal and comfort testing. Every fit revision is hours, not a week.</p>
+        </div>
+        <div class="row crucial">
+          <span class="dot"></span>
+          <div class="tool">
+            <p class="tool-name">Fiber laser (50W)</p>
+            <span class="plain">cuts thin metal sheet</span>
+          </div>
+          <p class="why">Cuts 0.1&ndash;0.3 mm titanium or nitinol sheet into a <strong>2D flexure wing</strong> &mdash; a compliant spring pattern formed over a jig, graded stiffness by varying beam widths in the drawing. Pennies per revision. This is the friends-batch wing; the 3D gyroid is the product version.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="tier middle">
+      <div class="tier-head"><h2 class="tier-name">Middle</h2><span class="tier-sub">real value, but alternatives exist</span></div>
+      <div class="rows">
+        <div class="row middle">
+          <span class="dot"></span>
+          <div class="tool">
+            <p class="tool-name">Electronics bench</p>
+            <span class="plain">soldering irons, power supplies, meters</span>
+          </div>
+          <p class="why">Driver wiring, 2-pin sockets, bone-sensor and MEMS mic placement, dongle/puck assembly. Home iron covers it.</p>
+        </div>
+        <div class="row middle">
+          <span class="dot"></span>
+          <div class="tool">
+            <p class="tool-name">Injection molder (Galomb)</p>
+            <span class="plain">benchtop thermoplastic molder</span>
+          </div>
+          <p class="why">TPE tips and strain reliefs from a printed mold. Not silicone &mdash; LSR tips and skins are hand-cast in a Form 3 mold instead.</p>
+        </div>
+        <div class="row middle">
+          <span class="dot"></span>
+          <div class="tool">
+            <p class="tool-name">Ultimaker S5 / UV printer / vinyl cutter</p>
+            <span class="plain">FDM parts, direct-print graphics, decals</span>
+          </div>
+          <p class="why">Dongle and wireless-puck enclosures, cases, jigs; UV printer puts branding on cases and pucks.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="elsewhere">
+      <h3>Still needed elsewhere</h3>
+      <ul>
+        <li><strong>Titanium gyroid wing (3D lattice)</strong> &mdash; laser powder-bed print at a bureau (Protolabs, Xometry, or a Chinese Ti shop). Prototype the geometry in resin first so Ti only prints once.</li>
+        <li><strong>Electropolishing</strong> of a 3D lattice &mdash; service. Ti <em>anodizing</em> is a 9 V battery and a cup of borax, do it at home. A 2D flexure wing can be hand-polished.</li>
+        <li><strong>Drivers, 2-pin sockets, cables, magnets, bone sensor, MEMS mic</strong> &mdash; bought parts.</li>
+        <li><strong>Measurement</strong> &mdash; IEC 60318-4 coupler (~$150 clone) for tuning; the lab has no audio gear.</li>
+        <li><strong>PCBs</strong> for dongle and puck &mdash; board factory.</li>
+      </ul>
+    </div>
+  </section>
+
   <footer class="note">
-    Machine list per Fab Lab Tulsa's published equipment page (60W CO2 laser, 50W fiber laser, 3&times;4 ft bed, ShopBot, vinyl cutter, printers, electronics station, screen printing). Membership tiers from $40/yr student. Confirm current hours-package pricing and class calendar with the lab.
+    Machine list per Fab Lab Tulsa's published equipment page, re-checked 2026-08-29 (4&times; Epilog 60W CO2, Epilog Fusion Pro 36 w/ 50W fiber, Omax ProtoMAX waterjet, 2&times; ShopBot PRSalpha, Formlabs Form 3, Ultimaker S5, Galomb injection molder, thermoformer, plasma, welder, UV printer, vinyl cutter, electronics station, screen printing; no metal 3D printer). Membership tiers from $40/yr student. Confirm current hours-package pricing and class calendar with the lab.
   </footer>
 </div>
 

@@ -40,13 +40,17 @@ Notes: aperture is **oval, height > width**, always. Ethnic ordering reported in
 
 | Dataset | Subjects | Access | Notes |
 |---|---|---|---|
-| SYMARE-1 | 10 (MRI, full head + ear) | public | best free concha geometry |
+| **SONICOM HRTF dataset** | **300** (200 + 100 extended) | **public download** — https://transfer.ic.ac.uk:9090/#/2022_SONICOM-HRTF-DATASET/ | full-head + ear **STL meshes** (watertight and raw), depth photos, demographics. The primary shape dataset for us. |
+| **HUTUBS** (TU Berlin) | **96** | **public** — https://depositonce.tu-berlin.de/items/dc2a3076-a291-417e-97f0-7697e332c960 | head mesh + **pinna scanned at 0.05 mm** with an Artec Space Spider; anthropometric features included. Best concha/aperture detail. |
+| 119-subject ear mesh + PRTF set | 119 | public (arXiv 2010.04546) | structured-light ear scans, 18,176 vertices in correspondence across subjects — easy to compute population stats on |
+| Notre Dame UND-J2 | 415 (1,800 range images) | license agreement | biometrics-oriented profile range scans; lower detail than the above |
+| SYMARE-1 | 10 (MRI, full head + ear) | public | canal included (MRI), tiny n |
 | York Ear Model (YEM) | 500 synthesized from 10 scans + 605 landmarked images | academic user agreement — OU student can request | statistical shape model; PCA parameters let you sweep the population |
 | Lee et al. Korean/Caucasian scans | 326 | not public (POSTECH) | the numbers above |
 | Chinese canal casting study | 700 | paper only | 23 canal variables to the second bend |
 | Zhang et al. Chinese cavum concha shape analysis | 1195 scans | paper only | statistical shape of cavum concha + meatus |
 
-Plan: use the ranges here to set the mechanism envelope, use SYMARE-1 meshes to sanity-check the wing/cup against real geometry, have the OU engineer request YEM to sweep the population in software, and validate on our own scans (iPhone photogrammetry or impression putty).
+Plan: use the ranges here to set the mechanism envelope; download SONICOM + HUTUBS (~400 real ears, no paperwork) and fit the wing/cup against them in software; validate on our own scans (iPhone photogrammetry or impression putty). YEM/UND are optional.
 
 ## Cross-population check (added same day)
 
@@ -87,7 +91,7 @@ So: a mechanism that covers one population's observed **range** already contains
 
 - No cross-ethnic data on aperture **angles** or concha **rim shape** (notch width/depth, antihelix undercut). These are what a rigid part would care about; a compliant part cares less.
 - African-descent aperture size is only known as "smaller than Asian" from one citation; no numbers found. The 4.5 mm low end already assumes a small tail.
-- No population's 3D mesh is public at scale (SYMARE-1 = 10 people, York = academic license).
+- Public 3D meshes (SONICOM, HUTUBS) are mostly European-recruited university populations; they cover *shape* well but don't fix the ethnic-tail question on their own.
 
 ### Is 3D required?
 

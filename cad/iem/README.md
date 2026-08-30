@@ -77,42 +77,51 @@ face reversal.
 
 ## 4. Magnets
 
-Numbers come from `docs/MAGFLOAT_MAGNETS.md` (magpylib 5.0.1 + magpylib-force,
-Maxwell-stress solver). Select with `--magnet-preset`.
+Numbers come from `docs/MAGFLOAT_MAGNETS.md`, **"Asymmetric pair (as-built)"**
+(magpylib 5.0.1 + magpylib-force, Maxwell-stress solver). The moving ring has to
+slide over the Ø5 nozzle tube, so its ID is pinned at 5.4 mm and the pair can
+never be identical — every preset below is asymmetric. Select with
+`--magnet-preset`.
 
-| preset | ring OD×ID×T | material | rest gap | F over 1.5 mm travel | ratio |
-|---|---|---|---|---|---|
-| **`bonded_compact`** (default) | 7 × 3 × 1.5 | bonded NdFeB, Br 0.65 T | **2.25 mm** | 0.433 → 0.254 → 0.165 N | 2.62 |
-| `n52_long` | 7 × 3 × 1.5 | N52, Br 1.45 T | 6.40 mm | 0.263 → 0.200 → 0.155 N | 1.69 |
-| `n52_clean_bore` | 8 × 4 × 1.5 | N52 | 6.80 mm | 0.259 → 0.203 → 0.161 N | 1.61 |
-| `n52_small_pkg` | 6 × 3 × 1 | N52 | 3.30 mm | 0.359 → 0.226 → 0.153 N | 2.35 |
+| preset | fixed ring | moving ring | rest gap | F over 1.5 mm travel | ratio | moving mass |
+|---|---|---|---|---|---|---|
+| **`asym_as_built`** (default) | 7 × 3 × 1.5 | **9 × 5.4 × 2.0** | **2.25 mm** | 0.307 → 0.214 → 0.155 N | **1.98** | 0.489 g |
+| `asym_light` | 7 × 3 × 1.5 | 9 × 5.4 × 1.5 | 1.25 mm | 0.405 → 0.288 → 0.199 N | 2.04 | 0.366 g |
+| `asym_8mm` | 7 × 3 × 1.5 | 8 × 5.4 × 2.0 | 1.89 mm | 0.382 → 0.230 → 0.151 N | 2.53 | 0.328 g |
+| `n52_long` / `n52_clean_bore` | (symmetric, first study) | — | 6.4 / 6.8 mm | — | 1.69 / 1.61 | — |
+
+All bonded NdFeB, Br 0.65 T. `asym_light` is the compact alternative: nearly the
+same regulation (2.04 vs 1.98) at half the rest gap and 25 % less moving-ring
+mass — pick it if envelope or carrier inertia matters more than the last bit of
+flatness. It changes only the carrier's counterbore depth and the bayonet
+station, both of which are derived, so `--magnet-preset asym_light` regenerates a
+consistent insert + carrier + mould set on its own.
+
+The two symmetric `n52_*` presets are kept for reference only: their moving ring
+has ID 3 mm, which cannot slide on a 5 mm tube, and the generator warns.
 
 **Both magnets live in the nozzle insert / carrier. Nothing magnetic is recessed
-into the core.** The fixed ring sits in a counterbore at the +X face of the
-insert's flange; the moving ring sits in an annular pocket at the floor of a
-counterbore in the carrier's core end. The counterbore is what swallows the air
-gap — that is why the carrier's core face can sit at x = 4.65 mm while its magnet
-face sits at x = 7.15 mm, 2.25 mm in front of the fixed ring at x = 4.90 mm.
+into the core.** The fixed ring sits in a Ø7.1 counterbore at the +X face of the
+insert's flange. The moving ring is **encapsulated in the carrier**: 0.5 mm of
+silicone (`magnet_encap`) on each axial face, 0.70 mm on the OD
+(`carrier_wall_od`, checked at runtime), and its ID flush with the sliding bore —
+a 9 × 5.4 ring over a Ø5.2 bore leaves 0.1 mm, which will not cast, so the
+mould core's post locates the ring during the pour instead. The carrier body was
+widened to **Ø10.5 mm** to carry the 9 mm ring; that is also the skirt root
+diameter, so the skirt's 35° flare now runs 5.82 mm instead of 7.61 mm to reach
+the same Ø19 rim.
 
-Two geometric conflicts the force study could not see, both flagged at runtime:
+A counterbore in the carrier's core end swallows the air gap: the carrier's face
+sits at x = 4.65 mm, its counterbore floor at x = 6.65 mm, and the moving ring's
+−X face at x = 7.15 mm — 2.25 mm in front of the fixed ring at x = 4.90 mm.
 
-1. **Ring ID 3 mm < nozzle bore 4 mm.** The fixed ring cannot be coaxial with a
-   4 mm bore without its own ID becoming the local bore. The generator seats it
-   in a plain Ø7.1 counterbore, so the acoustic path necks **Ø4 → Ø3 → Ø4 over
-   1.5 mm**. Acceptable (it is a short, smooth restriction), but if you want it
-   gone, use `--magnet-preset n52_clean_bore` — an 8×4×1.5 ring has ID = bore
-   exactly, at the cost of a 6.8 mm gap and a much longer stack.
-2. **The moving ring cannot have ID 3 mm at all.** It slides on the Ø5 insert
-   tube, so its ID is opened to 5.4 mm. The pair is therefore **asymmetric** and
-   the modelled 2.25 mm rest gap is optimistic — the real gap will be shorter.
-   Re-run the magpylib study with a 7×3×1.5 source and a 7×5.4×1.5 target before
-   ordering magnets. `carrier_magnet_id` is derived, not free.
+One geometric conflict remains, flagged at runtime: the **fixed ring's ID is
+3 mm, below the 4 mm nozzle bore**, so the acoustic path necks **Ø4 → Ø3 → Ø4
+over 1.5 mm**. Acceptable (short and smooth), and unavoidable at this ring size.
 
-Stray field from the fixed ring at the compact pick is 3.30 mT at 10 mm behind
-its back face, i.e. roughly at x = −5.9 mm — inside the front volume, ~5 mm from
-the driver's magnet. Worth a bench check on the driver's THD before committing.
-
----
+Stray field from the fixed ring is 3.30 mT at 10 mm behind its back face, i.e.
+roughly at x = −5.9 mm — inside the front volume, ~5 mm from the driver's magnet.
+Worth a bench check on driver THD before committing.
 
 ## 5. The protrusion budget (why the numbers came out where they did)
 
@@ -125,23 +134,27 @@ x = 0.00   core face / nozzle base
 x = 0..3   core nozzle stub, Ø5, two external bayonet lugs
 x = 3.20   insert socket ends
 x = 4.90   insert magnet flange face  <- FIXED ring's +X face
-x = 4.65   carrier core face (its counterbore overlaps the flange by 0.25)
-x = 5.05   skirt root, r = 4.0
-x = 7.15   carrier MOVING ring face   <- 2.25 mm gap
-x = 12.65  carrier distal face == skirt rim, Ø19.0     <- seal plane
-x = 14.15  same, at full 1.5 mm float
+x = 4.65   carrier core face (its Ø10.5 collar overlaps the flange by 0.25)
+x = 6.65   carrier counterbore floor  (0.5 mm encapsulation web)
+x = 7.15   MOVING ring -X face        <- 2.25 mm gap
+x = 7.83   skirt root, r = 5.25
+x = 9.20   moving ring +X face
+x = 9.55   bayonet lug station (derived: ring end + 0.35)
+x = 12.90  far end of the L-slot float pocket (1.5 mm travel)
+x = 13.65  carrier distal face == skirt rim, Ø19.0     <- seal plane
+x = 15.15  same, at full 1.5 mm float
 ```
 
-**Total protrusion from the core face: 12.65 mm at rest, 14.15 mm at full float**,
+**Total protrusion from the core face: 13.65 mm at rest, 15.15 mm at full float**,
 and the seal plane is the frontmost feature — nothing enters the canal. Against
 the `EAR_ANTHROPOMETRY.md` envelope (concha depth 8–18 mm) that fits the upper
-~60 % of the range at rest. The `n52_long` preset adds 4.15 mm to every number
-above and is *not* recommended for that reason; it is kept because it has the
-flattest force curve.
+~60 % of the range at rest. `asym_light` is 1.0 mm shorter in the counterbore but the same overall, since
+`carrier_len` dominates. The `n52_*` presets add ~4 mm and are not recommended.
 
 The `short` / `med` / `long` inserts differ only in tube length past the magnet
-flange (6 / 8 / 10 mm). The bayonet lug station is fixed at x = 9.0–10.5 mm so
-**one carrier fits all three**; the longer tubes exist to support the carrier
+flange (**7 / 9 / 11 mm**, raised to reach the new lug station). The lug station
+is derived from the magnet stack, so it is the same for all three inserts within
+a preset and **one carrier fits all three**; the longer tubes exist to support the carrier
 further out and to give deep conchas more retention, and they do protrude past
 the seal plane, so `short` is the default in the assembly.
 
@@ -194,6 +207,7 @@ tilted plate; that is normal for an ear shell and is not addressed here.
 |---|---|---|
 | `magnet_preset` | `bonded_compact` | the only combination in the magpylib grid that clears all four force bounds at a compact gap |
 | `magnet_pocket_clear` | 0.05 mm | glue gap around the ring; too much and the axial position (hence the force) drifts |
+| `magnet_encap` | 0.50 mm | silicone over the moving ring's axial faces. Drives the counterbore depth; a preset whose rest gap is under 0.8 mm will warn |
 
 ### Core shell
 
@@ -231,17 +245,16 @@ increases are forced by the 12 mm driver carrier, not stylistic.
 | `lug_h` / `lug_w` | 0.60 / 1.50 mm | as briefed; two lugs at 180° |
 | `socket_od` | 8.00 mm | insert socket wall = (8 − 5.15)/2 = 1.42 mm, leaving 0.67 mm behind a 0.75 mm-deep L-slot |
 | `insert_od` | 5.00 mm | the carrier's sliding surface |
-| `insert_tube_lengths` | 6 / 8 / 10 mm | tube beyond the magnet flange — see §5 |
-| `insert_lug_x0` | 9.00 mm | fixed lug station so one carrier fits all three inserts |
+| `insert_tube_lengths` | 7 / 9 / 11 mm | tube beyond the magnet flange — see §5 |
 | `damper_dia` / `damper_recess` | 4.00 / 0.30 mm | standard acoustic damper disc, recessed at the ear end |
 
 ### Mag-float carrier
 
 | param | default | why |
 |---|---|---|
-| `carrier_bore` | 5.20 mm | 0.20 mm on the Ø5 tube; in cast silicone this is a working sliding fit, not a press |
-| `carrier_od` | 8.00 mm | as briefed. A Ø9.6 collar over the counterbore is added automatically — a Ø8.3 counterbore cannot live inside a Ø8 body |
-| `carrier_len` | 8.00 mm | as briefed; sets the tip protrusion together with the magnet gap |
+| `carrier_bore` | 5.20 mm | 0.20 mm on the Ø5 tube; in cast silicone this is a working sliding fit, not a press. Also pins the moving ring's ID at 5.4 mm |
+| `carrier_od` | **10.50 mm** | raised from 8.0: a 9 mm moving ring plus 0.75 mm of silicone each side. Also the skirt root diameter |
+| `carrier_len` | **9.00 mm** | raised from 8.0: the encapsulated 2 mm ring plus lug width plus 1.5 mm travel plus margins does not fit in 8 mm. Checked at runtime |
 | `carrier_travel` | 1.50 mm | the travel the force study was run over; enforced by the L-slot pocket length (lug width + travel) |
 | `skirt_flare_deg` | 35.0° | as briefed |
 | `skirt_wall` | 0.35 mm | as briefed; the lip is rounded automatically (the skirt is a revolved capsule) |
@@ -368,14 +381,16 @@ transform the tool runs but says so, loudly.
 
 ## 10. Known gaps / v1 list
 
-1. **Asymmetric magnet pair** — re-run the force study with 7×3×1.5 source vs
-   7×5.4×1.5 target, then re-fix `rest_gap`.
+1. **Moving-ring ID is not encapsulated** — 9 × 5.4 over a Ø5.2 bore leaves
+   0.1 mm, so the ring's bore face is exposed and located by the mould core post.
+   Watch it for delamination on the first cast.
 2. **Nozzle tilt** — add `nozzle_tilt_deg` so the nozzle/carrier stack can rake
    relative to the shell; the aperture azimuth range is 0–55°.
 3. **Two-shot carrier mould** — the current mould is single-shot; production
    wants a Shore A 10–15 skirt over a Shore A 40–50 body.
-4. **12.65 mm protrusion** is at the upper end of what a shallow concha will
-   take. The lever is `carrier_len` and the magnet gap, in that order.
+4. **13.65 mm protrusion** is at the upper end of what a shallow concha will
+   take. The lever is `carrier_len` and the magnet gap, in that order —
+   `asym_light` does not help because `carrier_len` dominates.
 5. **Core dome supports** — the −Z pole is a true horizontal overhang.
 6. **No front/rear volume tuning** — the acoustic cavity is whatever the shell
    leaves. Once a driver is in hand, tune `cavity_cap_z` and the vent diameters

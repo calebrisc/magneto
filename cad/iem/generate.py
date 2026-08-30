@@ -49,23 +49,37 @@ except ImportError:  # pragma: no cover
 # --------------------------------------------------------------------------
 
 MAGNET_PRESETS = {
-    # name             od    id    t     rest_gap  material          F@rest  ratio
-    "bonded_compact": dict(od=7.0, id=3.0, t=1.5, gap=2.25,
-                           material="bonded NdFeB (Br 0.65 T)",
-                           f_rest=0.254, f_lo=0.433, f_hi=0.165, ratio=2.62,
-                           mass_g=0.283, stray_mT_at_10mm=3.30),
-    "n52_long":       dict(od=7.0, id=3.0, t=1.5, gap=6.40,
-                           material="N52 sintered NdFeB (Br 1.45 T)",
-                           f_rest=0.200, f_lo=0.263, f_hi=0.155, ratio=1.69,
-                           mass_g=0.353, stray_mT_at_10mm=None),
-    "n52_clean_bore": dict(od=8.0, id=4.0, t=1.5, gap=6.80,
-                           material="N52 sintered NdFeB (Br 1.45 T)",
-                           f_rest=0.203, f_lo=0.259, f_hi=0.161, ratio=1.61,
-                           mass_g=0.424, stray_mT_at_10mm=8.26),
-    "n52_small_pkg":  dict(od=6.0, id=3.0, t=1.0, gap=3.30,
-                           material="N52 sintered NdFeB (Br 1.45 T)",
-                           f_rest=0.226, f_lo=0.359, f_hi=0.153, ratio=2.35,
-                           mass_g=0.159, stray_mT_at_10mm=None),
+    # Asymmetric pairs -- the moving ring must slide over the 5 mm nozzle tube, so
+    # its ID is pinned at 5.4 mm and the pair can never be identical.
+    # See docs/MAGFLOAT_MAGNETS.md, "Asymmetric pair (as-built)".
+    "asym_as_built": dict(
+        fixed=(7.0, 3.0, 1.5), moving=(9.0, 5.4, 2.0), gap=2.25,
+        material="bonded NdFeB (Br 0.65 T)",
+        f_lo=0.307, f_rest=0.214, f_hi=0.155, ratio=1.98,
+        mass_fixed_g=0.283, mass_moving_g=0.489, stray_mT_at_10mm=3.30),
+    "asym_light": dict(
+        fixed=(7.0, 3.0, 1.5), moving=(9.0, 5.4, 1.5), gap=1.25,
+        material="bonded NdFeB (Br 0.65 T)",
+        f_lo=0.405, f_rest=0.288, f_hi=0.199, ratio=2.04,
+        mass_fixed_g=0.283, mass_moving_g=0.366, stray_mT_at_10mm=3.30),
+    "asym_8mm": dict(
+        fixed=(7.0, 3.0, 1.5), moving=(8.0, 5.4, 2.0), gap=1.89,
+        material="bonded NdFeB (Br 0.65 T)",
+        f_lo=0.382, f_rest=0.230, f_hi=0.151, ratio=2.53,
+        mass_fixed_g=0.283, mass_moving_g=0.328, stray_mT_at_10mm=3.30),
+    # Symmetric presets from the first study -- kept for reference.  They assume a
+    # moving ring with ID 3 mm, which physically cannot slide on a 5 mm tube; the
+    # generator opens it and warns.
+    "n52_long": dict(
+        fixed=(7.0, 3.0, 1.5), moving=(7.0, 3.0, 1.5), gap=6.40,
+        material="N52 sintered NdFeB (Br 1.45 T)",
+        f_lo=0.263, f_rest=0.200, f_hi=0.155, ratio=1.69,
+        mass_fixed_g=0.353, mass_moving_g=0.353, stray_mT_at_10mm=None),
+    "n52_clean_bore": dict(
+        fixed=(8.0, 4.0, 1.5), moving=(8.0, 4.0, 1.5), gap=6.80,
+        material="N52 sintered NdFeB (Br 1.45 T)",
+        f_lo=0.259, f_rest=0.203, f_hi=0.161, ratio=1.61,
+        mass_fixed_g=0.424, mass_moving_g=0.424, stray_mT_at_10mm=8.26),
 }
 
 
@@ -77,8 +91,9 @@ PARAMS = dict(
     press_clearance=0.15,      # mm, press/slip fit clearance on cylindrical joints
 
     # ---- magnets ------------------------------------------------------
-    magnet_preset="bonded_compact",
+    magnet_preset="asym_as_built",
     magnet_pocket_clear=0.05,  # mm added to magnet OD/thickness for the pocket
+    magnet_encap=0.50,         # mm of silicone over the moving ring's axial faces
 
     # ---- core shell ---------------------------------------------------
     core_rx=8.5,               # mm half-extent along X (nozzle axis)
@@ -107,15 +122,14 @@ PARAMS = dict(
     lug_w=1.50,                # mm bayonet lug axial width
     socket_od=8.00,            # mm nozzle-insert socket (slips over the stub) OD
     insert_od=5.00,            # mm nozzle-insert tube OD
-    insert_tube_lengths=dict(short=6.0, med=8.0, long=10.0),  # mm beyond the magnet flange
-    insert_lug_x0=9.00,        # mm, carrier bayonet lug station (start)
+    insert_tube_lengths=dict(short=7.0, med=9.0, long=11.0),  # mm beyond the magnet flange
     damper_dia=4.00,           # mm damper disc
     damper_recess=0.30,        # mm damper disc recess depth
 
     # ---- mag-float carrier --------------------------------------------
     carrier_bore=5.20,         # mm sliding bore on the insert tube
-    carrier_od=8.00,           # mm carrier body OD
-    carrier_len=8.00,          # mm carrier body length
+    carrier_od=10.50,          # mm carrier body OD (moving ring OD + 2 x 0.75 wall)
+    carrier_len=9.00,          # mm carrier body length
     carrier_travel=1.50,       # mm allowed axial float
     skirt_flare_deg=35.0,      # deg half-angle of the sealing skirt
     skirt_wall=0.35,           # mm skirt wall
@@ -328,6 +342,8 @@ class G:
         self.P = P
         m = copy.deepcopy(MAGNET_PRESETS[P["magnet_preset"]])
         self.mag = m
+        self.fix_od, self.fix_id, self.fix_t = m["fixed"]
+        self.mov_od, self.mov_id, self.mov_t = m["moving"]
         mc = P["magnet_pocket_clear"]
 
         self.core_cx = -P["core_rx"]
@@ -339,32 +355,38 @@ class G:
         self.pocket_r = 0.5 * (P["driver_carrier_od"] + P["driver_pocket_clear"])
         self.pocket_z1 = self.z_cut
         self.pocket_z0 = self.z_cut - P["driver_pocket_depth"]
-        self.front_wall_x = self.core_cx + self.pocket_r      # +X wall of the driver pocket
+        self.front_wall_x = self.core_cx + self.pocket_r
 
-        # ---- nozzle / insert stack (all magnets live here, none in the core)
+        # ---- nozzle / insert stack: BOTH magnets live here, none in the core
         self.stub_x1 = P["stub_len"]
         self.socket_x0 = -0.20
         self.socket_x1 = P["stub_len"] + 0.20                 # 3.20
-        self.mag_pocket_r = 0.5 * m["od"] + mc
+        self.mag_pocket_r = 0.5 * self.fix_od + mc
         self.flange_x0 = self.socket_x1
-        self.flange_x1 = self.flange_x0 + m["t"] + 0.20       # 4.90
-        self.fixed_mag_x0 = self.flange_x1 - m["t"]           # 3.40
+        self.flange_x1 = self.flange_x0 + self.fix_t + 0.20   # 4.90
+        self.fixed_mag_x0 = self.flange_x1 - self.fix_t
         self.fixed_mag_face = self.flange_x1                  # +X face of the fixed ring
 
-        # carrier: its magnet floor sits rest_gap in front of the fixed ring face
+        # carrier: the moving ring's -X face sits rest_gap in front of the fixed one
+        self.carrier_x0 = self.flange_x1 - 0.25               # collar overlaps the flange
         self.carrier_mag_face = self.fixed_mag_face + m["gap"]
-        self.cbore_depth = m["gap"] + 0.25                    # counterbore over the flange
-        self.carrier_x0 = self.carrier_mag_face - self.cbore_depth
+        self.cbore_floor = self.carrier_mag_face - P["magnet_encap"]
+        self.cbore_depth = self.cbore_floor - self.carrier_x0
+        self.carrier_mag_x1 = self.carrier_mag_face + self.mov_t + mc
         self.carrier_x1 = self.carrier_x0 + P["carrier_len"]
         self.cbore_r = 0.5 * P["socket_od"] + 0.15
-        self.collar_r = self.cbore_r + 0.65
-        # the carrier ring must have ID >= carrier_bore -- it slides on the tube
-        self.carrier_mag_ri = 0.5 * P["carrier_bore"] + 0.10
-        self.carrier_mag_ro = 0.5 * m["od"] + mc
-        self.carrier_mag_id_eff = 2.0 * self.carrier_mag_ri
+        self.collar_r = max(self.cbore_r + 0.65, 0.5 * P["carrier_od"])
+        # the moving ring's ID face is flush with the sliding bore: ID 5.4 over a
+        # 5.2 bore leaves 0.1 mm, which will not cast.  The mould core's post
+        # locates the ring instead.
+        self.carrier_mag_ri = 0.5 * P["carrier_bore"]
+        self.carrier_mag_ro = 0.5 * self.mov_od + mc
+        self.carrier_wall_od = 0.5 * P["carrier_od"] - self.carrier_mag_ro
 
-        self.insert_lug_x0 = P["insert_lug_x0"]
+        # bayonet station: just clear of the encapsulated ring
+        self.insert_lug_x0 = self.carrier_mag_x1 + 0.35
         self.insert_lug_x1 = self.insert_lug_x0 + P["lug_w"]
+        self.lslot_x1 = self.insert_lug_x1 + 0.35 + P["carrier_travel"]
 
         # skirt: rim at the carrier tip so nothing protrudes past the seal plane
         self.skirt_rim_r = 0.5 * P["skirt_max_dia"] - 0.5 * P["skirt_wall"]
@@ -405,17 +427,29 @@ class G:
         if P["gyroid_cell"] < P["min_cell"] - 1e-9:
             self.warnings.append(
                 f"gyroid_cell {P['gyroid_cell']} mm < min_cell {P['min_cell']} mm")
-        if m["id"] < P["nozzle_bore"] - 1e-9:
+        if self.fix_id < P["nozzle_bore"] - 1e-9:
             self.warnings.append(
-                f"magnet ID {m['id']} mm < nozzle bore {P['nozzle_bore']} mm -- the "
-                f"fixed ring necks the acoustic bore to {m['id']} mm over {m['t']} mm")
-        if self.carrier_mag_id_eff > m["id"] + 1e-9:
+                f"fixed ring ID {self.fix_id} mm < nozzle bore {P['nozzle_bore']} mm -- it "
+                f"necks the acoustic bore to {self.fix_id} mm over {self.fix_t} mm")
+        if self.mov_id < P["carrier_bore"] - 1e-9:
             self.warnings.append(
-                f"carrier ring ID opened {m['id']}->{self.carrier_mag_id_eff:.1f} mm to "
-                f"clear the {P['carrier_bore']} mm bore; the pair is asymmetric, so the "
-                f"real rest gap will be SHORTER than the modelled {m['gap']} mm")
-        if self.front_wall_x > self.fixed_mag_x0:
-            pass  # nothing in the core any more; kept for symmetry
+                f"moving ring ID {self.mov_id} mm < carrier bore {P['carrier_bore']} mm -- "
+                f"it cannot slide on the {P['insert_od']} mm tube; pick a preset whose "
+                f"moving ring has ID >= {P['carrier_bore']} mm")
+        if self.carrier_wall_od < 0.5 - 1e-9:
+            self.warnings.append(
+                f"only {self.carrier_wall_od:.2f} mm of silicone outside the moving ring; "
+                f"raise carrier_od to >= {self.mov_od + 1.1:.1f} mm")
+        if self.cbore_depth < 0.3:
+            self.warnings.append(
+                f"carrier counterbore is only {self.cbore_depth:.2f} mm deep -- the rest "
+                f"gap {m['gap']} mm is too small for {P['magnet_encap']} mm encapsulation")
+        need = self.insert_lug_x1 + 0.35 + P["carrier_travel"]
+        if need > self.carrier_x1 - 0.2:
+            self.warnings.append(
+                f"L-slot needs the carrier to reach x={need + 0.2:.2f} mm but it ends at "
+                f"{self.carrier_x1:.2f}; raise carrier_len to "
+                f"{need + 0.2 - self.carrier_x0:.2f} mm")
 
     def core_outer(self, X, Y, Z, C):
         """The bare outer surface of the core (no pockets) -- the jacket offsets from this."""
@@ -728,7 +762,7 @@ def _carrier_lslot(g, X, Y, Z, th, radial_lo, radial_hi):
     th2 = th + math.radians(85.0)
     pocket = arc_slot_x(X, Y, Z, radial_lo, radial_hi,
                         g.insert_lug_x0 - 0.35,
-                        g.insert_lug_x1 + 0.35 + P["carrier_travel"],
+                        g.lslot_x1,
                         th2 - w / 2.6, th2 + w / 2.6)
     return U(entry, arc, pocket)
 
@@ -796,13 +830,14 @@ def carrier_field(g, X, Y, Z, C):
 
     # counterbore that swallows the insert's magnet flange (this is the air gap)
     d = S(d, cyl_x(X, Y, Z, 0, 0, g.cbore_r,
-                   g.carrier_x0 - 1.0, g.carrier_mag_face))
+                   g.carrier_x0 - 1.0, g.cbore_floor))
     # annular ring-magnet pocket
     d = S(d, tube_x(X, Y, Z, 0, 0, g.carrier_mag_ri, g.carrier_mag_ro,
-                    g.carrier_mag_face, g.carrier_mag_face + g.mag["t"] + 0.05))
-    # sliding bore
+                    g.carrier_mag_face, g.carrier_mag_x1))
+    # sliding bore -- starts at the counterbore floor, so the 0.5 mm encapsulation
+    # web in front of the moving ring survives
     d = S(d, cyl_x(X, Y, Z, 0, 0, 0.5 * P["carrier_bore"],
-                   g.carrier_mag_face, g.carrier_x1 + 1.0))
+                   g.cbore_floor, g.carrier_x1 + 1.0))
     # L-slots
     rl = 0.5 * P["carrier_bore"] - 0.05
     rh = 0.5 * P["carrier_bore"] + P["lug_h"] + 0.15
@@ -836,8 +871,8 @@ def mold_core_field(g, X, Y, Z, C):
     x0, x1, r = mold_geom(g)
     rod = cyl_x(X, Y, Z, 0, 0, 0.5 * P["carrier_bore"], x0 - 2.0, x1 + 2.0)
     seat = cyl_x(X, Y, Z, 0, 0, g.carrier_mag_ro,
-                 g.carrier_mag_face, g.carrier_mag_face + g.mag["t"] + 0.05)
-    plug = cyl_x(X, Y, Z, 0, 0, g.cbore_r, x0 - 2.0, g.carrier_mag_face)
+                 g.carrier_mag_face, g.carrier_mag_x1)
+    plug = cyl_x(X, Y, Z, 0, 0, g.cbore_r, x0 - 2.0, g.cbore_floor)
     d = U(rod, seat, plug)
     for th in (0.0, np.pi):
         d = U(d, _carrier_lslot(g, X, Y, Z, th,
@@ -1112,11 +1147,12 @@ def main():
 
     m = g.mag
     print("=" * 100)
-    print(f"Magneto IEM generator -- magnet preset '{P['magnet_preset']}': "
-          f"{m['od']}x{m['id']}x{m['t']} mm, {m['material']}, rest gap {m['gap']} mm, "
-          f"F(rest)={m['f_rest']} N, ratio {m['ratio']}")
+    print(f"Magneto IEM generator -- magnet preset '{P['magnet_preset']}': fixed "
+          f"{g.fix_od}x{g.fix_id}x{g.fix_t} / moving {g.mov_od}x{g.mov_id}x{g.mov_t} mm, "
+          f"{m['material']}, rest gap {m['gap']} mm, F {m['f_lo']}->{m['f_rest']}->"
+          f"{m['f_hi']} N over {P['carrier_travel']} mm, ratio {m['ratio']}")
     print(f"core  {2*P['core_rx']:.1f} x {2*P['core_ry']:.1f} x {2*P['core_rz']:.1f} mm    "
-          f"carrier x {g.carrier_x0:.2f}..{g.carrier_x1:.2f} mm    "
+          f"carrier OD {P['carrier_od']} x {g.carrier_x0:.2f}..{g.carrier_x1:.2f} mm    "
           f"tip protrusion {g.tip_protrusion:.2f} mm "
           f"(max {g.tip_protrusion_max:.2f} at full float)")
     for w in g.warnings:

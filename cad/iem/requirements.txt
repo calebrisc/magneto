@@ -1,0 +1,4 @@
+numpy>=1.24
+scikit-image>=0.21
+trimesh>=4.0
+rtree>=1.0

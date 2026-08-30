@@ -1,0 +1,382 @@
+# Magneto IEM — parametric STL generator (v0)
+
+`generate.py` builds every part of the Magneto in-ear monitor from one `PARAMS`
+dict. Geometry is expressed as signed-distance fields, sampled on a regular grid
+and polygonised with marching cubes. That is slower than a B-rep kernel but it
+is **watertight by construction** and it lets the graded gyroid lattice and the
+solid Ti bodies live in the same expression tree.
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install numpy scikit-image trimesh rtree   # or -r requirements.txt
+
+.venv/bin/python generate.py --all                       # ~18 s, both ears
+.venv/bin/python generate.py --part core --part faceplate
+.venv/bin/python generate.py --all --magnet-preset n52_long
+.venv/bin/python generate.py --part jacket_wing --voxel 0.07   # print-quality lattice
+.venv/bin/python generate.py --list
+```
+
+STLs land in `stl/right/` and `stl/left/`. **`stl/` is gitignored** — the full
+set is ~488 MB (the lattice alone is 1.0 M triangles) and regenerates in 18 s,
+so it is a build product, not a source artifact.
+
+---
+
+## 1. Coordinate convention
+
+| Axis | Direction |
+|---|---|
+| origin | centre of the **nozzle base** — where the nozzle stub leaves the core |
+| **+X** | nozzle axis, pointing **into** the ear |
+| **+Z** | toward the **faceplate**, outward from the head |
+| **+Y** | up, toward the antihelix / cymba concha |
+
+Units are mm throughout. The **right** ear is the master; the left is produced by
+mirroring across the sagittal plane, implemented as `scale(-1, 1, 1)` on X with
+face reversal.
+
+> Caveat worth stating plainly: in a real ear the canal axis and the outward
+> (lateral) face normal are roughly 120–150° apart, not 90°. This build treats
+> +X and +Z as **orthogonal design axes**, which is a simplification. It costs
+> nothing for v0 — the wing and skirt are compliant and the nozzle joint is
+> meant to have a few degrees of give — but a v1 that fits scanned ears should
+> add a `nozzle_tilt_deg` parameter that rotates the nozzle/carrier stack about
+> Y relative to the shell.
+
+---
+
+## 2. Design decisions carried in from the brief
+
+* Right-ear master, L/R mirror variants only; **one size**, no S/M/L.
+* The seal happens at the **canal opening**. Nothing enters the canal — the
+  skirt rim is the most-distal feature of the whole assembly (see §5).
+* Everything is **magnetically removable**: jacket→core (3 magnets + 2 pins),
+  faceplate→core (2 magnets), tip carrier→nozzle (mag-float pair + bayonet).
+* Minimum printable wall 0.20 mm, minimum gyroid cell 1.00 mm — enforced, with
+  a printed warning when a parameter set violates either.
+
+---
+
+## 3. Parts
+
+| STL | Material / process | What it is |
+|---|---|---|
+| `core.stl` | Ti, LPBF | sealed shell, driver seat, nozzle stub, vents, socket + bone-sensor pockets |
+| `faceplate.stl` | Ti, LPBF | +Z cap, held by 2 magnets, hollowed to add rear volume |
+| `jacket_wing.stl` | Ti, LPBF (or SLS nylon for mules) | graded-gyroid ear-facing skin + antihelix wing, one piece |
+| `nozzle_insert_short/med/long.stl` | Ti, LPBF or machined | tube that bayonets onto the core stub; carries the **fixed** ring magnet |
+| `carrier.stl` | silicone, cast | mag-float tip carrier + sealing skirt, single material for prototypes |
+| `carrier_mold_a.stl` / `_b.stl` | resin | two-part mould, alignment pins, pour spout, vent |
+| `carrier_mold_core.stl` | resin | removable core rod: defines the bore, the L-slots and the magnet seat |
+| `driver_carrier.stl` | resin | press-fit ring for the 10 mm dynamic driver, with a rear vent notch |
+| `damper_jig.stl` | resin | punch die + magazine + plunger for Ø4 mm damper discs |
+| `assembly.stl` | — | everything positioned, magnets omitted, visual check only |
+
+---
+
+## 4. Magnets
+
+Numbers come from `docs/MAGFLOAT_MAGNETS.md` (magpylib 5.0.1 + magpylib-force,
+Maxwell-stress solver). Select with `--magnet-preset`.
+
+| preset | ring OD×ID×T | material | rest gap | F over 1.5 mm travel | ratio |
+|---|---|---|---|---|---|
+| **`bonded_compact`** (default) | 7 × 3 × 1.5 | bonded NdFeB, Br 0.65 T | **2.25 mm** | 0.433 → 0.254 → 0.165 N | 2.62 |
+| `n52_long` | 7 × 3 × 1.5 | N52, Br 1.45 T | 6.40 mm | 0.263 → 0.200 → 0.155 N | 1.69 |
+| `n52_clean_bore` | 8 × 4 × 1.5 | N52 | 6.80 mm | 0.259 → 0.203 → 0.161 N | 1.61 |
+| `n52_small_pkg` | 6 × 3 × 1 | N52 | 3.30 mm | 0.359 → 0.226 → 0.153 N | 2.35 |
+
+**Both magnets live in the nozzle insert / carrier. Nothing magnetic is recessed
+into the core.** The fixed ring sits in a counterbore at the +X face of the
+insert's flange; the moving ring sits in an annular pocket at the floor of a
+counterbore in the carrier's core end. The counterbore is what swallows the air
+gap — that is why the carrier's core face can sit at x = 4.65 mm while its magnet
+face sits at x = 7.15 mm, 2.25 mm in front of the fixed ring at x = 4.90 mm.
+
+Two geometric conflicts the force study could not see, both flagged at runtime:
+
+1. **Ring ID 3 mm < nozzle bore 4 mm.** The fixed ring cannot be coaxial with a
+   4 mm bore without its own ID becoming the local bore. The generator seats it
+   in a plain Ø7.1 counterbore, so the acoustic path necks **Ø4 → Ø3 → Ø4 over
+   1.5 mm**. Acceptable (it is a short, smooth restriction), but if you want it
+   gone, use `--magnet-preset n52_clean_bore` — an 8×4×1.5 ring has ID = bore
+   exactly, at the cost of a 6.8 mm gap and a much longer stack.
+2. **The moving ring cannot have ID 3 mm at all.** It slides on the Ø5 insert
+   tube, so its ID is opened to 5.4 mm. The pair is therefore **asymmetric** and
+   the modelled 2.25 mm rest gap is optimistic — the real gap will be shorter.
+   Re-run the magpylib study with a 7×3×1.5 source and a 7×5.4×1.5 target before
+   ordering magnets. `carrier_magnet_id` is derived, not free.
+
+Stray field from the fixed ring at the compact pick is 3.30 mT at 10 mm behind
+its back face, i.e. roughly at x = −5.9 mm — inside the front volume, ~5 mm from
+the driver's magnet. Worth a bench check on the driver's THD before committing.
+
+---
+
+## 5. The protrusion budget (why the numbers came out where they did)
+
+The seal-at-the-opening rule means nothing may sit distal to the skirt rim. The
+skirt therefore flares **forward** (a trumpet, not a normal backward-flaring
+eartip), and the rim lands in the same plane as the carrier's distal face:
+
+```
+x = 0.00   core face / nozzle base
+x = 0..3   core nozzle stub, Ø5, two external bayonet lugs
+x = 3.20   insert socket ends
+x = 4.90   insert magnet flange face  <- FIXED ring's +X face
+x = 4.65   carrier core face (its counterbore overlaps the flange by 0.25)
+x = 5.05   skirt root, r = 4.0
+x = 7.15   carrier MOVING ring face   <- 2.25 mm gap
+x = 12.65  carrier distal face == skirt rim, Ø19.0     <- seal plane
+x = 14.15  same, at full 1.5 mm float
+```
+
+**Total protrusion from the core face: 12.65 mm at rest, 14.15 mm at full float**,
+and the seal plane is the frontmost feature — nothing enters the canal. Against
+the `EAR_ANTHROPOMETRY.md` envelope (concha depth 8–18 mm) that fits the upper
+~60 % of the range at rest. The `n52_long` preset adds 4.15 mm to every number
+above and is *not* recommended for that reason; it is kept because it has the
+flattest force curve.
+
+The `short` / `med` / `long` inserts differ only in tube length past the magnet
+flange (6 / 8 / 10 mm). The bayonet lug station is fixed at x = 9.0–10.5 mm so
+**one carrier fits all three**; the longer tubes exist to support the carrier
+further out and to give deep conchas more retention, and they do protrude past
+the seal plane, so `short` is the default in the assembly.
+
+---
+
+## 6. Wing printability
+
+Reported by `generate.py --all`, measured on the free-standing span of the wing
+beyond the jacket rim (inboard of that the wing is fused to and supported by the
+jacket shell). Build direction = the jacket rim plane flat on the bed, part
+growing in −Z.
+
+| metric | value |
+|---|---|
+| designed taper on the wing's deep edge | **40°** (`wing_taper_deg`) |
+| area-weighted p99 overhang | **58.6°** |
+| absolute worst facet | 82.3° |
+| fraction of wing area over 45° | **0.8 %** |
+
+The 0.8 % / 82° tail is marching-cubes staircase on the knife edge where the
+40° taper closes, not a real ceiling: the whole tapered flank is a single 40°
+plane by construction and the sides above it are vertical. Everything else on
+the free span is at 0°.
+
+For reference, the **whole** jacket+wing including the lattice reads worst 90°,
+p99 83°, 14.1 % over 45° — that number is the gyroid's own micro-facets. A sheet
+gyroid is self-supporting in LPBF in practice; do not read it as a defect. The
+generator also scans 42 build directions and prints the best one it finds
+(≈ +0.69, −0.67, −0.26, giving p99 52°) if you would rather tilt the plate.
+
+The core's −Z dome has a genuine horizontal pole and needs either supports or a
+tilted plate; that is normal for an ear shell and is not addressed here.
+
+---
+
+## 7. Every parameter
+
+### Process limits
+
+| param | default | why |
+|---|---|---|
+| `min_wall` | 0.20 mm | thinnest wall LPBF Ti / high-res resin will hold; violating it prints a warning |
+| `min_cell` | 1.00 mm | below this a gyroid traps unfused powder; violating it prints a warning |
+| `clearance` | 0.15 mm | jacket-to-core gap. Smaller and thermal/print variation binds; larger and the magnets feel loose |
+| `press_clearance` | 0.15 mm | slip fit on the insert-over-stub joint. It is a bayonet, not a press, so it wants clearance |
+
+### Magnets
+
+| param | default | why |
+|---|---|---|
+| `magnet_preset` | `bonded_compact` | the only combination in the magpylib grid that clears all four force bounds at a compact gap |
+| `magnet_pocket_clear` | 0.05 mm | glue gap around the ring; too much and the axial position (hence the force) drifts |
+
+### Core shell
+
+| param | default | why |
+|---|---|---|
+| `core_rx` | 8.5 mm | half-length. Driver pocket needs 6.1 mm of it; the remaining 2.4 mm is the front volume |
+| `core_ry` | 7.0 mm | **raised from the brief's 6.0.** A 12 mm driver-carrier ring needs 6.1 mm of half-width; 0.9 mm of wall on top gives 7.0. A 12 mm carrier simply does not fit a 12 mm-wide shell |
+| `core_rz` | 5.0 mm | as briefed. 10 mm total sits inside the 8–18 mm concha-depth envelope |
+| `core_wall` | 1.20 mm | LPBF Ti pressure wall with margin for post-polish |
+| `faceplate_z` | 1.00 mm | parting plane. Lower and the faceplate gets thick; higher and the rim annulus outside the driver pocket gets too narrow for the Ø2 magnets |
+| `cavity_cap_z` | −0.60 mm | caps the acoustic cavity 0.6 mm below the magnet pockets so the rim stays solid |
+| `nose_cone_r0/r1/x0` | 5.0 / 3.2 / −6.0 mm | the cone that blends the ellipsoid into the nozzle stub; smooth-unioned with k = 1.2 mm for a fillet |
+
+Resulting shell: **17 × 14 × 10 mm**, versus the brief's ~16 × 12 × 10. Both
+increases are forced by the 12 mm driver carrier, not stylistic.
+
+### Driver
+
+| param | default | why |
+|---|---|---|
+| `driver_dia` | 10.0 mm | the specified dynamic driver |
+| `driver_carrier_id` | 10.0 mm | slip fit on the driver can |
+| `driver_carrier_od` | 12.0 mm | 1 mm of ring wall each side |
+| `driver_carrier_h` | 3.0 mm | as briefed |
+| `driver_pocket_clear` | 0.20 mm | → Ø12.2 pocket in the core. The brief's "10.2 mm pocket" is the driver's *acoustic* aperture; the seat has to clear the carrier's 12 mm OD |
+| `driver_pocket_depth` | 3.0 mm | carrier sits flush with the faceplate parting plane |
+
+### Nozzle stack
+
+| param | default | why |
+|---|---|---|
+| `nozzle_bore` | 4.00 mm | per `EAR_ANTHROPOMETRY.md`: 4 mm clears the 4.5 mm small-aperture tail with the skirt around it. Industry-standard 5.5–6.5 mm nozzles are why small-canal users get hurt |
+| `stub_od` | 5.00 mm | 0.5 mm of wall on the bore |
+| `stub_len` | 3.00 mm | enough bayonet engagement to take the skirt's side load |
+| `lug_h` / `lug_w` | 0.60 / 1.50 mm | as briefed; two lugs at 180° |
+| `socket_od` | 8.00 mm | insert socket wall = (8 − 5.15)/2 = 1.42 mm, leaving 0.67 mm behind a 0.75 mm-deep L-slot |
+| `insert_od` | 5.00 mm | the carrier's sliding surface |
+| `insert_tube_lengths` | 6 / 8 / 10 mm | tube beyond the magnet flange — see §5 |
+| `insert_lug_x0` | 9.00 mm | fixed lug station so one carrier fits all three inserts |
+| `damper_dia` / `damper_recess` | 4.00 / 0.30 mm | standard acoustic damper disc, recessed at the ear end |
+
+### Mag-float carrier
+
+| param | default | why |
+|---|---|---|
+| `carrier_bore` | 5.20 mm | 0.20 mm on the Ø5 tube; in cast silicone this is a working sliding fit, not a press |
+| `carrier_od` | 8.00 mm | as briefed. A Ø9.6 collar over the counterbore is added automatically — a Ø8.3 counterbore cannot live inside a Ø8 body |
+| `carrier_len` | 8.00 mm | as briefed; sets the tip protrusion together with the magnet gap |
+| `carrier_travel` | 1.50 mm | the travel the force study was run over; enforced by the L-slot pocket length (lug width + travel) |
+| `skirt_flare_deg` | 35.0° | as briefed |
+| `skirt_wall` | 0.35 mm | as briefed; the lip is rounded automatically (the skirt is a revolved capsule) |
+| `skirt_max_dia` | 19.0 mm | covers the design envelope's 4.5–14 mm aperture width with room to conform |
+
+The skirt is modelled as **part of the carrier STL** — a single material for the
+first prototypes. The production version casts the skirt in **Shore A 10–15**
+over a firmer (Shore A 40–50) carrier body, which needs a two-shot mould or an
+overmould step; the mould in this repo is the single-shot prototype version.
+
+### Jacket + wing
+
+| param | default | why |
+|---|---|---|
+| `jacket_thick` | 1.60 mm | lattice + skin. Thick enough for two gyroid cells across |
+| `jacket_x_clip` | −2.00 mm | the jacket stops here so it never fouls the nozzle nose |
+| `gyroid_cell` | 1.20 mm | above `min_cell`, small enough for two cells through the jacket |
+| `wall_face` | 0.20 mm | soft against the ear at the outer/ear face |
+| `wall_root` | 0.40 mm | stiff where the wing takes bending load |
+| `grade_len` | 6.00 mm | distance from the root corner over which the wall grades root → face |
+| `skin_t` | 0.60 mm | solid membrane on the ear-facing surface so the lattice never touches skin |
+| `perf_dia` / `perf_pitch` | 0.40 / 1.50 mm | sweat perforations through the membrane, on a square grid |
+| `solid_root` | 1.00 mm | solid Ti collar before the lattice starts, at the rim and the wing root |
+| `wing_thick` | 4.00 mm | blade thickness across the XY plane |
+| `wing_width` | 7.00 mm | blade depth in Z, into the concha |
+| `wing_z_top` | −0.20 mm | top of the wing, just under the parting plane so the whole part is at z ≤ 0 |
+| `wing_taper_deg` | 40.0° | the deep edge tapers at 40°, under the 45° self-support limit with margin for discretisation |
+| `wing_taper` | 2.60 mm | the depth over which that taper closes a 2.0 mm half-thickness at 40° |
+| `wing_rise` | 10.0 mm | tip lands 10 mm above the core rim, as briefed |
+| `wing_back_deg` | 30.0° | tip angled 30° toward −X, as briefed |
+| `wing_root_dx` | 1.00 mm | root offset from the core centre in X |
+| `wing_len` | 14.0 mm | nominal centreline length; the Bezier from rise + back angle lands close to this |
+
+The wing centreline is a quadratic Bezier in XY; the blade is that curve offset
+by `wing_thick/2`, extruded in Z and tapered on its deep edge.
+
+### Jacket / core interface
+
+| param | default | why |
+|---|---|---|
+| `gasket_w` / `gasket_d` | 0.60 / 0.40 mm | groove around the z = 0 parting line for a cast silicone gasket ring (sweat + grit seal) |
+| `jmag_dia` / `jmag_depth` | 2.00 / 1.00 mm | three Ø2 × 1 magnets, drilled along the local surface normal on the −Z hemisphere |
+| `pin_dia` / `pin_depth` | 1.00 / 1.50 mm | two locating pins. Pins take the shear, magnets only take the normal load |
+
+Magnet stations are at (cx ± 5.6, y = 0) and (cx, y = +4.4); pins at
+(cx ± 2.6, y = −4.0). The core gets holes at +0.06 mm, the jacket gets pins at
+−0.06 mm.
+
+### Electronics
+
+| param | default | why |
+|---|---|---|
+| `socket_w/h/d` | 5.60 / 2.80 / 6.00 mm | standard 2-pin socket body, at the −X rim, top |
+| `socket_z` | 1.20 mm | keeps the pocket above the driver pocket |
+| `bone_w/h/d` | 4.00 / 3.00 / 1.50 mm | bone-conduction sensor, in the −Y (tragus) flank |
+| `wire_dia` | 1.00 mm | channel from the bone pocket to the socket pocket |
+| `vent_dia` | 0.80 mm | front vent (front volume → −Y/−Z exterior) and rear vent (rear cavity → −Y/−Z exterior) |
+
+The socket pocket is wrapped in a 0.7 mm sleeve that is unioned into the shell
+**before** the pocket is subtracted, so it never opens into the acoustic cavity.
+The bone-sensor pocket sits in a rounded boss on the −Y flank, smooth-unioned so
+there is real wall behind it.
+
+### Mould
+
+| param | default | why |
+|---|---|---|
+| `mold_wall` | 4.5 mm | block wall around the cavity |
+| `mold_pin_dia` / `mold_pin_len` | 3.0 / 3.0 mm | four alignment pins on the +Y half, holes (+0.12 mm) on the −Y half |
+| `mold_spout_dia` | 3.0 mm | pour spout into the ring end from +Z |
+| `mold_vent_dia` | 1.2 mm | vent at the skirt rim, the last place to fill |
+
+The mould splits on the y = 0 plane. `carrier_mold_core.stl` is a third piece: a
+Ø5.2 rod with the L-slot ridges and the magnet-seat boss, plus a Ø8 grip. Silicone
+demoulds off the L-slot undercuts without tearing. Assemble core → half A →
+half B, pour at the ring end, vent at the rim.
+
+### Meshing
+
+| param | default | why |
+|---|---|---|
+| `voxel` | `None` | override with `--voxel`; otherwise derived from the budget |
+| `budget` | 3.0e6 | voxels for solid parts. Gives ~0.08–0.19 mm depending on bbox — 0.8 mm vents land on 4–10 samples |
+| `budget_lattice` | 6.0e6 | voxels for `jacket_wing`. ~0.098 mm, i.e. **2 samples across a 0.20 mm wall** |
+
+That last number is the one real quality compromise. Marching cubes still emits a
+watertight surface at 2 samples/wall, but the lattice walls come out rounded and
+slightly under-thick. The generator prints a note saying so. **Before sending the
+jacket to a printer, re-run `--part jacket_wing --voxel 0.07`** (≈ 3 samples/wall,
+~17 M voxels, a couple of minutes, a much larger STL).
+
+---
+
+## 8. Verification
+
+`generate.py` checks `trimesh.is_watertight` on every mesh and prints volume,
+bounding box, triangle count, voxel size and build time. `--all` exits non-zero
+if anything is not watertight.
+
+One thing worth knowing if you touch `polygonise()`: **do not** call
+`merge_vertices()` on the marching-cubes output. skimage already returns a
+manifold, index-shared surface; welding across a 0.2 mm lattice wall creates
+non-manifold edges and loses watertightness. That bug cost an afternoon.
+
+---
+
+## 9. `fit_check.py`
+
+```bash
+.venv/bin/python fit_check.py --ear subject_042.stl --transform "0,0,0,0,-25,10"
+```
+
+Loads a SONICOM / HUTUBS-style ear mesh and reports, for the **wing tip** (20
+most-distal vertices) and the **skirt rim** (72 points around the sealing lip),
+the min/mean/max distance to the nearest ear surface — plus signed distance and
+worst interference if the ear mesh is closed. Uses `trimesh.proximity`.
+
+Alignment is **not** automated and is the hard part; `--transform` takes either
+`tx,ty,tz,rx,ry,rz` (mm, degrees, XYZ intrinsic) or a path to a 4×4 matrix file.
+The docstring describes the three-landmark method for deriving it. Without a
+transform the tool runs but says so, loudly.
+
+---
+
+## 10. Known gaps / v1 list
+
+1. **Asymmetric magnet pair** — re-run the force study with 7×3×1.5 source vs
+   7×5.4×1.5 target, then re-fix `rest_gap`.
+2. **Nozzle tilt** — add `nozzle_tilt_deg` so the nozzle/carrier stack can rake
+   relative to the shell; the aperture azimuth range is 0–55°.
+3. **Two-shot carrier mould** — the current mould is single-shot; production
+   wants a Shore A 10–15 skirt over a Shore A 40–50 body.
+4. **12.65 mm protrusion** is at the upper end of what a shallow concha will
+   take. The lever is `carrier_len` and the magnet gap, in that order.
+5. **Core dome supports** — the −Z pole is a true horizontal overhang.
+6. **No front/rear volume tuning** — the acoustic cavity is whatever the shell
+   leaves. Once a driver is in hand, tune `cavity_cap_z` and the vent diameters
+   against a measured response.

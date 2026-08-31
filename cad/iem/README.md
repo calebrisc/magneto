@@ -201,48 +201,44 @@ any trim: a Ø2 magnet pocket needs 2 mm of rim and the annulus between the Ø12
 driver pocket and the shell is 1.17–2.23 mm. That mounting wants a rethink on its
 own schedule.
 
-### Intertragic-notch sector — `notch_sector_ext`, self-calibrating
+### Intertragic-notch sector — compliance, not reach
 
-The inferior sector carries 77–88 % of the remaining seal failures, so it gets
-more reach and a more compliant land, and nothing else changes.
+v3 gave the inferior sector 3.25 mm of extra radial flare. **v4 (`2d2c491`)
+showed that is net negative: it breaks more seals than it fixes.** A radial
+extension commits the lip *toward the notch opening*, where there is no flesh to
+seal against — the v3 number was a deformation budget, not a reach.
 
-| | |
-|---|---|
-| sector | `notch_sector_deg` 90° centred `notch_sector_center_deg` 180° from +Y_local (inferior) — try-on v3 measured the aim 18° off, within the 20° blend |
-| **realised reach** | **3.25 mm**, measured on `carrier.stl` (target 3.0–3.5) |
-| rim | **Ø25.5 mm** in the sector, **Ø19.0 mm** elsewhere |
-| land wall | 0.22 mm in the sector vs 0.25 mm elsewhere |
-| blends | 20° smoothstep at each edge |
-| land width | 4.50 mm, unchanged all the way round |
+**Reverted: the rim is a plain Ø19.0 mm circle all the way round** and the
+4.5 mm land is unchanged. `notch_sector_ext` is 0 and should stay there; the code
+path is kept only so the experiment is reproducible.
 
-**v1 built this short — 1.00 mm realised against a 1.75 mm spec — and the cause
-was a trig error, not mesh rounding.** A radial offset *d* shifts a cone's signed
-distance by *d·n_r*, and for this cone *n_r* = cos 35° = 0.819; v1 multiplied by
-*u_r* = sin 35° = 0.574 instead, and the rim-lip torus was offset by
-`ext · u_r` outright. So the parameter realised 0.574× what it claimed —
-1.75 × 0.574 = 1.004 mm, which is exactly what the try-on measured.
+The sector now gets **compliance** instead, so the lip can drape onto the
+cartilage flanking the notch rather than reaching across it (`notch_compliance`):
 
-Both are fixed, so `notch_sector_ext` now *is* the radial reach. On top of that
-the number is **verified, not asserted**:
+| | sector | elsewhere |
+|---|---|---|
+| land wall | **0.22 mm** | 0.25 mm |
+| hinge wall | **0.15 mm** | 0.20 mm |
+| hinge free length | **1.60 mm** | 0.60 mm |
+| rim | Ø19.0 mm | Ø19.0 mm |
+| land width | 4.50 mm | 4.50 mm |
 
-* `measure_notch_reach()` takes the rim ring off the built carrier mesh and
-  compares the 95th-percentile radius inside the sector against outside it.
-* `calibrate_notch()` builds the carrier, measures, rescales
-  `notch_sector_ext` by `target / measured`, and repeats until the measured
-  reach lands in [3.0, 3.5] mm (up to 5 passes).
-* Every `--all` run prints `MEASURED reach on carrier.stl` and the calibration
-  history, so a silent regression is not possible.
+Sector is `notch_sector_deg` 90° centred `notch_sector_center_deg` 180° from
++Y_local (inferior), with 20° smoothstep blends. Try-on v3 measured the aim 18°
+off, inside that blend.
 
-With the trig corrected the loop converges on the first pass (`3.25~3.25`) — the
-closed-form fix is exact and the calibration is now a guard rather than a search.
+Both numbers are **measured, not asserted**. `measure_skirt_wall()` marches
+inward along the cone normal at mid-land and returns the interval where the
+built field is negative; every `--all` run prints
+`MEASURED land wall: 0.221 mm in the sector vs 0.250 mm outside`, and
+`measure_notch_reach()` confirms the sector reach is `+0.00 mm`. Mould draw is
+still re-checked each run: `non-monotone rim steps 0 / 0 -> demoulds`.
 
-The extension ramps from zero at the root to full at the rim, so it is angled by
-construction and the structural neck is untouched. **Mould draw is re-checked
-numerically at the larger extension** — the rim outline is sampled and each half
-tested for monotone |z| against |y| out from the y = 0 split:
-`non-monotone rim steps 0 / 0 -> demoulds, no undercut`. Rotating
-`notch_sector_center_deg` or growing the reach re-runs that check, so an undercut
-cannot be introduced silently.
+> Lesson worth keeping: v3's realised reach was 1.00 mm against a 1.75 mm spec
+> because of a trig error (a radial offset shifts a cone's signed distance by
+> *d·cos 35°*, not *d·sin 35°*). That was fixed and verified — and then the
+> feature turned out to be the wrong idea. Measuring the number did not save the
+> design decision; it only made the decision legible.
 
 ---
 
@@ -396,11 +392,12 @@ fine 1.2 mm gyroid skin is unchanged; it is structural-rigid by design.
 | | value |
 |---|---|
 | unit cell (`gyroid_cell_wing`) | **12.0 mm** |
-| sheet wall (`wing_wall_root` → `wing_wall_tip`) | **0.22 → 0.20 mm** |
-| envelope (free span × press direction × depth into concha) | **13.2 × 7.0 × 5.0 mm** |
-| anchored foot (`wing_anchor_w` → `wing_width` over `wing_anchor_len`) | 2.4 → 5.0 mm over 7.0 mm |
-| relative density, nominal 3.09·t/a | **5.4 %** |
-| relative density, **measured from the SDF** incl. rolled edges | **5.2 %** |
+| sheet wall (`wing_wall_root` → `wing_wall_tip`) | **0.20 mm constant** |
+| envelope (free span × press direction × depth into concha) | **10.4 × 7.0 × 5.0 mm** |
+| anchored foot (`wing_anchor_w` → `wing_width` over `wing_anchor_len`) | **1.4** → 5.0 mm over 7.0 mm |
+| shortened / splayed (v4) | **−2.75 mm**, **−10°** about the root |
+| relative density, nominal 3.09·t/a | **5.1 %** |
+| relative density, **measured from the SDF** incl. rolled edges | **5.5 %** |
 | solid Ti transition into the jacket rim (`wing_root_solid`) | 1.2 mm |
 | rolled rim on every exposed sheet edge (`wing_edge_wall`) | 0.40 mm over a 0.70 mm band |
 
@@ -424,10 +421,23 @@ E = 110 GPa, ν = 0.31 (Ti-6Al-4V). Integrated per station over the free span:
 
 | | value |
 |---|---|
-| **tip stiffness k** | **0.251 N/mm**  (target 0.15–0.35) |
-| **F at 1.0 mm** | **0.251 N**  (target 0.2–0.4 N) |
-| **F at 1.5 mm** | **0.376 N**  (target 0.2–0.4 N) |
-| sheet chord at the foot / at the tip | 3.4 / 7.1 mm |
+| **tip stiffness k** | **0.294 N/mm**  (target 0.15–0.35) |
+| **F at 1.0 mm** | **0.294 N** |
+| **F at 1.5 mm** | **0.441 N** |
+| free span | **10.40 mm** (rise 8.72 mm) |
+
+**v4 retention taxonomy: 44 % of ears are overpressed (median −2.66 mm) and only
+one is short.** So the wing is shortened `wing_shorten` = 2.75 mm and the whole
+blade is rotated `wing_splay_deg` = −10° about its root, which splays the press
+direction by the same angle. `wing_rise` is solved by bisection to hit the
+shortened free span, so the shortening is specified in arc length, not in rise.
+
+Shortening stiffens it — k ∝ 1/L³ took k from 0.251 to 0.480 N/mm — so the foot
+was narrowed from 2.4 to **1.4 mm** and the wall dropped to a constant 0.20 mm,
+bringing k back to **0.294 N/mm**, inside the 0.15–0.35 band. Force at a *given*
+deflection is slightly higher than before; force in a *given ear* is much lower,
+because the shortening removes ~2.75 mm of the interference that was causing the
+overpress in the first place.
 
 Sensitivity: χ is the weak link. χ = 0.30 → k = 0.19 N/mm; χ = 0.50 → k = 0.31.
 The whole band still lands inside the target, which is why these parameters were

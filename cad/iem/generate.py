@@ -165,12 +165,20 @@ PARAMS = dict(
     skirt_wall_hinge=0.20,     # mm wall in the compliance groove behind the land
     skirt_wall_land=0.25,      # mm wall through the contact land
     skirt_hinge_w=0.60,        # mm slant width of the compliance groove
-    # ---- intertragic-notch sector (docs/TRYON_REPORT.md seal rescore 5ff456f)
-    notch_sector_ext=3.25,     # mm of REALISED radial reach in the notch sector;
-                               #   auto-calibrated against the built mesh
+    # ---- intertragic-notch sector: COMPLIANCE, not reach ------------------
+    # v3 added radial flare; v4 (2d2c491) showed that is net negative -- a radial
+    # extension commits the lip toward the notch opening, where there is no flesh
+    # to seal against.  The rim is plain O19 all round again; the sector now just
+    # gets a thinner land on a longer hinge so the lip can drape onto the
+    # cartilage flanking the notch.
+    notch_compliance=True,     # enable the compliant inferior sector
+    notch_sector_ext=0.00,     # mm radial flare -- REVERTED to 0, do not re-enable
     notch_sector_deg=90.0,     # deg of skirt perimeter treated as the notch sector
     notch_sector_center_deg=180.0,  # deg from +Y_local; 180 = inferior
     notch_sector_trans_deg=20.0,    # deg of smooth azimuthal blend at each edge
+    notch_hinge_wall=0.15,     # mm hinge wall in the sector (vs skirt_wall_hinge)
+    notch_hinge_w=1.60,        # mm hinge slant width in the sector -- the free
+                               #   length the lip rotates over
     notch_sector_wall=0.22,    # mm land wall inside the sector (vs skirt_wall_land)
 
     # ---- jacket skin (fine gyroid, structural-rigid by design) ----------
@@ -187,7 +195,7 @@ PARAMS = dict(
 
     # ---- wing: MACRO-scale gyroid shell (a compliant doubly-curved sheet) --
     gyroid_cell_wing=12.00,    # mm wing unit cell -- 1-2 cells across the envelope
-    wing_wall_root=0.22,       # mm sheet wall at the root
+    wing_wall_root=0.20,       # mm sheet wall at the root
     wing_wall_tip=0.20,        # mm sheet wall at the tip
     wing_edge_wall=0.40,       # mm rolled/thickened rim on exposed sheet edges
     wing_edge_band=0.70,       # mm over which the wall ramps up to the rolled edge
@@ -195,13 +203,18 @@ PARAMS = dict(
     wing_len=14.0,             # mm nominal wing length along its centreline
     wing_thick=7.00,           # mm envelope across the press direction (in XY)
     wing_width=5.00,           # mm envelope depth in Z, into the concha
-    wing_anchor_w=2.40,        # mm Z-width at the anchor (necked foot; softens the wing)
+    wing_anchor_w=1.40,        # mm Z-width at the anchor (necked foot; softens the
+                               #   wing).  Narrowed at v4 to hold k in band after the
+                               #   2.75 mm shortening stiffened it (k ~ 1/L^3).
     wing_anchor_len=7.00,      # mm over which the Z-width opens anchor_w -> wing_width
     wing_z_top=-0.20,          # mm top of the wing, just under the parting plane
     wing_taper_deg=40.0,       # deg overhang of the wing's deep-edge taper
     wing_edge_round=0.85,      # fraction of the half-section used as a corner radius
     wing_taper=1.60,           # mm of tapered depth on the wing's deep edge
-    wing_rise=11.0,            # mm the tip lands above the core rim
+    wing_shorten=2.75,         # mm taken off the free span (v4: 44% overpressed)
+    wing_splay_deg=-10.0,      # deg the whole wing rotates about its root in XY,
+                               #   which splays the press direction by the same angle
+    wing_rise=11.0,            # mm the tip lands above the core rim (pre-shorten)
     wing_back_deg=30.0,        # deg the tip is angled toward -X
     wing_root_dx=1.00,         # mm, wing root offset from the core centre in X
     shell_chi=0.40,            # sheet-orientation factor <cos^2 th> for the k estimate
@@ -557,6 +570,16 @@ class G:
         self.skirt_wall_fp = [P["skirt_wall_neck"], P["skirt_wall_neck"],
                               P["skirt_wall_hinge"], P["skirt_wall_hinge"],
                               P["skirt_wall_land"], P["skirt_wall_land"]]
+        # sector profile: same land start, but a thinner hinge over a longer run,
+        # so the lip has more free length to rotate through
+        n_h1 = s_h1
+        n_h0 = max(0.05, n_h1 - P["notch_hinge_w"])
+        n_n1 = max(0.02, n_h0 - 0.20)
+        self.notch_wall_xp = [0.0, n_n1, n_h0, n_h1, s_l0, self.skirt_slant]
+        self.notch_wall_fp = [P["skirt_wall_neck"], P["skirt_wall_neck"],
+                              P["notch_hinge_wall"], P["notch_hinge_wall"],
+                              P["notch_sector_wall"], P["notch_sector_wall"]]
+        self.notch_hinge_span = n_h1 - n_h0
         self.skirt_land_x0 = self.skirt_root_x + s_l0 * self.skirt_u[0]
         self.skirt_land_d0 = 2.0 * (self.skirt_root_r + s_l0 * self.skirt_u[1])
 
@@ -578,13 +601,44 @@ class G:
         self.jacket_mags = [(cx - 6.0, 0.0), (cx + 0.5, 4.8), (cx + 0.5, -4.8)]
         self.jacket_pins = [(cx - 3.0, 4.0), (cx - 3.0, -4.0)]
 
-        # ---- wing centreline (quadratic Bezier in XY)
+        # ---- wing centreline (quadratic Bezier in XY) ----------------------
+        # v4 (2d2c491): 44% of ears are OVERPRESSED by the wing (median -2.66 mm)
+        # and only one is short, so the wing is shortened and the whole blade is
+        # rotated about its root, which splays the press direction by the same
+        # angle.
         y_root = self.core_ry + P["clearance"]
         back = math.radians(P["wing_back_deg"])
-        self.wing_p0 = (cx + P["wing_root_dx"], y_root - 1.6)
-        self.wing_p1 = (cx + P["wing_root_dx"], y_root + 0.62 * P["wing_rise"])
-        self.wing_p2 = (cx + P["wing_root_dx"] - P["wing_rise"] * math.tan(back),
-                        y_root + P["wing_rise"])
+        splay = math.radians(P["wing_splay_deg"])
+        dx0 = self.core_cx + P["wing_root_dx"]
+
+        def _pts(rise):
+            p0 = np.array([dx0, y_root - 1.6])
+            p1 = np.array([dx0, y_root + 0.62 * rise])
+            p2 = np.array([dx0 - rise * math.tan(back), y_root + rise])
+            c, sn = math.cos(splay), math.sin(splay)
+            R = np.array([[c, -sn], [sn, c]])
+            return p0, p0 + R @ (p1 - p0), p0 + R @ (p2 - p0)
+
+        def _free(rise):
+            q = _bezier_pts(*_pts(rise))
+            seg = np.linalg.norm(np.diff(q, axis=0), axis=1)
+            cum = np.concatenate([[0.0], np.cumsum(seg)])
+            yv = q[:, 1]
+            s_r = float(np.interp(y_root, yv, cum)) if yv[0] < y_root < yv[-1] else 0.0
+            return float(cum[-1]) - s_r
+
+        target = _free(P["wing_rise"]) - P["wing_shorten"]
+        lo, hi = 1.0, P["wing_rise"]
+        for _ in range(40):
+            mid = 0.5 * (lo + hi)
+            if _free(mid) < target:
+                lo = mid
+            else:
+                hi = mid
+        self.wing_rise = 0.5 * (lo + hi)
+        self.wing_p0, self.wing_p1, self.wing_p2 = (tuple(v) for v in _pts(self.wing_rise))
+        self.wing_L_free = _free(self.wing_rise)
+
         self.y_root = y_root
 
         # ---- curved sound bore ---------------------------------------------
@@ -1129,23 +1183,18 @@ def skirt_field(g, X, Y, Z):
     dn = px * nx + pr * nr                 # +ve outside the cone face
     w = np.interp(sl, g.skirt_wall_xp, g.skirt_wall_fp)
 
-    # ---- intertragic-notch sector -------------------------------------------
-    # The inferior sector of the perimeter carries 77-88% of the remaining seal
-    # failures, so it gets more reach and a thinner, more compliant land.  The
-    # extension ramps from zero at the root to full at the rim, which both angles
-    # it for demoulding and leaves the structural neck untouched.
-    hw = math.radians(0.5 * P["notch_sector_deg"])
-    tr = math.radians(P["notch_sector_trans_deg"])
-    th = np.arctan2(Z, Y)
-    dth = np.abs(_wrap(th - math.radians(P["notch_sector_center_deg"])))
-    tb = np.clip((dth - (hw - tr)) / tr, 0.0, 1.0)
-    b = 1.0 - tb * tb * (3.0 - 2.0 * tb)
-    ramp = np.clip(sl / g.skirt_slant, 0.0, 1.0)
-    # A radial offset d shifts the signed distance by d * n_r, and n_r = ux.
-    # (v1 used ur here, which realised only ext * ur = 0.57x the asked-for reach.)
-    dn = dn - P["notch_sector_ext"] * b * ramp * ux
-    land = np.clip((sl - (g.skirt_slant - g.skirt_land_w)) / 0.30, 0.0, 1.0)
-    w = w + (P["notch_sector_wall"] - P["skirt_wall_land"]) * b * land
+    # ---- intertragic-notch sector: compliance only, no radial reach ---------
+    if P["notch_compliance"]:
+        hw = math.radians(0.5 * P["notch_sector_deg"])
+        tr = math.radians(P["notch_sector_trans_deg"])
+        th = np.arctan2(Z, Y)
+        dth = np.abs(_wrap(th - math.radians(P["notch_sector_center_deg"])))
+        tb = np.clip((dth - (hw - tr)) / tr, 0.0, 1.0)
+        b = 1.0 - tb * tb * (3.0 - 2.0 * tb)
+        wn = np.interp(sl, g.notch_wall_xp, g.notch_wall_fp)
+        w = w + (wn - w) * b
+        if P["notch_sector_ext"]:                     # kept, but 0 by default
+            dn = dn - P["notch_sector_ext"] * b * np.clip(sl / g.skirt_slant, 0, 1) * ux
 
     band = np.maximum(dn, -dn - w)         # between the cone and its inward offset
     d = np.maximum(band, np.maximum(-sl, sl - g.skirt_slant))
@@ -1153,7 +1202,7 @@ def skirt_field(g, X, Y, Z):
     # skirt_max_dia and there is no knife edge on the sealing lip
     lw = 0.5 * P["skirt_wall_land"]
     lipx = ax + ux * g.skirt_slant + nx * (-lw)
-    lipr = ar + ur * g.skirt_slant + nr * (-lw) + P["notch_sector_ext"] * b
+    lipr = ar + ur * g.skirt_slant + nr * (-lw)
     lip = np.sqrt((X - lipx) ** 2 + (rho - lipr) ** 2) - lw
     return U(d, lip)
 
@@ -1526,6 +1575,29 @@ def acoustic_void(g, spacing=0.20):
     return float((ins & (f > 0)).sum()) * sp ** 3
 
 
+def measure_skirt_wall(g, P, theta_deg, n=600):
+    """Wall thickness of the sealing land, measured by probing the built field.
+
+    Marches inward along the cone normal at mid-land and returns the length of
+    the interval where carrier_field() is negative.
+    """
+    ux, ur = g.skirt_u
+    sl = g.skirt_slant - 0.5 * g.skirt_land_w
+    x0 = g.skirt_root_x + ux * sl
+    r0 = g.skirt_root_r + ur * sl
+    t = np.linspace(-0.15, 1.20, n)
+    th = math.radians(theta_deg)
+    X = (x0 + ur * t).reshape(-1, 1, 1)
+    rr = r0 - ux * t
+    Y = (rr * math.cos(th)).reshape(1, -1, 1)
+    Z = (rr * math.sin(th)).reshape(1, 1, -1)
+    # sample along the ray only (diagonal of the broadcast grid)
+    d = np.array([float(carrier_field(g, X[i], Y[0, i], Z[0, 0, i], None))
+                  for i in range(n)])
+    inside = d < 0
+    return float(inside.sum()) * (t[1] - t[0]) if inside.any() else 0.0
+
+
 def measure_notch_reach(mesh, g, P):
     """Realised radial reach of the notch sector, measured on the built mesh.
 
@@ -1630,7 +1702,8 @@ def main():
     if args.trim is not None:
         P["body_trim_mm"] = args.trim
     P = solve_body_trim(P)
-    P = calibrate_notch(P)
+    if P["notch_sector_ext"] > 0:
+        P = calibrate_notch(P)
     g = G(P)
 
     here = os.path.dirname(os.path.abspath(__file__))
@@ -1716,6 +1789,10 @@ def main():
               f"worst {w_best:.1f} deg, p99 {p_best:.1f} deg, "
               f"{100*f_best:.1f}% of area over 45 deg")
         wr = wing_report(g, measure=("jacket_wing" in meshes))
+        print(f"wing: free span {wr['L_free']:.2f} mm "
+              f"(shortened {P['wing_shorten']:.2f} mm, splayed "
+              f"{P['wing_splay_deg']:+.0f} deg about the root, rise "
+              f"{g.wing_rise:.2f} mm)")
         print(f"wing macro gyroid: cell {P['gyroid_cell_wing']} mm, wall "
               f"{P['wing_wall_root']}->{P['wing_wall_tip']} mm, envelope "
               f"{wr['L_free']:.1f} long x {P['wing_thick']} (press) x {P['wing_width']} "
@@ -1861,10 +1938,17 @@ def main():
               f"{2*g.skirt_rim_r:.1f} mm elsewhere; land wall "
               f"{P['notch_sector_wall']} vs {P['skirt_wall_land']} mm, "
               f"{P['notch_sector_trans_deg']:.0f} deg blends")
-        mr = P.get("notch_measured_reach")
-        hist = " -> ".join(f"{e:.2f}~{r:.2f}" for e, r in (P.get("notch_calib_hist") or []))
-        print(f"  MEASURED reach on carrier.stl: {mr:.2f} mm "
-              f"(target 3.0-3.5)   calibration ext~measured: {hist}")
+        w_in = measure_skirt_wall(g, P, P["notch_sector_center_deg"])
+        w_out = measure_skirt_wall(g, P, P["notch_sector_center_deg"] + 180.0)
+        mr = measure_notch_reach(meshes["carrier"], g, P) if "carrier" in meshes else 0.0
+        print(f"  notch = COMPLIANCE, not reach (v4): rim is plain Ø"
+              f"{P['skirt_max_dia']:.1f} mm all round, measured sector reach "
+              f"{mr:+.2f} mm")
+        print(f"  MEASURED land wall: {w_in:.3f} mm in the sector vs "
+              f"{w_out:.3f} mm outside (spec {P['notch_sector_wall']} / "
+              f"{P['skirt_wall_land']} mm); hinge {P['notch_hinge_wall']} mm over "
+              f"{g.notch_hinge_span:.2f} mm of free length vs "
+              f"{P['skirt_wall_hinge']} mm over {P['skirt_hinge_w']:.2f} mm")
         print(f"  two-part mould, split y=0, pull +/-Y: non-monotone rim steps "
               f"{draw[0]} / {draw[1]}  -> "
               + ("demoulds, no undercut" if max(draw) == 0

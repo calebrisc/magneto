@@ -397,7 +397,7 @@ sheet as a legacy option, unchanged.
 |---|---|---|---|---|---|---|
 | cymba | (+0.20, +0.98, −0.10) | 4 × 3.0 mm | 5.50 mm | Ø10.5 | 20.21 mm | +0.62 mm |
 | antihelix undercut | (−0.45, +0.85, −0.28) | 4 × 3.0 mm | 5.50 mm | Ø9.0 | 20.42 mm | +3.43 mm |
-| **tragus_inner** | (+0.82, −0.17, −0.54) | **6 × 4.5 mm** | 6.90 mm | Ø9.0 | 22.32 mm | **−6.53 mm — CLASH** |
+| **tragus_inner** *(disabled)* | (+0.82, −0.17, −0.54) | **6 × 4.5 mm** | 6.90 mm | Ø9.0 | 22.32 mm | **−6.53 mm — CLASH** |
 
 Each aim is normalised at load and the boss base is found by ray-casting the aim
 to the point where the core's outward normal *is* the aim, then offsetting by
@@ -406,23 +406,41 @@ coordinates. Clearance to the nozzle/insert/carrier/skirt stack is computed ever
 run from the real stack profile (`nozzle_stack_profile()`), with the plunger
 modelled as two capsule sections because the boss is narrower than the pad.
 
-> ### tragus_inner does not fit — and the cam is not the reason
+### Per-leg enable — the shipped build is TWO legs
+
+`plunger_enable` turns each leg on or off. **tragus_inner ships OFF**, so the
+default build is the two-leg + interlock variant, ready for a stability test.
+All three are still defined, reported and clearance-checked every run; the
+disabled one just is not built.
+
+> ### tragus_inner cannot be reached from this shell — and no base fixes it
 >
 > The extended cam **does** fit its local depth budget: 6 detents over 4.5 mm
 > needs `cam_h` 4.70 mm and a 6.90 mm boss, which the leg carries fine.
 >
-> The aim itself is the problem. **(+0.82, −0.17, −0.54) sits 15.2° off the canted
-> nozzle axis**, so the plunger drives almost parallel to and alongside the
-> nozzle / insert / carrier / skirt stack and runs straight into it —
-> **−6.53 mm of interference**, not a near miss. No cam, boss or pad change
-> recovers that; the leg is aiming down the same corridor the nozzle already
-> occupies.
+> The aim is the problem. **(+0.82, −0.17, −0.54) sits 15.2° off the canted nozzle
+> axis**, so the leg drives down the same corridor the nozzle already occupies:
+> **−6.53 mm of interference**, not a near miss.
 >
-> Three ways out, none of which I picked unilaterally: move the aim off the nozzle
-> corridor (more −Y / +Z), reduce `nozzle_cant_deg` so the stack swings clear, or
-> accept that the tragus inner wall is unreachable from a shell that also fires a
-> canted nozzle at it. The geometry is built and flagged so a try-on pass can be
-> scored against the other two legs meanwhile.
+> Since the base is a free variable, `leg3_feasibility()` sweeps bases over the
+> anterior / anterior-superior jacket surface, re-aims each at the same tragus-wall
+> target, and scores clearance against the real stack profile. Result, printed
+> every run: **0 of 1431 candidate bases clear 0.80 mm; the best is −6.04 mm.**
+> Relaxing the filters does not rescue it either — at 20 000 directions with *no*
+> aim or length limit at all, i.e. every point on the jacket, the best is still
+> **−2.27 mm**.
+>
+> **The root cause, which the sweep also prints:** the tragus-wall target sits
+> 8.01 mm off the nozzle axis at station 14.74 mm — 1.1 mm past the skirt rim
+> plane and *inside* the Ø19 rim's 9.50 mm radius. **The tragus inner wall is in
+> the skirt's shadow.** Any line from the shell to it has to pass through the
+> skirt. This is not a boss-placement problem and cannot be solved by moving the
+> leg.
+>
+> The levers that would actually work, none chosen unilaterally: shrink
+> `skirt_max_dia`, reduce `nozzle_cant_deg` so the stack swings off that corridor,
+> or accept the tragus inner wall as unreachable and let the two-leg variant carry
+> retention.
 
 ### The cymba lip bias
 

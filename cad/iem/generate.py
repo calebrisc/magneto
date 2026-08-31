@@ -204,6 +204,11 @@ PARAMS = dict(
     plunger_aims=(("cymba",              (0.30,  0.94, -0.15)),
                   ("antihelix_undercut", (-0.45, 0.85, -0.28)),
                   ("tragus_inner",       (0.82, -0.17, -0.54))),
+    # per-leg enable.  tragus_inner is defined but OFF: its aim clashes with the
+    # nozzle stack (see README 6), so the shipped build is the two-leg + interlock
+    # variant for stability testing.
+    plunger_enable={"cymba": True, "antihelix_undercut": True,
+                    "tragus_inner": False},
     cymba_lip_bias=7.0,        # deg the cymba aim rotates toward +Y, so the pad
                                #   lands UNDER the cymba's overhanging lip
     cymba_pad_extra=1.50,      # mm of extra pad diameter on the cymba leg only
@@ -522,6 +527,7 @@ class G:
 
         # ---- three radial mag-plungers -------------------------------------
         self.plungers = []
+        self.plungers_all = []
         rr_ = np.array(self.core_r)
         for name, aim in P["plunger_aims"]:
             a = np.array(aim, dtype=float)
@@ -558,7 +564,10 @@ class G:
                            else P["plunger_cam_steps"]),
                 cam_range=(P["plunger_cam_ext_range"] if ext
                            else P["plunger_cam_range"]),
-                pad_extra=(P["cymba_pad_extra"] if name == "cymba" else 0.0)))
+                pad_extra=(P["cymba_pad_extra"] if name == "cymba" else 0.0),
+                enabled=bool(P["plunger_enable"].get(name, True))))
+        self.plungers_all = list(self.plungers)
+        self.plungers = [q for q in self.plungers_all if q["enabled"]]
         # canonical axial stations, measured from the mount face along the aim
         self.pl_mag_fix = -P["plunger_mag_t"]                      # fixed ring back
         self.pl_mag_mov = P["plunger_gap"]                         # moving ring face
@@ -1324,6 +1333,89 @@ def nozzle_stack_profile(g):
         f = (t - g.skirt_root_x) / max(g.skirt_rim_x - g.skirt_root_x, 1e-9)
         out.append((nb + ax * t, g.skirt_root_r + f * (g.skirt_rim_r - g.skirt_root_r)))
     return out
+
+
+def clearance_for(g, base, aim, pad_extra=0.0, boss_h=None):
+    """Clearance from a hypothetical plunger at (base, aim) to the nozzle stack."""
+    P = g.P
+    base = np.asarray(base, dtype=float)
+    aim = np.asarray(aim, dtype=float) / np.linalg.norm(aim)
+    bh = P["plunger_boss_h"] if boss_h is None else boss_h
+    mount = base + aim * bh
+    tip = mount + aim * (g.pl_pad1 + P["plunger_rocker"] + P["plunger_travel"])
+    secs = [(base, mount, 0.5 * P["plunger_boss_od"]),
+            (mount, tip, 0.5 * (P["plunger_foot_od"] + pad_extra))]
+    prof = nozzle_stack_profile(g)
+    return min(_seg_pt_dist(a0, a1, c) - r - ra
+               for a0, a1, ra in secs for c, r in prof)
+
+
+def jacket_point(g, n):
+    """Point on the jacket's outer surface whose outward normal is n."""
+    P = g.P
+    n = np.asarray(n, dtype=float) / np.linalg.norm(n)
+    rr = np.array(g.core_r)
+    surf = np.array(g.core_c) + (rr ** 2 * n) / np.linalg.norm(rr * n)
+    return surf + n * (P["clearance"] + P["jacket_thick"])
+
+
+def leg3_feasibility(g, nominal=(0.82, -0.17, -0.54), name="tragus_inner",
+                     min_clear=0.8, max_aim_dev=35.0, n_dir=4000):
+    """Can leg 3 reach the tragus inner wall from ANY base on the jacket?
+
+    The base is a free variable -- only the far end of the aim line is fixed.  So
+    sweep bases over the anterior / anterior-superior jacket surface, re-aim each
+    at the target the nominal leg reaches, and score clearance to the real stack.
+    """
+    P = g.P
+    nom = np.asarray(nominal, dtype=float)
+    nom /= np.linalg.norm(nom)
+    pl0 = next((q for q in g.plungers_all if q["name"] == name), None)
+    bh = pl0["boss_h"] if pl0 else P["plunger_boss_h"]
+    need = bh + g.pl_pad1 + P["plunger_rocker"]
+    T = jacket_point(g, nom) + nom * need               # the tragus-wall target
+    half = 0.5 * P["plunger_cam_range"]                 # the cam absorbs this much
+
+    i = np.arange(n_dir) + 0.5
+    phi = np.arccos(1 - 2 * i / n_dir)
+    th = np.pi * (1 + 5 ** 0.5) * i
+    dirs = np.stack([np.cos(th) * np.sin(phi), np.sin(th) * np.sin(phi),
+                     np.cos(phi)], axis=1)
+    best, ok = None, []
+    for d in dirs:
+        if d[0] < 0.0 or d[1] < -0.7:                   # anterior / ant-superior
+            continue
+        B = jacket_point(g, d)
+        v = T - B
+        L = float(np.linalg.norm(v))
+        if abs(L - need) > half:                        # cam cannot take up more
+            continue
+        a = v / L
+        dev = math.degrees(math.acos(min(1.0, float(np.dot(a, nom)))))
+        if dev > max_aim_dev:
+            continue
+        cl = clearance_for(g, B, a, boss_h=bh)
+        rec = dict(base=B, aim=a, clear=cl, dev=dev, L=L,
+                   axis_deg=math.degrees(math.acos(min(1.0, abs(float(
+                       np.dot(a, g.n_ax)))))))
+        if best is None or cl > best["clear"]:
+            best = rec
+        if cl >= min_clear:
+            ok.append(rec)
+    # why: where does the target itself sit relative to the nozzle stack?
+    v = T - np.array(g.nozzle_base)
+    st = float(np.dot(v, g.n_ax))
+    perp = float(np.linalg.norm(v - st * np.array(g.n_ax)))
+    prof = nozzle_stack_profile(g)
+    stations = [float(np.dot(c - np.array(g.nozzle_base), g.n_ax)) for c, r in prof]
+    k = int(np.argmin([abs(x - st) for x in stations]))
+    near_st = stations[k]
+    # several bodies share a station (carrier body and skirt rim both end at
+    # carrier_x1); the widest one is what a leg has to clear
+    rad = max(r for (c, r), x in zip(prof, stations) if abs(x - near_st) < 0.5)
+    return dict(target=T, need=need, best=best, ok=ok, n_ok=len(ok),
+                tgt_station=st, tgt_perp=perp, tgt_stack_r=rad,
+                tgt_near_station=near_st)
 
 
 def plunger_clearance(g, pl):
@@ -2165,14 +2257,15 @@ def main():
                   f"{sk:.2f} mm -> {g.pl_mag_mov - sk:.2f} mm of inward travel "
                   f"before it bottoms on the boss")
         clash = []
-        for pl in g.plungers:
+        for pl in g.plungers_all:
             tip = pl["mount"] + pl["aim"] * (g.pl_pad1 + P["plunger_rocker"])
             cl = plunger_clearance(g, pl)
             ang = math.degrees(math.acos(min(1.0, abs(float(
                 np.dot(pl["aim"], g.n_ax))))))
-            if cl < 0.3:
+            if cl < 0.3 and pl["enabled"]:
                 clash.append((pl["name"], cl, ang))
-            print(f"    {pl['name']:20s} aim ({pl['aim'][0]:+.2f},"
+            print(f"    [{'ON ' if pl['enabled'] else 'OFF'}] "
+                  f"{pl['name']:19s} aim ({pl['aim'][0]:+.2f},"
                   f"{pl['aim'][1]:+.2f},{pl['aim'][2]:+.2f})  cam "
                   f"{pl['cam_steps']}x{pl['cam_range']:.1f}mm  boss "
                   f"{pl['boss_h']:.2f} mm  pad Ø"
@@ -2186,6 +2279,28 @@ def main():
                   f"skirt stack: "
                   + ", ".join(f"{n} {c:+.2f} mm ({a:.0f} deg off the nozzle axis)"
                               for n, c, a in clash))
+        off = [q["name"] for q in g.plungers_all if not q["enabled"]]
+        if off:
+            print(f"  BUILD = {len(g.plungers)}-leg variant; disabled via "
+                  f"plunger_enable: {', '.join(off)}")
+        # ---- leg-3 feasibility: is there ANY base that clears the stack?
+        fs = leg3_feasibility(g)
+        b = fs["best"]
+        print(f"  leg-3 base sweep (base is free, aim must still end at the "
+              f"tragus wall): {fs['n_ok']} of the swept anterior bases clear "
+              f"0.80 mm")
+        print(f"    the target sits {fs['tgt_perp']:.2f} mm off the nozzle axis at "
+              f"station {fs['tgt_station']:.2f} mm; the nearest stack station is "
+              f"{fs['tgt_near_station']:.2f} mm at {fs['tgt_stack_r']:.2f} mm radius"
+              + ("  -- the tragus wall lies inside the skirt's shadow, so no base "
+                 "can reach it" if fs["tgt_perp"] < fs["tgt_stack_r"] else ""))
+        if b is not None:
+            print(f"    best base ({b['base'][0]:+6.2f},{b['base'][1]:+6.2f},"
+                  f"{b['base'][2]:+6.2f})  aim ({b['aim'][0]:+.2f},"
+                  f"{b['aim'][1]:+.2f},{b['aim'][2]:+.2f})  {b['dev']:4.1f} deg "
+                  f"off nominal  {b['axis_deg']:4.1f} deg off the nozzle axis  "
+                  f"clearance {b['clear']:+.2f} mm"
+                  + ("  -> FEASIBLE" if b["clear"] >= 0.8 else "  -> still clashes"))
         if P["cymba_lip_bias"]:
             print(f"  cymba lip bias: aim rotated {P['cymba_lip_bias']:.0f} deg "
                   f"toward +Y, pad Ø{P['plunger_foot_od']:.1f} -> Ø"

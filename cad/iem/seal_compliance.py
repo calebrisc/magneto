@@ -66,7 +66,10 @@ import sys
 import numpy as np
 import trimesh
 
-from earfit import ALIGNED, NOZZLE_AXIS, EarField, _rim_circle, transform
+import os as _os
+
+from earfit import (ALIGNED, HERE, NOZZLE_AXIS, NOZZLE_T, EarField, _rim_circle,
+                    transform)
 
 BUDGETS = (1.5, 2.5, 4.0)
 BUDGET_LABEL = {1.5: "rigid", 2.5: "conservative", 4.0: "optimistic"}
@@ -76,6 +79,41 @@ GAP_MAX_DEG = 18.0           # any single unsealed arc above this leaks
 TRAVEL_MM = 1.5              # mag-float carrier axial travel
 TRAVEL_STEPS = 16
 NOTCH_HALF_DEG = 45.0        # half-width of the intertragic-notch sector
+
+
+def rim_from_mesh(stl_dir=None, n=N_RIM):
+    """Sample the AS-BUILT skirt rim off carrier.stl, one point per azimuth.
+
+    The analytic circle in earfit is a perfect Ø19 ring, which was right until the
+    intertragic-notch sector landed: the rim now flares ~1 mm further out over the
+    inferior 90 deg, and a circle samples straight past the very feature the
+    sector was added to provide.  Taking the max-radius locus per azimuth bin
+    picks up whatever shape the generator actually produced, including future
+    changes.
+
+    carrier.stl is written in the NOZZLE-LOCAL frame, so the contour is built
+    there and then canted into the assembly frame with NOZZLE_T.
+    """
+    sdir = stl_dir or _os.path.join(HERE, "stl", "right")
+    m = trimesh.load(_os.path.join(sdir, "carrier.stl"), force="mesh")
+    v = np.asarray(m.vertices, float)
+    r = np.hypot(v[:, 1], v[:, 2])
+    th = np.degrees(np.arctan2(v[:, 2], v[:, 1])) % 360.0
+    # only the lip band, so a wide flange further down the cone cannot win
+    lip = v[:, 0] > v[:, 0].max() - 0.60
+    v, r, th = v[lip], r[lip], th[lip]
+    edges = np.linspace(0.0, 360.0, n + 1)
+    idx = np.clip(np.digitize(th, edges) - 1, 0, n - 1)
+    pts = np.zeros((n, 3))
+    for b in range(n):
+        sel = np.where(idx == b)[0]
+        if len(sel) == 0:                     # empty bin: fall back to the circle
+            a = np.radians(0.5 * (edges[b] + edges[b + 1]))
+            from earfit import SKIRT_RIM_R, SKIRT_RIM_X
+            pts[b] = [SKIRT_RIM_X, SKIRT_RIM_R * np.cos(a), SKIRT_RIM_R * np.sin(a)]
+        else:
+            pts[b] = v[sel[np.argmax(r[sel])]]
+    return pts @ NOZZLE_T[:3, :3].T + NOZZLE_T[:3, 3]
 
 
 def longest_false_run(mask):
@@ -178,6 +216,11 @@ def score_ear(rec, patch, rim_design):
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--rim", choices=("mesh", "circle"), default="mesh",
+                    help="'mesh' samples the as-built rim off carrier.stl "
+                         "(captures the intertragic-notch flare); 'circle' uses "
+                         "the analytic Ø19 ring, for comparison with older runs")
+    ap.add_argument("--stl-dir", default=None)
     ap.add_argument("--csv", default=os.path.join(ALIGNED, "seal_compliance.csv"))
     ap.add_argument("--md", default=os.path.join(ALIGNED, "seal_compliance.md"))
     a = ap.parse_args()
@@ -186,7 +229,9 @@ def main():
     if not js:
         sys.exit("nothing in ears/aligned -- run align_ear.py first")
 
-    rim_design = _rim_circle(n=N_RIM)
+    rim_design = (rim_from_mesh(a.stl_dir, N_RIM) if a.rim == "mesh"
+                  else _rim_circle(n=N_RIM))
+    print(f"rim model: {a.rim}", flush=True)
     rows = []
     for p in js:
         rec = json.load(open(p))

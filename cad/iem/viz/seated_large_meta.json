@@ -1,0 +1,54 @@
+{
+ "label": "large",
+ "ear": "hutubs/pp49",
+ "aim_pair": [
+  [
+   -0.426123380580603,
+   0.7072047654236768,
+   -0.5641633489376997
+  ],
+  [
+   -0.43300238151964754,
+   0.5000027500226877,
+   -0.7500041250340316
+  ]
+ ],
+ "equilibrium_translation_mm": [
+  1.1288233486224026,
+  0.6485947043238481,
+  -2.2493211175829493
+ ],
+ "sites": [
+  {
+   "aim": [
+    -0.426123380580603,
+    0.7072047654236768,
+    -0.5641633489376997
+   ],
+   "surface_distance_mm": 8.298288925553706,
+   "stroke_consumed_mm": 3.798288925553706,
+   "engaged": true
+  },
+  {
+   "aim": [
+    -0.43300238151964754,
+    0.5000027500226877,
+    -0.7500041250340316
+   ],
+   "surface_distance_mm": 6.878924011283871,
+   "stroke_consumed_mm": 2.378924011283871,
+   "engaged": true
+  }
+ ],
+ "stability_margin": {
+  "mu0.4_tug0.5": 0.0,
+  "mu0.4_tug0.2": 0.0,
+  "mu0.6_tug0.5": 0.387,
+  "mu0.6_tug0.2": 0.46,
+  "mu0.8_tug0.5": 0.473,
+  "mu0.8_tug0.2": 0.799,
+  "mu1.0_tug0.5": 0.601,
+  "mu1.0_tug0.2": 1.016
+ },
+ "note": "Body at the coupled floating-equilibrium pose. Plunger stacks are SCHEMATIC primitives (green column, red pad) drawn at the extension consumed on this ear -- the searched aims have no STL yet. Ear/shell meshes are decimated for viewing only."
+}

@@ -647,6 +647,81 @@ Not reportable: with zero contacts there is no spread to measure. If the seat is
 re-sited medially onto the concha floor, that question becomes answerable — and
 worth asking then, because the floor is the one surface every ear presents.
 
+## Aim-pair end-game search — objective 2 is impossible, and that is the answer
+
+`aim_pair_search.py` searches both aims jointly: 183 candidate directions on a
+15° sphere grid, pruned to 56 that reach ≥3 ears inside the stroke window, giving
+1540 pairs, scored analytically on the reaction direction and then run through
+the floating equilibrium on all 13 ears.
+
+### Objective 2 cannot be satisfied — a structural result, not a search failure
+
+| | best over all 1540 pairs |
+|---|---|
+| reaction alignment with floor-inward (+0.18, +0.39, −0.90) | **−0.06** |
+| |reaction sum| at that pair | 1.87 (not a cancelling couple either) |
+
+**No pair points its reaction into the concha floor.** The best is −0.06 —
+perpendicular, marginally the wrong way — and it is not a near-cancelling couple.
+The reason is structural, and once seen it is obvious:
+
+> A contact's reaction is opposite its aim. The aims must point **at** flesh, and
+> the only flesh available is the concha **walls** (superior) and the concha
+> **floor** (medial). Aim at the floor and the reaction is **lateral — straight
+> out of the ear**, which is the pull-out direction. Aim at the walls and the
+> reaction is **inferior**, into the notch void with nothing to react it.
+> **You cannot push off the floor and be pressed into the floor by the same
+> contact.**
+
+So a radial plunger inside the concha cannot generate a *retaining* preload,
+whatever its aim. This closes the line of enquiry that started with the
+antitragus leg.
+
+### Best pair, and what it costs
+
+Winner on the combined score: **a1 = (−0.426, +0.707, −0.564), a2 = (−0.433,
++0.500, −0.750)**.
+
+| objective | result |
+|---|---|
+| 1 coverage | **6/13** ears with both stacks engaged |
+| 2 reaction into floor | **−0.76** — actively pushes the body *out* |
+| 3 no bottoming >2 N | **0.73 N** worst — satisfied |
+| 4 stability ≥1.0× at μ0.6/over-ear | **fails: 0.21 small, 0.46 large** |
+
+Objectives 1 and 4 fight each other exactly as the impossibility predicts: the
+pairs that reach the most cartilage aim **medially**, and medial aims eject the
+body. That is why stability collapses from 1.14× (built aims) to 0.21×.
+
+### Seated scenes at floating equilibrium
+
+| file | ear | body shift | stroke consumed (site 1 / 2) | μ0.6, over-ear |
+|---|---|---|---|---|
+| `viz/seated_small.glb` | pp66 | 0.74 mm | 2.69 / 4.70 mm — both engaged | 0.21× |
+| `viz/seated_median.glb` | P0023 | 2.26 mm | 4.83 / 7.39 mm — site 2 out of stroke | 0.00× |
+| `viz/seated_large.glb` | pp49 | 2.60 mm | 3.80 / 2.38 mm — both engaged | 0.46× |
+
+2.52 MB each, with a meta JSON carrying ear id, aim pair, per-site stroke and the
+full stability grid. Stacks are drawn at the extension actually consumed on that
+ear — green column, red pad — as **schematic primitives**, since the searched
+aims have no STL yet.
+
+### Where this leaves retention
+
+Preload direction is a dead end; the two mechanisms that remain are the two that
+never depended on it:
+
+1. **Interlock.** A pad hooked under a lip has a contact normal set by the
+   *cartilage*, not by the pad's aim — so the impossibility above does not apply
+   to it. This is the one route that beats the geometry.
+2. **Friction.** Still the dominant lever, and still unmeasured: μ = 0.6→0.8
+   moves the built design from fail to pass.
+
+Caveat on the model: the equilibrium assumes each stack pushes along its aim,
+which is right for a face-on contact and wrong for one hooked under a lip. It
+therefore understates exactly the mechanism recommendation 1 relies on — another
+reason to measure interlock directly rather than search aims.
+
 ## Deriving the third plunger aim from data
 
 `plunger_aim_search.py` sweeps candidate aims on a 10° grid and, for each ear,

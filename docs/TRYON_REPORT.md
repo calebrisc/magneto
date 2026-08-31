@@ -277,6 +277,99 @@ P0023 the surface in that direction falls away far faster than the other two
 sites. Worth checking whether that is P0023-specific or general before re-aiming
 — it is the obvious next single-ear question.
 
+## Deriving the third plunger aim from data
+
+`plunger_aim_search.py` sweeps candidate aims on a 10° grid and, for each ear,
+casts a ray from where the generator would place the boss (`core_c` → core
+ellipsoid → jacket outer surface) to find how far the cartilage actually is.
+Geometry queries only — no re-seating; each ear keeps the pose it had. Run over
+the 13-ear short list plus P0023 on its current `17810fd` pose.
+
+Two windows are reported because they differ: the **as-built** leg spans
+8.40–12.15 mm from the jacket surface (11.40 mm stack, −3.0 cam, +0.75 travel),
+while the stated **target** working range is 1.5–6.0 mm, which describes a
+considerably shorter leg.
+
+### (a) The best aims
+
+| aim | in target | in as-built | interlocking | median | spread p10–p90 | misses |
+|---|---|---|---|---|---|---|
+| `antitragus` (+0.20, −0.96, −0.20) **as built** | 1/13 | **0/13** | 0/13 | 23.5 mm | — | **10/13** |
+| best inferior, target window (−0.09, −0.50, −0.86) | **6**/13 | — | 1/13 | 5.4 mm | 1.6–10.1 | 4/13 |
+| **best anterior (+0.82, −0.17, −0.54)** | — | **7**/13 | 0/13 | 9.7 mm | 1.3–15.8 | — |
+| (0, 0, −1) — straight at the concha floor | 8/13 | — | 1/13 | 3.2 mm | 0.7–10.9 | — |
+
+The nominal winner on raw count, (0, 0, −1), is **degenerate**: −Z is medial, so
+that leg presses on the concha floor where the jacket already rests. It earns no
+interlock and adds nothing. Ranking is therefore restricted to directions with a
+real inferior component, and reported separately for the anterior region.
+
+**The as-built antitragus aim is bad across the population, not just on P0023:
+it misses 10 of 13 ears entirely and lands in the usable window on none.**
+
+### (b) Is there a good common inferior direction? No
+
+The best inferior aim reaches only **6 of 13** ears, misses 4 outright, and
+spreads 1.6–13.2 mm — about 12 mm of variation across a 3.75 mm adjustment
+range. Interlock is essentially absent (0–1 of 13) for *every* inferior
+direction tried. **The lower ear is too variable to serve with a fixed leg.**
+
+The suggested tragus-inside-face aim ≈ (−0.8, −0.3, +0.5) **misses all 13 ears**,
+and (+0.8, −0.3, +0.5) misses 11 — because in this design frame **+Z is lateral,
+i.e. out of the ear**, so any aim with a positive Z component leaves the concha
+before it can hit anything. The idea is sound with the sign corrected: the
+anterior-medial direction **(+0.82, −0.17, −0.54)** aims at the tragus inner wall
+and reaches **7 of 13** ears inside the as-built window, against the antitragus
+leg's 0 — the best result found, and it needs no change to leg length.
+
+### (c) Per-ear spread, best inferior aim (−0.09, −0.50, −0.86)
+
+| ear | distance | in window |
+|---|---|---|
+| hutubs/pp82 | 1.61 mm | yes |
+| sonicom/P0023 | 1.65 mm | yes |
+| hutubs/pp66 | 2.27 mm | yes |
+| sonicom/P0016 | 4.45 mm | yes |
+| hutubs/pp9 | 5.41 mm | yes |
+| hutubs/pp49 | 5.50 mm | yes |
+| hutubs/pp69 | 7.25 mm | no |
+| synthetic/xl_deep | 9.35 mm | no |
+| synthetic/xl_shallow | 13.15 mm | no |
+| pp67, P0003, xs_deep, xs_shallow | no hit | no |
+
+Median 5.41 mm, p10–p90 1.6–10.1 mm. Recommendation: **drop the antitragus leg
+and move leg 3 anterior to ≈ (+0.82, −0.17, −0.54)**, accepting that no fixed
+third aim serves the whole population.
+
+### Does the cymba pad get interlock credit? Yes structurally — but it rarely earns it
+
+**The model does credit interlock.** `stability.py` builds each contact wrench
+from the ear's own outward surface normal, so a pad seated under an overhang has
+n · pull_out < 0 and resists pull-out *directly*, with no friction required. No
+special term is needed and none is missing.
+
+**But the cymba pad does not land on the overhang.** Measured at the pad tip
+across 13 ears, n · pull_out is **+0.41 median** — the surface faces *outward* and
+would help eject the shell — and only **4 of 13** ears give it interlock at all.
+
+This is a genuine underestimate rather than a true negative, because the overhang
+is present in the data: within 8 mm of the cymba pad the ear meshes carry a
+**median 16.9 %** of area with n · pull_out < −0.2 (up to 40.9 %; 12.6 % over the
+whole patch). The cartilage lip is there — the pad tip is simply beside it.
+
+Two concrete sources of under-credit, both fixable:
+
+1. **Tip-only sampling.** `iem_points` samples the pad as a disc at its tip. A pad
+   tucked under a lip contacts on its shoulder, and that contact is never
+   sampled, so its interlock cannot be counted. Sample the pad's full surface.
+2. **Normal smoothing.** `EarField` returns a nearest-sample face normal, which
+   rounds off sharp lips and understates the inward-facing component.
+
+So the stability margins reported for the cymba leg are conservative. The
+actionable move is not a model change but a geometry one: shift the cymba pad a
+few millimetres to land **on** the overhang that the scans already show, then
+re-measure — the interlock credit will follow automatically.
+
 ### Auto-export
 
 Every single-ear run rewrites `viz/seated_scene.glb` and its metadata for that

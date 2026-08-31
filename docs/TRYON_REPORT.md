@@ -388,6 +388,86 @@ and not demonstrated**.
 > geometry iteration. Cross-referenced in `MECH_VALIDATION.md` §5.4, whose
 > "no tissue or friction model" limitation this check answers.
 
+## Sizing a repelling magnet stack per site
+
+`plunger_stroke_spec.py` measures, per site, the distance from the boss **mount
+face** along the aim to the ear surface — `D_mount`, exactly what the stack has
+to span. Measured on the 13-ear short list **re-seated on `e2df120`**, because
+the earlier seatings came from the wing-era body and the shell sits differently
+under the plunger build.
+
+| site | n hits | min | p10 | median | p90 | max | range |
+|---|---|---|---|---|---|---|---|
+| cymba | 11 (2 no-hit) | 0.15 | 0.35 | 2.56 | 13.14 | 23.71 | **23.6 mm** |
+| antihelix_undercut | 8 (5 no-hit) | 0.46 | 1.10 | 5.22 | 7.89 | 7.97 | **7.5 mm** |
+
+### The binding constraint is not stroke — it is compacted length
+
+A stack must satisfy both:
+
+```
+N · s  ≥  R                                  stroke covers the range
+(N+1) · t + pad + plate + 1 mm  ≤  D_min     compacted fits the CLOSEST ear
+```
+
+with `s` = usable stroke per gap, `t` = magnet thickness, pad + plate = 1.8 mm.
+Combining: **`D_min ≥ (R/s)·t + t + 2.8`**.
+
+**`D_min` is 0.15 mm (cymba) and 0.46 mm (antihelix).** The thinnest conceivable
+stack — one magnet plus pad plus plate — is already ≈ 2.8 mm. **No repelling
+stack of any N fits either site**, because the 5.5 mm boss has already consumed
+the entire depth budget: on the closest ear the boss face is touching flesh.
+
+With the characterised 5 × 2.5 × 1 N35 pair (`t` = 1.0, `s` = 1.5):
+
+| site | sizing | N | compacted | verdict |
+|---|---|---|---|---|
+| cymba | min–max | 16 | 18.8 mm | impossible even at boss = 0, short **14.1 mm** |
+| cymba | p10–p90 | 9 | 11.8 mm | impossible even at boss = 0, short 6.9 mm |
+| antihelix | min–max | 6 | 8.8 mm | impossible even at boss = 0, short 3.8 mm |
+| antihelix | p10–p90 | 5 | 7.8 mm | impossible even at boss = 0, short 2.2 mm |
+
+### Stroke specs, and what has to change to reach them
+
+**antihelix_undercut — sizeable, conditionally.** Range 7.5 mm all-ears / 6.8 mm
+p10–p90.
+
+> **Spec: 7.5 mm stroke → N = 4 gaps at 1.9 mm each, `t` = 0.5 mm magnets,
+> compacted 4.3 mm, boss shortened from 5.5 mm to ≤ 0.7 mm** (pads essentially
+> flush on the jacket). Relaxing to p10–p90 gives N = 3 gaps at 2.3 mm, compacted
+> 3.8 mm, boss ≤ 1.8 mm.
+
+**cymba — not sizeable from this data.** Range 23.6 mm all-ears; even the most
+favourable cell (p10–p90, `t` = 0.5, `s` = 2.5, boss = 0) is still 0.4 mm short.
+Its distribution is the problem: median 2.56 mm but max 23.71 mm, a ten-fold
+spread across ears. One stack cannot serve it.
+
+> **Flag for the magnet agent — this may be physically backwards.** Both specs
+> above need ~2 mm of usable stroke from a **0.5 mm** magnet, i.e. a
+> stroke-to-thickness ratio of ~4 against the characterised 1.5. Thinner magnets
+> generally give *weaker* fields and *shorter* usable stroke, so the direction
+> this sizing demands is likely unavailable. **Please verify before anyone designs
+> to it.** If `s/t` cannot exceed ~1.5, no stack fits either site at any N.
+
+### To seat the cymba pad under the lip
+
+Undercut surface sits a median 4.00 mm / p90 10.82 / max 13.23 mm along the aim
+(cymba) and 4.51 / 8.98 / 9.70 mm (antihelix). Hooking on *every* ear needs
+expanded reach ≥ 14.23 mm (cymba, stroke 15.1 mm, N = 11) or ≥ 10.70 mm
+(antihelix, stroke 11.2 mm, N = 8) — both far outside what fits.
+
+### What this actually says
+
+The stack concept is not the problem; **the 5.5 mm boss is.** It spends the whole
+depth budget before the magnets get any, and on the closest ear it leaves 0.15 mm.
+Shortening the boss is worth more than any magnet change, and it is free. Order
+of operations: flush-mount the pads, re-measure, then size the stack — at which
+point antihelix looks tractable and cymba probably needs a second SKU or a
+different site.
+
+Caveat: 2 of 13 ears (cymba) and 5 of 13 (antihelix) return no ray hit at all, so
+these ranges describe the ears the site reaches, not the whole population.
+
 ## Deriving the third plunger aim from data
 
 `plunger_aim_search.py` sweeps candidate aims on a 10° grid and, for each ear,

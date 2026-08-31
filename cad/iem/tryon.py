@@ -191,6 +191,10 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--dataset", default=None)
+    ap.add_argument("--cant", type=float, default=None,
+                    help="override nozzle_cant_deg when reading the STLs")
+    ap.add_argument("--stl-dir", default=None,
+                    help="directory of right-ear STLs (default stl/right)")
     ap.add_argument("--csv", default=os.path.join(ALIGNED, "tryon.csv"))
     ap.add_argument("--md", default=os.path.join(ALIGNED, "tryon_summary.md"))
     a = ap.parse_args()
@@ -201,7 +205,7 @@ def main():
     if not js:
         sys.exit("nothing in ears/aligned -- run align_ear.py first")
 
-    P = iem_points()
+    P = iem_points(stl_dir=a.stl_dir, cant=a.cant)
     rows = []
     for p in js:
         rec = json.load(open(p))

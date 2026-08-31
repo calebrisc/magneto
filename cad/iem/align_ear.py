@@ -130,7 +130,7 @@ import numpy as np
 import trimesh
 from scipy import ndimage, optimize
 
-from earfit import (ALIGNED, DATASETS, EARS, EarField, SKIRT_RIM_X, crop,
+from earfit import (ALIGNED, DATASETS, EARS, EarField, crop,
                     depth_map, ear_window, iem_points, load_head, rt_matrix,
                     transform)
 
@@ -306,7 +306,7 @@ def find_tragus(dm, ap, win):
     return np.array([xs[mx][ij[0]], sub[ij], zs[mz][ij[1]]])
 
 
-def concha_frame(ap, n_out, lat):
+def concha_frame(ap, n_out, lat, rim_centre):
     """4x4 with +X anterior, +Y superior, +Z = concha outward normal, origin
     placed so the skirt rim centre lands on the aperture."""
     ez = n_out / np.linalg.norm(n_out)
@@ -319,7 +319,10 @@ def concha_frame(ap, n_out, lat):
         ex, ey = -ex, -ey
     M = np.eye(4)
     M[:3, 0], M[:3, 1], M[:3, 2] = ex, ey, ez
-    M[:3, 3] = ap - SKIRT_RIM_X * ex
+    # seat the rim CENTRE on the aperture.  With a canted nozzle the rim centre is
+    # no longer at (SKIRT_RIM_X, 0, 0) in the assembly frame, so seed off
+    # RIM_CENTRE rather than a distance along +X.
+    M[:3, 3] = ap - M[:3, :3] @ rim_centre
     return M
 
 
@@ -364,17 +367,30 @@ def seating_cost(M, P, field, ctx=None):
     # long along its nozzle axis, so burying the rim throws the faceplate just as
     # far the other way.  Nobody wears an IEM standing 14 mm proud of the tragus,
     # so the pose the optimiser reports has to be one a wearer would accept.
+    # FACEPLATE ORIENTATION.  Nothing in the cost said which way is "out", so the
+    # search was free to roll the shell until the faceplate pointed sideways or
+    # into the skull -- 23 of 107 ears on the collinear baseline and 13 on the
+    # canted build seated with the faceplate normal more than 90 deg from the
+    # out-of-head direction, which is not a fit any wearer could adopt and which
+    # quietly corrupts the protrusion number.  The outer face has to face out.
+    # 45 deg of slack is free (real fits vary that much); past that it is quadratic.
+    c_face = 0.0
+    if ctx is not None and ctx.get("outward") is not None:
+        fz = M[:3, 2] / max(np.linalg.norm(M[:3, 2]), 1e-9)
+        th = np.degrees(np.arccos(np.clip(float(fz @ ctx["outward"]), -1.0, 1.0)))
+        c_face = 0.004 * relu(th - 45.0) ** 2
+
     c_prot = 0.0
     if ctx is not None and ctx.get("tragus") is not None:
         fp = transform(P["faceplate"], M)
         prot = float(np.max(np.einsum("ij,j->i", fp - ctx["tragus"], ctx["normal"])))
         c_prot = 0.08 * relu(prot - 2.0) ** 2
 
-    c = c_rim + c_pen + c_wing + c_jac + c_soft + c_prot
+    c = c_rim + c_pen + c_wing + c_jac + c_soft + c_prot + c_face
     return float(c) if np.isfinite(c) else 1e6
 
 
-def start_pose(frame, ap, rake_deg, roll_deg):
+def start_pose(frame, ap, rake_deg, roll_deg, rim_centre):
     """Rotate the design frame by `rake` about +Y (nozzle anterior -> medial)
     and `roll` about +X, then re-seat so the rim centre stays on the aperture."""
     R = trimesh.transformations.euler_matrix(np.radians(roll_deg),
@@ -382,7 +398,7 @@ def start_pose(frame, ap, rake_deg, roll_deg):
     M = frame.copy()
     M[:3, 3] = 0.0
     M = M @ R
-    M[:3, 3] = ap - SKIRT_RIM_X * M[:3, 0]
+    M[:3, 3] = ap - M[:3, :3] @ rim_centre
     return M
 
 
@@ -390,7 +406,7 @@ def seat(frame, ap, P, field, refine=4, ctx=None):
     starts = []
     for rake in RAKES:
         for roll in ROLLS:
-            M = start_pose(frame, ap, rake, roll)
+            M = start_pose(frame, ap, rake, roll, P["_rim_centre"])
             starts.append((seating_cost(M, P, field, ctx), rake, roll, M))
     starts.sort(key=lambda s: s[0])
 
@@ -447,10 +463,10 @@ def process(path, ds, side, P, want_png, manual):
         lm["manual"] = True
 
     tragus = find_tragus(dm, lm["aperture"], win)
-    frame = concha_frame(lm["aperture"], n_out, win["lat"])
+    frame = concha_frame(lm["aperture"], n_out, win["lat"], P["_rim_centre"])
     field = EarField(patch)
     ctx = dict(tragus=None if tragus is None else np.asarray(tragus, float),
-               normal=n_out)
+               normal=n_out, outward=outward)
     cost, rake, roll, M, z, cost0 = seat(frame, lm["aperture"], P, field, ctx=ctx)
 
     os.makedirs(ALIGNED, exist_ok=True)
@@ -494,7 +510,12 @@ def reseat(json_path, P, field_seed=0):
     frame = np.array(rec["concha_frame"], float)
     n_out = np.array(rec["floor_normal"], float)
     trg = rec.get("tragus")
-    ctx = dict(tragus=None if trg is None else np.array(trg, float), normal=n_out)
+    ctx = dict(tragus=None if trg is None else np.array(trg, float), normal=n_out,
+               outward=np.array(rec["outward"], float))
+    # the cached concha_frame was seeded off the OLD rim centre; re-seed it so a
+    # reseat after a cant change starts from the right place
+    frame = frame.copy()
+    frame[:3, 3] = ap - frame[:3, :3] @ P["_rim_centre"]
     cost, rake, roll, M, z, cost0 = seat(frame, ap, P,
                                          EarField(patch, seed=field_seed), ctx=ctx)
     rec.update(transform=M.tolist(), nozzle_rake_deg=rake, roll_deg=roll,
@@ -507,18 +528,18 @@ def reseat(json_path, P, field_seed=0):
 _P = None
 
 
-def _reseat_worker(json_path, field_seed=0):
+def _reseat_worker(json_path, field_seed=0, cant=None, stl_dir=None):
     global _P
     if _P is None:
-        _P = iem_points()
+        _P = iem_points(stl_dir=stl_dir, cant=cant)
     return reseat(json_path, _P, field_seed)
 
 
-def _worker(path, ds, side, want_png, manual):
+def _worker(path, ds, side, want_png, manual, cant=None, stl_dir=None):
     """Process pool entry point; the IEM point sets are built once per worker."""
     global _P
     if _P is None:
-        _P = iem_points()
+        _P = iem_points(stl_dir=stl_dir, cant=cant)
     return process(path, ds, side, _P, want_png, manual)
 
 
@@ -526,6 +547,11 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--dataset", choices=list(DATASETS), default=None)
+    ap.add_argument("--cant", type=float, default=None,
+                    help="override nozzle_cant_deg when reading the STLs "
+                         "(pair with --stl-dir to score a non-default build)")
+    ap.add_argument("--stl-dir", default=None,
+                    help="directory of right-ear STLs (default stl/right)")
     ap.add_argument("--field-seed", type=int, default=0,
                     help="seed for the ear-surface point sampling; vary it to "
                          "measure how much a result depends on the sampling")
@@ -558,7 +584,8 @@ def main():
             sys.exit(f"nothing to reseat in {ALIGNED}")
         t0, ok, bad = time.time(), 0, 0
         with cf.ProcessPoolExecutor(max_workers=a.jobs) as ex:
-            futs = {ex.submit(_reseat_worker, p, a.field_seed): p for p in js}
+            futs = {ex.submit(_reseat_worker, p, a.field_seed, a.cant, a.stl_dir): p
+                    for p in js}
             for fut in cf.as_completed(futs):
                 try:
                     report(fut.result()); ok += 1
@@ -590,8 +617,8 @@ def main():
 
     if a.jobs > 1:
         with cf.ProcessPoolExecutor(max_workers=a.jobs) as ex:
-            futs = {ex.submit(_worker, p, a.dataset, a.side, a.qc_png, manual): p
-                    for p in files}
+            futs = {ex.submit(_worker, p, a.dataset, a.side, a.qc_png, manual,
+                              a.cant, a.stl_dir): p for p in files}
             for fut in cf.as_completed(futs):
                 try:
                     report(fut.result()); ok += 1
@@ -600,7 +627,7 @@ def main():
                     print(f"{a.dataset}/{os.path.basename(futs[fut])}  FAILED: {e}",
                           flush=True)
     else:
-        P = iem_points()
+        P = iem_points(stl_dir=a.stl_dir, cant=a.cant)
         for p in files:
             try:
                 report(process(p, a.dataset, a.side, P, a.qc_png, manual)); ok += 1

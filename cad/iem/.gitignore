@@ -2,6 +2,8 @@
 __pycache__/
 *.pyc
 stl/
+# alternate-parameter builds, e.g. stl_cant0 from --cant 0
+stl_*/
 
 # ear meshes and per-ear outputs are the publishers' data, not ours
 ears/*

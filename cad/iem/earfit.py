@@ -41,8 +41,37 @@ EARS = os.path.join(HERE, "ears")
 ALIGNED = os.path.join(EARS, "aligned")
 
 # ---- IEM geometry constants, mirrored from generate.py PARAMS -------------- #
-SKIRT_RIM_X = 13.67        # mm, design X of the skirt rim / seal plane
-SKIRT_RIM_R = 9.375        # mm, rim centreline radius (19.0/2 - skirt_wall_land/2)
+def _nozzle_frame(cant=None):
+    """Nozzle-local -> assembly frame, read straight out of generate.py.
+
+    `cant` overrides `nozzle_cant_deg` (degrees) so a single checkout can score
+    the canted default and the collinear baseline side by side.
+
+    Since `nozzle_cant_deg`, the carrier/skirt and the nozzle inserts are modelled
+    about the nozzle axis and their STLs are written in that local frame; only the
+    assembly applies `nozzle_T`.  Loading carrier.stl and treating its coordinates
+    as assembly-frame coordinates would put the seal 45 deg away from where it
+    actually is, so the transform is imported rather than copied -- a hardcoded
+    cant here would silently rot the moment the generator's default changes.
+
+    Returns (nozzle_T, rim_x, rim_r) with rim_x/rim_r in the NOZZLE-LOCAL frame.
+    """
+    import generate                                   # same directory
+    P = generate.PARAMS
+    if cant is not None:
+        P = dict(P, nozzle_cant_deg=float(cant))
+    g = generate.G(P)
+    # generate's skirt_rim_r is the OUTER radius; the contact land's centreline
+    # sits half a land-wall inboard of it
+    rim_r = float(g.skirt_rim_r) - 0.5 * P["skirt_wall_land"]
+    return np.asarray(g.nozzle_T, float), float(g.skirt_rim_x), rim_r
+
+
+NOZZLE_T, SKIRT_RIM_X, SKIRT_RIM_R = _nozzle_frame()
+# the Ø19 rim centre in the ASSEMBLY frame -- what the seating search lands on the
+# canal aperture.  At cant = 0 this is just (SKIRT_RIM_X, 0, 0).
+RIM_CENTRE = NOZZLE_T[:3, :3] @ np.array([SKIRT_RIM_X, 0.0, 0.0]) + NOZZLE_T[:3, 3]
+NOZZLE_AXIS = NOZZLE_T[:3, 0] / np.linalg.norm(NOZZLE_T[:3, 0])
 CARRIER_X0 = 4.65          # mm, carrier proximal face
 
 DATASETS = {
@@ -171,14 +200,19 @@ class EarField:
 # IEM sample points
 # --------------------------------------------------------------------------- #
 
-def _rim_circle(n=72):
+def _rim_circle(n=72, nT=None, rim_x=None, rim_r=None):
+    """The sealing rim, built in the nozzle-local frame and canted into the
+    assembly frame -- so it follows `nozzle_cant_deg` automatically."""
+    nT = NOZZLE_T if nT is None else nT
+    rim_x = SKIRT_RIM_X if rim_x is None else rim_x
+    rim_r = SKIRT_RIM_R if rim_r is None else rim_r
     th = np.linspace(0, 2 * np.pi, n, endpoint=False)
-    return np.stack([np.full(n, SKIRT_RIM_X),
-                     SKIRT_RIM_R * np.cos(th),
-                     SKIRT_RIM_R * np.sin(th)], axis=1)
+    loc = np.stack([np.full(n, rim_x), rim_r * np.cos(th), rim_r * np.sin(th)],
+                   axis=1)
+    return loc @ nT[:3, :3].T + nT[:3, 3]
 
 
-def iem_points(stl_dir=None, seed=0):
+def iem_points(stl_dir=None, seed=0, cant=None):
     """Tagged sample points on the IEM, in the design frame.
 
     rim        72 points on the Ø19 skirt-rim circle (the seal band)
@@ -196,6 +230,10 @@ def iem_points(stl_dir=None, seed=0):
     sdir = stl_dir or os.path.join(HERE, "stl", "right")
     rng = np.random.default_rng(seed)
     out = {}
+    # this point set's own nozzle frame, so a cant-0 and a cant-45 build can be
+    # scored in the same process without either picking up the other's transform
+    nT, rim_x, rim_r = ((NOZZLE_T, SKIRT_RIM_X, SKIRT_RIM_R) if cant is None
+                        else _nozzle_frame(cant))
 
     def load(n):
         return trimesh.load(os.path.join(sdir, n), force="mesh")
@@ -203,9 +241,14 @@ def iem_points(stl_dir=None, seed=0):
     core = load("core.stl")
     face = load("faceplate.stl")
     jw = load("jacket_wing.stl")
+    # carrier.stl is written in the NOZZLE-LOCAL frame (see _nozzle_frame); the
+    # core, faceplate and jacket/wing are already in the assembly frame.
     car = load("carrier.stl")
+    car.apply_transform(nT)
 
-    out["rim"] = _rim_circle()
+    out["rim"] = _rim_circle(nT=nT, rim_x=rim_x, rim_r=rim_r)
+    out["_nozzle_T"] = nT
+    out["_rim_centre"] = nT[:3, :3] @ np.array([rim_x, 0.0, 0.0]) + nT[:3, 3]
 
     jv = jw.vertices
     tipidx = np.argsort(jv[:, 1])[-40:]
@@ -228,7 +271,10 @@ def iem_points(stl_dir=None, seed=0):
     out["shell"] = np.vstack([s_core, s_face, s_jw[s_jw[:, 1] < 8.0]])
 
     cv = car.vertices
-    r = np.hypot(cv[:, 1], cv[:, 2])
+    # radius about the NOZZLE axis, measured in the nozzle-local frame -- hypot on
+    # world y,z would only be the skirt radius when the cant is zero
+    loc = np.einsum("ij,jk->ik", cv - nT[:3, 3], nT[:3, :3])
+    r = np.hypot(loc[:, 1], loc[:, 2])
     out["soft"] = cv[rng.choice(len(cv), 400, replace=False)]
     out["skirt"] = cv[r > 6.0]
 

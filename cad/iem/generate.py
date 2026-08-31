@@ -103,12 +103,17 @@ PARAMS = dict(
     corner_ramp=1.20,          # mm over which the cut opens up above the magnet band
 
     # ---- body trim (docs/TRYON_REPORT.md, recalibrated 13e75b3) ------------
-    body_trim_mm=5.00,         # mm of PROTRUSION to remove by shrinking the shell
+    body_trim_mm=0.00,         # mm of PROTRUSION to remove by shrinking the shell.
+                               #   0 = ACCEPT: protrusion settled 2026-08-31, no
+                               #   driver change and no further body shrink. The
+                               #   solver below is kept for the record; see README 2c.
     body_trim_w=(0.41, 0.65, 0.49),   # mm of protrusion removed per mm cut on X/Y/Z
     body_trim_min_wall=0.90,   # mm of Ti kept around the driver pocket while trimming
     body_trim_min_front_cc=0.50,   # cc of acoustic void that must survive the trim
     body_trim_keep_magnets=True,   # refuse an X trim that worsens the faceplate rim
     body_trim_force=None,      # (tx, ty, tz) override, set by solve_body_trim()
+    notch_measured_reach=None, # filled in by calibrate_notch()
+    notch_calib_hist=None,
 
     # ---- core shell ---------------------------------------------------
     core_rx=8.5,               # mm half-extent along X (nozzle axis)
@@ -161,7 +166,8 @@ PARAMS = dict(
     skirt_wall_land=0.25,      # mm wall through the contact land
     skirt_hinge_w=0.60,        # mm slant width of the compliance groove
     # ---- intertragic-notch sector (docs/TRYON_REPORT.md seal rescore 5ff456f)
-    notch_sector_ext=1.75,     # mm of extra radial flare over the notch sector
+    notch_sector_ext=3.25,     # mm of REALISED radial reach in the notch sector;
+                               #   auto-calibrated against the built mesh
     notch_sector_deg=90.0,     # deg of skirt perimeter treated as the notch sector
     notch_sector_center_deg=180.0,  # deg from +Y_local; 180 = inferior
     notch_sector_trans_deg=20.0,    # deg of smooth azimuthal blend at each edge
@@ -1135,7 +1141,9 @@ def skirt_field(g, X, Y, Z):
     tb = np.clip((dth - (hw - tr)) / tr, 0.0, 1.0)
     b = 1.0 - tb * tb * (3.0 - 2.0 * tb)
     ramp = np.clip(sl / g.skirt_slant, 0.0, 1.0)
-    dn = dn - P["notch_sector_ext"] * b * ramp * ur      # ur = radial part of n_hat
+    # A radial offset d shifts the signed distance by d * n_r, and n_r = ux.
+    # (v1 used ur here, which realised only ext * ur = 0.57x the asked-for reach.)
+    dn = dn - P["notch_sector_ext"] * b * ramp * ux
     land = np.clip((sl - (g.skirt_slant - g.skirt_land_w)) / 0.30, 0.0, 1.0)
     w = w + (P["notch_sector_wall"] - P["skirt_wall_land"]) * b * land
 
@@ -1145,7 +1153,7 @@ def skirt_field(g, X, Y, Z):
     # skirt_max_dia and there is no knife edge on the sealing lip
     lw = 0.5 * P["skirt_wall_land"]
     lipx = ax + ux * g.skirt_slant + nx * (-lw)
-    lipr = ar + ur * g.skirt_slant + nr * (-lw) + P["notch_sector_ext"] * b * ur
+    lipr = ar + ur * g.skirt_slant + nr * (-lw) + P["notch_sector_ext"] * b
     lip = np.sqrt((X - lipx) ** 2 + (rho - lipr) ** 2) - lw
     return U(d, lip)
 
@@ -1518,6 +1526,50 @@ def acoustic_void(g, spacing=0.20):
     return float((ins & (f > 0)).sum()) * sp ** 3
 
 
+def measure_notch_reach(mesh, g, P):
+    """Realised radial reach of the notch sector, measured on the built mesh.
+
+    Takes the rim ring of the carrier and compares the rim radius inside the
+    sector against the rim radius outside it.  This is the number that matters:
+    the cone slant and marching-cubes rounding both eat into the nominal.
+    """
+    v = np.asarray(mesh.vertices)
+    sel = v[:, 0] > g.skirt_rim_x - 0.60
+    if sel.sum() < 200:
+        sel = np.ones(len(v), dtype=bool)
+    vv = v[sel]
+    rho = np.hypot(vv[:, 1], vv[:, 2])
+    th = np.arctan2(vv[:, 2], vv[:, 1])
+    hw = math.radians(0.5 * P["notch_sector_deg"])
+    tr = math.radians(P["notch_sector_trans_deg"])
+    dth = np.abs(_wrap(th - math.radians(P["notch_sector_center_deg"])))
+    inn, out = dth < (hw - tr), dth > (hw + tr)
+    if inn.sum() < 20 or out.sum() < 20:
+        return float("nan")
+    return float(np.percentile(rho[inn], 95) - np.percentile(rho[out], 95))
+
+
+def calibrate_notch(P, target=3.25, lo=3.0, hi=3.5, iters=5):
+    """Drive notch_sector_ext until the MEASURED reach lands in [lo, hi]."""
+    P = copy.deepcopy(P)
+    hist = []
+    for _ in range(iters):
+        g = G(P)
+        fn, b = PARTS["carrier"][0](g)
+        fld, org, spc = evaluate(fn, b, spacing_for(b, P["budget"], P["voxel"]))
+        m = polygonise(fld, org, spc)
+        got = measure_notch_reach(m, g, P)
+        hist.append((P["notch_sector_ext"], got))
+        if not math.isfinite(got) or got <= 1e-6:
+            break
+        if lo <= got <= hi:
+            break
+        P["notch_sector_ext"] *= target / got
+    P["notch_measured_reach"] = hist[-1][1]
+    P["notch_calib_hist"] = hist
+    return P
+
+
 def solve_body_trim(P):
     """Largest trim that keeps every internal margin.
 
@@ -1578,6 +1630,7 @@ def main():
     if args.trim is not None:
         P["body_trim_mm"] = args.trim
     P = solve_body_trim(P)
+    P = calibrate_notch(P)
     g = G(P)
 
     here = os.path.dirname(os.path.abspath(__file__))
@@ -1808,6 +1861,10 @@ def main():
               f"{2*g.skirt_rim_r:.1f} mm elsewhere; land wall "
               f"{P['notch_sector_wall']} vs {P['skirt_wall_land']} mm, "
               f"{P['notch_sector_trans_deg']:.0f} deg blends")
+        mr = P.get("notch_measured_reach")
+        hist = " -> ".join(f"{e:.2f}~{r:.2f}" for e, r in (P.get("notch_calib_hist") or []))
+        print(f"  MEASURED reach on carrier.stl: {mr:.2f} mm "
+              f"(target 3.0-3.5)   calibration ext~measured: {hist}")
         print(f"  two-part mould, split y=0, pull +/-Y: non-monotone rim steps "
               f"{draw[0]} / {draw[1]}  -> "
               + ("demoulds, no undercut" if max(draw) == 0

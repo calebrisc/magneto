@@ -172,64 +172,77 @@ lives entirely in the faceplate, and the worst point simply relocates to the cor
 rim at z = 1.0. The faceplate magnet stations were moved to a diagonal pair,
 (cx ± 6.5, ∓2.9), because the old axial −X station sat inside the roll.
 
-### Body trim — `body_trim_mm` (5.0 mm requested)
+### Body trim — `body_trim_mm` (**default 0.00 — protrusion ACCEPTED**)
 
-Distributes the requested protrusion reduction across X/Y/Z in proportion to
-`body_trim_w`, then clamps each axis to what the internals allow. X and Y are
-bounded analytically; Z is bounded by the acoustic void, which has to be measured,
-so `solve_body_trim()` bisects on the real geometry.
+**Settled 2026-08-31: protrusion is accepted as-is.** No 8 mm driver, no further
+body shrink. `body_trim_mm` defaults to 0 and the core stays 17.00 × 14.00 ×
+10.00 mm with a 550.8 mm³ acoustic void. The solver below is kept because the
+finding it produced is the reason the decision went that way.
 
-| axis | requested | feasible | applied | what binds |
-|---|---|---|---|---|
-| X | 2.47 mm | **0.00** | 0.00 | faceplate magnet rim, already at 0.02 mm |
-| Y | 3.91 mm | **0.00** | 0.00 | driver pocket wall is exactly `body_trim_min_wall` |
-| Z | 2.95 mm | 4.20 | **1.34** | acoustic void hits the 0.5 cc floor |
+Asked for 5 mm of protrusion reduction, distributed across X/Y/Z by
+`body_trim_w` and clamped to what the internals allow (X and Y analytically; Z by
+bisecting `solve_body_trim()` against a *measured* 0.5 cc void), the answer was:
 
-**Delivered: 0.65 mm of the 5.00 mm asked for.** Core 17.00 × 14.00 × 8.66 mm.
-Margins after the trim (flagged under 0.30 mm):
+| axis | requested | feasible | what binds |
+|---|---|---|---|
+| X | 2.47 mm | **0.00** | faceplate magnet rim, already at 0.02 mm |
+| Y | 3.91 mm | **0.00** | driver pocket wall is exactly `body_trim_min_wall` |
+| Z | 2.95 mm | 1.34 | acoustic void hits the 0.5 cc floor |
 
-```
-     driver pocket wall, +/-X        2.40      faceplate cap above parting  3.33
-     driver pocket wall, +/-Y        0.90      socket pocket to shell       2.33
-     shell under the driver pocket   2.33      acoustic void              504.6 mm3
-FLAG faceplate magnet rim (x2)       0.02
-```
+**0.65 mm of the 5.00 mm asked for**, and combined with the corner roll it moved
+the worst point 10.47 → 10.20 mm — 0.27 mm, measured on the meshes. The report's
+worked example (6 X + 4 Y + 4 Z) would take the shell to 11 × 10 × 6 mm around a
+14 mm-minimum driver pocket. 4–6 mm was never reachable without a driver change,
+which is what made ACCEPT the right call.
 
-The two flagged magnet rims are **pre-existing**, not caused by the trim: a Ø2
-pocket needs 2 mm of rim and the annulus between the Ø12.2 pocket and the shell is
-1.17–2.23 mm. That mounting needs a rethink regardless.
+The margin report still runs every build, so a future parameter change cannot
+quietly eat a wall. Two rims stay flagged and are **pre-existing**, not caused by
+any trim: a Ø2 magnet pocket needs 2 mm of rim and the annulus between the Ø12.2
+driver pocket and the shell is 1.17–2.23 mm. That mounting wants a rethink on its
+own schedule.
 
-> **The honest verdict: 4–6 mm is not reachable while preserving the driver pocket,
-> the magnet stations and 0.5 cc.** The report's own worked example (6 X + 4 Y + 4 Z)
-> would take the shell to 11 × 10 × 6 mm around a 14 mm-minimum driver pocket. The
-> recalibration removed the *need* for a driver-stack redesign at the ≤10 mm
-> threshold, but the geometry still says a driver change is the only route past
-> ~1 mm. Relax `body_trim_keep_magnets` or `body_trim_min_front_cc` to trade.
+### Intertragic-notch sector — `notch_sector_ext`, self-calibrating
 
-**Combined chamfer + trim, measured on the meshes along the sensitivity diagonal:
-10.47 → 10.20 mm = 0.27 mm.** The report's coefficients predict 0.65 mm from the
-trim alone; they include re-seating gains this generator cannot see, so a try-on
-re-run is the arbiter.
-
-### Intertragic-notch sector — `notch_sector_ext`
-
-The inferior sector carries 77–88 % of the remaining seal failures, so it gets more
-reach and a more compliant land, and nothing else changes:
+The inferior sector carries 77–88 % of the remaining seal failures, so it gets
+more reach and a more compliant land, and nothing else changes.
 
 | | |
 |---|---|
-| sector | `notch_sector_deg` 90° centred `notch_sector_center_deg` 180° from +Y_local (inferior) |
-| extra reach | **+1.75 mm** radial → **Ø22.5 mm** there, **Ø19.0 mm** elsewhere |
-| land wall | **0.22 mm** in the sector vs 0.25 mm elsewhere |
+| sector | `notch_sector_deg` 90° centred `notch_sector_center_deg` 180° from +Y_local (inferior) — try-on v3 measured the aim 18° off, within the 20° blend |
+| **realised reach** | **3.25 mm**, measured on `carrier.stl` (target 3.0–3.5) |
+| rim | **Ø25.5 mm** in the sector, **Ø19.0 mm** elsewhere |
+| land wall | 0.22 mm in the sector vs 0.25 mm elsewhere |
 | blends | 20° smoothstep at each edge |
 | land width | 4.50 mm, unchanged all the way round |
 
+**v1 built this short — 1.00 mm realised against a 1.75 mm spec — and the cause
+was a trig error, not mesh rounding.** A radial offset *d* shifts a cone's signed
+distance by *d·n_r*, and for this cone *n_r* = cos 35° = 0.819; v1 multiplied by
+*u_r* = sin 35° = 0.574 instead, and the rim-lip torus was offset by
+`ext · u_r` outright. So the parameter realised 0.574× what it claimed —
+1.75 × 0.574 = 1.004 mm, which is exactly what the try-on measured.
+
+Both are fixed, so `notch_sector_ext` now *is* the radial reach. On top of that
+the number is **verified, not asserted**:
+
+* `measure_notch_reach()` takes the rim ring off the built carrier mesh and
+  compares the 95th-percentile radius inside the sector against outside it.
+* `calibrate_notch()` builds the carrier, measures, rescales
+  `notch_sector_ext` by `target / measured`, and repeats until the measured
+  reach lands in [3.0, 3.5] mm (up to 5 passes).
+* Every `--all` run prints `MEASURED reach on carrier.stl` and the calibration
+  history, so a silent regression is not possible.
+
+With the trig corrected the loop converges on the first pass (`3.25~3.25`) — the
+closed-form fix is exact and the calibration is now a guard rather than a search.
+
 The extension ramps from zero at the root to full at the rim, so it is angled by
-construction and the structural neck is untouched. **Mould draw is checked
-numerically every run** — the rim outline is sampled and each half tested for
-monotone |z| against |y| out from the y = 0 split: `non-monotone rim steps 0 / 0
--> demoulds, no undercut`. Rotating `notch_sector_center_deg` off 180° re-runs
-that check, so an undercut cannot be introduced silently.
+construction and the structural neck is untouched. **Mould draw is re-checked
+numerically at the larger extension** — the rim outline is sampled and each half
+tested for monotone |z| against |y| out from the y = 0 split:
+`non-monotone rim steps 0 / 0 -> demoulds, no undercut`. Rotating
+`notch_sector_center_deg` or growing the reach re-runs that check, so an undercut
+cannot be introduced silently.
 
 ---
 

@@ -1,0 +1,213 @@
+{
+  "provenance": "parsed from fea/wing2_run.log -- the 2026-08-31 run of wing2_stiffness.py against generate.py commit 8db64d7",
+  "generator_estimate": {
+    "k": 0.2506,
+    "chi": 0.4,
+    "rho_nom": 0.0538,
+    "L_free": 13.161
+  },
+  "linear_sweep": [
+    {
+      "delta": 0.25,
+      "F": 0.2693,
+      "k_secant": 1.0771,
+      "vm_max": 185.1,
+      "vm_p999": 99.6,
+      "newton_its": 1
+    },
+    {
+      "delta": 0.5,
+      "F": 0.5386,
+      "k_secant": 1.0771,
+      "vm_max": 370.2,
+      "vm_p999": 199.2,
+      "newton_its": 1,
+      "k_tangent": 1.0771
+    },
+    {
+      "delta": 0.75,
+      "F": 0.8078,
+      "k_secant": 1.0771,
+      "vm_max": 555.3,
+      "vm_p999": 298.8,
+      "newton_its": 1,
+      "k_tangent": 1.0771
+    },
+    {
+      "delta": 1.0,
+      "F": 1.0771,
+      "k_secant": 1.0771,
+      "vm_max": 740.4,
+      "vm_p999": 398.4,
+      "newton_its": 1,
+      "k_tangent": 1.0771
+    },
+    {
+      "delta": 1.25,
+      "F": 1.3464,
+      "k_secant": 1.0771,
+      "vm_max": 925.5,
+      "vm_p999": 498.0,
+      "newton_its": 1,
+      "k_tangent": 1.0771
+    },
+    {
+      "delta": 1.5,
+      "F": 1.6157,
+      "k_secant": 1.0771,
+      "vm_max": 1110.7,
+      "vm_p999": 597.6,
+      "newton_its": 1,
+      "k_tangent": 1.0771
+    },
+    {
+      "delta": 1.75,
+      "F": 1.8849,
+      "k_secant": 1.0771,
+      "vm_max": 1295.8,
+      "vm_p999": 697.2,
+      "newton_its": 1,
+      "k_tangent": 1.0771
+    },
+    {
+      "delta": 2.0,
+      "F": 2.1542,
+      "k_secant": 1.0771,
+      "vm_max": 1480.9,
+      "vm_p999": 796.7,
+      "newton_its": 1,
+      "k_tangent": 1.0771
+    }
+  ],
+  "nonlinear_sweep": [
+    {
+      "delta": 0.25,
+      "F": 0.2695,
+      "k_secant": 1.0781,
+      "vm_max": 183.7,
+      "vm_p999": 99.7,
+      "newton_its": 5
+    },
+    {
+      "delta": 0.5,
+      "F": 0.54,
+      "k_secant": 1.0801,
+      "vm_max": 364.8,
+      "vm_p999": 199.6,
+      "newton_its": 4,
+      "k_tangent": 1.0821
+    },
+    {
+      "delta": 0.75,
+      "F": 0.8123,
+      "k_secant": 1.0831,
+      "vm_max": 543.3,
+      "vm_p999": 299.6,
+      "newton_its": 5,
+      "k_tangent": 1.0892
+    },
+    {
+      "delta": 1.0,
+      "F": 1.0872,
+      "k_secant": 1.0872,
+      "vm_max": 719.4,
+      "vm_p999": 400.0,
+      "newton_its": 5,
+      "k_tangent": 1.0995
+    },
+    {
+      "delta": 1.25,
+      "F": 1.3655,
+      "k_secant": 1.0924,
+      "vm_max": 893.2,
+      "vm_p999": 500.7,
+      "newton_its": 5,
+      "k_tangent": 1.1132
+    },
+    {
+      "delta": 1.5,
+      "F": 1.6481,
+      "k_secant": 1.0987,
+      "vm_max": 1064.7,
+      "vm_p999": 601.5,
+      "newton_its": 5,
+      "k_tangent": 1.1302
+    },
+    {
+      "delta": 1.75,
+      "F": 1.9358,
+      "k_secant": 1.1062,
+      "vm_max": 1234.1,
+      "vm_p999": 703.4,
+      "newton_its": 5,
+      "k_tangent": 1.1509
+    },
+    {
+      "delta": 2.0,
+      "F": 2.2297,
+      "k_secant": 1.1148,
+      "vm_max": 1401.5,
+      "vm_p999": 806.5,
+      "newton_its": 6,
+      "k_tangent": 1.1754
+    }
+  ],
+  "linear_convergence": [
+    {
+      "h": 0.12,
+      "nelem": 21240,
+      "vol": 36.7,
+      "k": 1.0771,
+      "k_rigid_section": 21.1
+    },
+    {
+      "h": 0.1,
+      "nelem": 36398,
+      "vol": 36.4,
+      "k": 1.0159,
+      "k_rigid_section": 20.3
+    },
+    {
+      "h": 0.08,
+      "nelem": 71575,
+      "vol": 36.65,
+      "k": 1.0808,
+      "k_rigid_section": null,
+      "note": "standalone run; main() needs --fine for this point"
+    }
+  ],
+  "platen": {
+    "steps": [
+      {
+        "delta": 0.05,
+        "F": 0.2257,
+        "k": 4.5139,
+        "n_contact": 6,
+        "vm_max": 106.4,
+        "vm_p999": 47.1
+      },
+      {
+        "delta": 0.1,
+        "F": 0.4509,
+        "k": 4.509,
+        "n_contact": 2,
+        "vm_max": 209.0,
+        "vm_p999": 94.0
+      },
+      {
+        "delta": 0.25,
+        "F": 1.1273,
+        "k": 4.509,
+        "n_contact": 2,
+        "vm_max": 522.6,
+        "vm_p999": 235.1
+      }
+    ],
+    "contact_s_over_L_free": 0.633
+  },
+  "verification": {
+    "nonlinear_tangent_vs_linear_K_rel": 5.77e-16,
+    "disp_control_vs_force_control": "agree to 5 significant figures",
+    "rigid_tip_patch_artifact_k_N_per_mm": 20.8
+  }
+}

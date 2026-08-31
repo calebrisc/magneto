@@ -181,6 +181,15 @@ def tet_from_sdf(fn, bounds, h_mc, h_tet, tag="part"):
 # linear elasticity with an element-wise (graded) modulus
 # ---------------------------------------------------------------------------
 
+def rotate_mesh(m, R):
+    """Rigid-rotate a mesh by R.  Isotropic elasticity is frame-indifferent, so
+    solving on the rotated mesh is exact -- and it makes an arbitrary press
+    direction into the +z coordinate dof, which turns each frictionless contact
+    constraint into a single Dirichlet dof instead of a multipoint constraint."""
+    cls = type(m)
+    return cls(np.ascontiguousarray(R @ m.p), np.ascontiguousarray(m.t))
+
+
 def make_basis(m, intorder=2):
     """intorder=2 is FULL (2x2x2 Gauss) integration for a trilinear hex -- not
     reduced, so there is no hourglassing risk; it just avoids skfem's default
@@ -223,12 +232,17 @@ def von_mises(basis, u, E, nu=NU_TI):
     return np.sqrt(3.0 * j2)
 
 
-def solve_fixed(K, basis, D, x_pre, tol=1e-11, verbose=False):
+def solve_fixed(K, basis, D, x_pre, tol=1e-11, verbose=False,
+                direct_max=260000):
     """Solve K u = 0 with Dirichlet dofs D held at x_pre[D].
 
-    Smoothed-aggregation AMG preconditioned CG, with the six rigid-body modes
-    supplied as the near-nullspace -- without them AMG converges badly on
-    elasticity.  Falls back to a sparse direct solve on small systems.
+    Sparse direct (SuperLU) up to `direct_max` dof, AMG-preconditioned CG above
+    it.  Direct is preferred wherever it fits: smoothed-aggregation AMG with a
+    rigid-body near-nullspace converges fine on chunky solids but STALLS on thin
+    shells (the 0.2 mm wing sheet), where the near-nullspace is dominated by
+    bending modes that rigid-body vectors do not span.  SuperLU on the same
+    system is both robust and fast (17 s at 100k dof), because a thin shell has
+    a favourable elimination tree.
     Returns (u, r) where r = K u are the nodal reactions.
     """
     import scipy.sparse as sp
@@ -241,8 +255,8 @@ def solve_fixed(K, basis, D, x_pre, tol=1e-11, verbose=False):
     A = K[free][:, free].tocsr()
     b = -np.asarray(K @ x)[free]
 
-    if A.shape[0] < 20000:
-        u_f = sp.linalg.spsolve(A.tocsc(), b)
+    if A.shape[0] < direct_max:
+        u_f = sp.linalg.splu(A.tocsc()).solve(b)
     else:
         import pyamg
         nd = basis.nodal_dofs                       # (3, nnodes)

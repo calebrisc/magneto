@@ -161,9 +161,6 @@ def run_wing(h=0.15, steps=None, verbose=True):
     vol = nel * h ** 3
     E, wall, rd = graded_E(cent, P, g.y_root, wtab, Etab)
 
-    basis = K.make_basis(m)
-    Kmat = K.stiffness(basis, E)
-
     # ---- platen direction: in-plane normal to the root->tip chord ----------
     root_xy = np.array([g.core_cx + P["wing_root_dx"], g.y_root])
     tip_xy = np.array(g.wing_p2)
@@ -174,8 +171,14 @@ def run_wing(h=0.15, steps=None, verbose=True):
         nhat = -nhat                              # point outboard (+x side)
 
     fixed = np.where(m.p[1] < g.y_root + 0.25 * h)[0]
+    # Rotate the MESH, not just the coordinates used to pick contact nodes.
+    # Assembling K on the unrotated mesh while constraining dof 2 presses along
+    # GLOBAL z, whatever n_hat says -- the bug this line fixes.
     R = rot_to_z(nhat)
-    p_rot = R @ m.p
+    m = K.rotate_mesh(m, R)
+    basis = K.make_basis(m)
+    Kmat = K.stiffness(basis, E)
+    p_rot = m.p
     s0 = float(p_rot[2].max())
 
     if verbose:

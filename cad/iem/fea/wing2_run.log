@@ -1,0 +1,77 @@
+====================================================================================
+REDESIGNED WING -- macro-gyroid compliant Ti shell (commit 8db64d7)
+====================================================================================
+  macro cell 12.0 mm, wall 0.22->0.2 mm, rolled edge 0.4 mm
+  envelope 7.0 mm across press x 5.0 mm deep, free span 13.16 mm, solid root plug 1.2 mm
+  generator's shell-bending estimate: k = 0.2506 N/mm (chi = 0.4), rho_nom = 0.0538
+/Users/caponaroni/magneto/cad/iem/fea/_common.py:190: RuntimeWarning: divide by zero encountered in matmul
+  return cls(np.ascontiguousarray(R @ m.p), np.ascontiguousarray(m.t))
+/Users/caponaroni/magneto/cad/iem/fea/_common.py:190: RuntimeWarning: overflow encountered in matmul
+  return cls(np.ascontiguousarray(R @ m.p), np.ascontiguousarray(m.t))
+/Users/caponaroni/magneto/cad/iem/fea/_common.py:190: RuntimeWarning: invalid value encountered in matmul
+  return cls(np.ascontiguousarray(R @ m.p), np.ascontiguousarray(m.t))
+
+------------------------------------------------------------------------------------
+LINEAR sweep, 0.25 mm steps to 2.0 mm (h = 0.12 mm)
+------------------------------------------------------------------------------------
+/Users/caponaroni/magneto/cad/iem/fea/wing2_stiffness.py:514: RuntimeWarning: divide by zero encountered in matmul
+  lam = d / float(cf @ b)
+/Users/caponaroni/magneto/cad/iem/fea/wing2_stiffness.py:514: RuntimeWarning: overflow encountered in matmul
+  lam = d / float(cf @ b)
+/Users/caponaroni/magneto/cad/iem/fea/wing2_stiffness.py:514: RuntimeWarning: invalid value encountered in matmul
+  lam = d / float(cf @ b)
+    d= 0.250 mm  F=  0.2693 N  k_sec= 1.0771  k_tan=    --    vM    185.1 (p99.9    99.6) MPa  1 its (18s)
+    d= 0.500 mm  F=  0.5386 N  k_sec= 1.0771  k_tan=  1.0771  vM    370.2 (p99.9   199.2) MPa  1 its (0s)
+    d= 0.750 mm  F=  0.8078 N  k_sec= 1.0771  k_tan=  1.0771  vM    555.3 (p99.9   298.8) MPa  1 its (0s)
+    d= 1.000 mm  F=  1.0771 N  k_sec= 1.0771  k_tan=  1.0771  vM    740.4 (p99.9   398.4) MPa  1 its (0s)
+    d= 1.250 mm  F=  1.3464 N  k_sec= 1.0771  k_tan=  1.0771  vM    925.5 (p99.9   498.0) MPa  1 its (0s)
+    d= 1.500 mm  F=  1.6157 N  k_sec= 1.0771  k_tan=  1.0771  vM   1110.7 (p99.9   597.6) MPa  1 its (0s)
+    d= 1.750 mm  F=  1.8849 N  k_sec= 1.0771  k_tan=  1.0771  vM   1295.8 (p99.9   697.2) MPa  1 its (0s)
+    d= 2.000 mm  F=  2.1542 N  k_sec= 1.0771  k_tan=  1.0771  vM   1480.9 (p99.9   796.7) MPa  1 its (0s)
+
+------------------------------------------------------------------------------------
+GEOMETRICALLY NONLINEAR sweep (total-Lagrangian St Venant-Kirchhoff)
+------------------------------------------------------------------------------------
+/Users/caponaroni/magneto/cad/iem/fea/wing2_stiffness.py:408: RuntimeWarning: divide by zero encountered in matmul
+  cu = float(c @ u)
+/Users/caponaroni/magneto/cad/iem/fea/wing2_stiffness.py:408: RuntimeWarning: overflow encountered in matmul
+  cu = float(c @ u)
+/Users/caponaroni/magneto/cad/iem/fea/wing2_stiffness.py:408: RuntimeWarning: invalid value encountered in matmul
+  cu = float(c @ u)
+/Users/caponaroni/magneto/cad/iem/fea/wing2_stiffness.py:421: RuntimeWarning: divide by zero encountered in matmul
+  gap = float(c @ u) - delta
+/Users/caponaroni/magneto/cad/iem/fea/wing2_stiffness.py:421: RuntimeWarning: overflow encountered in matmul
+  gap = float(c @ u) - delta
+/Users/caponaroni/magneto/cad/iem/fea/wing2_stiffness.py:421: RuntimeWarning: invalid value encountered in matmul
+  gap = float(c @ u) - delta
+/Users/caponaroni/magneto/cad/iem/fea/wing2_stiffness.py:436: RuntimeWarning: divide by zero encountered in matmul
+  dlam = (-gap - float(cf @ a_)) / float(cf @ b_)
+/Users/caponaroni/magneto/cad/iem/fea/wing2_stiffness.py:436: RuntimeWarning: overflow encountered in matmul
+  dlam = (-gap - float(cf @ a_)) / float(cf @ b_)
+/Users/caponaroni/magneto/cad/iem/fea/wing2_stiffness.py:436: RuntimeWarning: invalid value encountered in matmul
+  dlam = (-gap - float(cf @ a_)) / float(cf @ b_)
+    d= 0.250 mm  F=  0.2695 N  k_sec= 1.0781  k_tan=    --    vM    183.7 (p99.9    99.7) MPa  5 its (104s)
+    d= 0.500 mm  F=  0.5400 N  k_sec= 1.0801  k_tan=  1.0821  vM    364.8 (p99.9   199.6) MPa  4 its (84s)
+    d= 0.750 mm  F=  0.8123 N  k_sec= 1.0831  k_tan=  1.0892  vM    543.3 (p99.9   299.6) MPa  5 its (107s)
+    d= 1.000 mm  F=  1.0872 N  k_sec= 1.0872  k_tan=  1.0995  vM    719.4 (p99.9   400.0) MPa  5 its (107s)
+    d= 1.250 mm  F=  1.3655 N  k_sec= 1.0924  k_tan=  1.1132  vM    893.2 (p99.9   500.7) MPa  5 its (432s)
+    d= 1.500 mm  F=  1.6481 N  k_sec= 1.0987  k_tan=  1.1302  vM   1064.7 (p99.9   601.5) MPa  5 its (724s)
+    d= 1.750 mm  F=  1.9358 N  k_sec= 1.1062  k_tan=  1.1509  vM   1234.1 (p99.9   703.4) MPa  5 its (535s)
+    d= 2.000 mm  F=  2.2297 N  k_sec= 1.1148  k_tan=  1.1754  vM   1401.5 (p99.9   806.5) MPa  6 its (127s)
+
+------------------------------------------------------------------------------------
+LINEAR tip stiffness -- mesh convergence (>=2 hexes through the 0.20 mm wall)
+------------------------------------------------------------------------------------
+  h=0.120 mm (1.7 elems/wall)   21240 hexes  vol 36.70 mm^3  k = 1.0771 N/mm   [rigid-section bound 21.1 N/mm]
+    (dropped 1 disconnected voxels of 36399)
+  h=0.100 mm (2.0 elems/wall)   36398 hexes  vol 36.40 mm^3  k = 1.0159 N/mm   [rigid-section bound 20.3 N/mm]
+Traceback (most recent call last):
+  File "/Users/caponaroni/magneto/cad/iem/fea/wing2_stiffness.py", line 654, in <module>
+    main()
+  File "/Users/caponaroni/magneto/cad/iem/fea/wing2_stiffness.py", line 631, in main
+    f"(spread {100*ks.ptp()/ks.mean():.1f}%).  Voxelising a 0.2 mm sheet "
+AttributeError: `ptp` was removed from the ndarray class in NumPy 2.0. Use np.ptp(arr, ...) instead.
+    d= 0.050 mm  F=   0.2257 N  k=  4.5139 N/mm  contact    6  vM     106.4 MPa (p99.9    47.1)  (35s)
+    d= 0.100 mm  F=   0.4509 N  k=  4.5090 N/mm  contact    2  vM     209.0 MPa (p99.9    94.0)  (90s)
+    d= 0.250 mm  F=   1.1273 N  k=  4.5090 N/mm  contact    2  vM     522.6 MPa (p99.9   235.1)  (133s)
+contact stations s/L_free: [0.633]

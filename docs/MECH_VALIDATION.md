@@ -1,6 +1,7 @@
 # Mechanical validation — Ti gyroid wing, and the magnet contact-pressure budget
 
-Two jobs, run 2026-08-30 against `cad/iem/generate.py` at commit `387b8eb`.
+Jobs 1 and 2 were run 2026-08-30 against `cad/iem/generate.py` at commit `387b8eb`.
+Section 3 re-verifies the **redesigned** wing at commit `8db64d7` and was run 2026-08-31.
 
 1. **Does the graded gyroid wing behave as a 0.2–0.4 N plateau spring over 0.5–2.5 mm of compression?**
    Answer: **no, and not by a small margin.** It is ~1.3 × 10⁴ times too stiff. It is
@@ -9,6 +10,11 @@ Two jobs, run 2026-08-30 against `cad/iem/generate.py` at commit `387b8eb`.
    for all-day wear?** Answer: **only if the contact band is at least ~4 mm wide on the
    funnel.** The current design does not specify a band width, and if the ear lands on the
    cone as a line contact the pressure is 4–8× over the ischaemia flag.
+3. **Does the redesigned macro-gyroid wing hit 0.15–0.35 N/mm?** Answer: **not yet — it is
+   3–7× too stiff at k = 1.06 N/mm**, and the generator's own estimate (0.251 N/mm) is
+   optimistic by 4.2× for a structural reason. But the response is a smooth, stable,
+   near-linear spring with no snap-through, and it is ~1250–4800× softer than the old block, so
+   the architecture is right and only the magnitude is wrong. See §3.
 
 Scripts: `cad/iem/fea/`. Every piece of geometry is imported from `generate.py` —
 the same SDF functions that write the STLs — so nothing here can drift from the
@@ -569,6 +575,234 @@ Recommendations, in order:
 
 ---
 
+# Macro-gyroid wing (as-redesigned)
+
+Re-run 2026-08-31 against `cad/iem/generate.py` at commit `8db64d7`, in which the wing
+was rebuilt as a compliant shell in response to §1.4/§1.7. Script
+`cad/iem/fea/wing2_stiffness.py`; run log `fea/wing2_run.log`, results
+`fea/wing2_results.json`.
+
+**Headline: the redesign works as a concept and is the right shape of thing — but it is
+still about 4× stiffer than the generator's own estimate and about 3–7× stiffer than the
+0.15–0.35 N/mm target. k = 1.06 ± 0.03 N/mm, F(1.0 mm) = 1.09 N.**
+
+## 3.1 What changed, and why the FEA had to change with it
+
+| | old (§1.1–1.6) | redesigned |
+|---|---|---|
+| structure | 4 × 7 mm blade filled with a 1.2 mm gyroid | 7 × 5 mm envelope holding a **12 mm** gyroid — one to two cells, i.e. a doubly-curved sheet |
+| wall | 0.20 → 0.40 mm graded | 0.22 → 0.20 mm, rolled to 0.40 mm on every exposed edge |
+| relative density | 0.43 – 0.85 | **0.054** |
+| root | 1.0 mm solid collar | 1.2 mm solid plug into the jacket rim |
+| free span | 11.55 mm | **13.16 mm** |
+| solid volume | 276.5 mm³ | **36.4 mm³** |
+
+Four method changes follow, and each one moves the answer materially:
+
+**(a) The mesh has to resolve the wall.** A 0.20 mm sheet spanning 13 mm is an
+aspect ratio of 65. Voxel hexes were run at h = 0.12 / 0.10 / 0.08 mm — 1.7 / 2.0 / 2.5
+elements through the wall.
+
+**(b) Direct solver, not AMG.** Smoothed-aggregation *and* rootnode AMG, both with the
+six rigid-body modes as near-nullspace, **stall** on this shell — 2000 CG iterations to a
+relative residual of only 5.6 × 10⁻⁷ (446 s), because a thin shell's near-nullspace is
+dominated by bending modes that rigid-body vectors do not span. SuperLU factorises the
+same 100k-dof system in **17 s**. `_common.solve_fixed` now prefers direct up to 260k dof.
+
+**(c) Geometric nonlinearity is now in the model.** For the old block the entire force
+band lived inside 78 nm, so large-displacement terms were provably irrelevant. Here the
+tip moves 1–2 mm on a 0.20 mm sheet — 5–10× the wall thickness — so a total-Lagrangian
+**St Venant-Kirchhoff** solve was implemented (`set_config` / `_residual` / `_tangent`,
+analytic material tangent A_iJkL = δ_ik S_JL + F_iM C_MJNL F_kN). *Verification: at u = 0
+the assembled nonlinear tangent reproduces the linear stiffness matrix to
+5.8 × 10⁻¹⁶ relative — machine precision.* Newton converges quadratically, 4–6 iterations
+per step.
+
+**(d) The load must not clamp the cross-section.** This one is worth stating loudly.
+Prescribing a uniform normal displacement on every node of the tip patch — the obvious
+"rigid platen" boundary condition — returns **k = 20.8 N/mm, twenty times the true
+value**, because for an *open* thin section cross-section distortion is most of the
+compliance and clamping the load patch removes it. The sweep instead uses **scalar
+displacement control**: a distributed tip load pattern c, with the work-conjugate mean tip
+deflection c·u driven to the target through a bordered system, so the load factor λ *is*
+the platen force. This loads the tip without stiffening it, and it walks through limit
+points, so a snap-through would appear as a negative tangent rather than as divergence.
+The linear branch of the same routine reproduces the independent force-controlled
+stiffness to 5 significant figures.
+
+## 3.2 Linear tip stiffness, and mesh convergence
+
+| element size h | 0.12 mm | 0.10 mm | 0.08 mm |
+|---|---|---|---|
+| elements through the 0.20 mm wall | 1.7 | 2.0 | 2.5 |
+| hexes | 21 240 | 36 398 | 71 575 |
+| meshed volume (mm³) | 36.70 | 36.40 | 36.65 |
+| **k (N/mm)** | **1.0771** | **1.0159** | **1.0808** |
+
+> **k = 1.058 ± 0.030 N/mm (spread 6.1%)**
+
+Convergence is *non-monotone*, and that is expected rather than alarming: voxelising a
+0.20 mm sheet makes the represented wall snap between 2 and 3 voxels as the grid moves
+relative to the surface, and bending stiffness goes as t³. The meshed volume is stable to
+0.8%, so the mass is right; it is the local t³ that jitters. The ±3% spread, not a
+Richardson extrapolation, is the honest error bar. (h = 0.08 costs ~25 min of SDF
+sampling and is run with `--fine`.)
+
+### Why the generator's estimate is low: it is a lower bound by construction
+
+Two independent bounds bracket the FEA, and they explain the 4× gap:
+
+| model | k (N/mm) | what it assumes |
+|---|---|---|
+| generator `wing_report`, D·chord·χ with χ = 0.40 | **0.251** | the sheet contributes only its own local plate rigidity E t³/12(1−ν²) — **lower bound**, it ignores that material offset from the neutral axis carries bending |
+| **FEA (this work)** | **1.06** | — |
+| rigid-section, ∫(z−z̄)²dA measured off the mesh | **21.1** | plane sections remain plane — **upper bound**, it ignores cross-section distortion of an open section |
+
+The FEA sits between them, 4.2× above the lower bound and 20× below the upper. So the
+generator's model is not "wrong by a fudge factor" — it is structurally the wrong model,
+and no choice of χ fixes it: even χ = 1.0 gives only 0.627 N/mm. Tuning χ up to ~1.7 would
+reproduce the FEA number for *this* geometry, but it would not generalise, because what
+the FEA is actually capturing is the offset second moment partially resisted by section
+distortion, which is not proportional to D·chord at all.
+
+## 3.3 Force–displacement, 0 → 2 mm
+
+Displacement-controlled, h = 0.12 mm. Stress is the von Mises of the **Cauchy** stress.
+Two columns are given: `vM max` is the single worst quadrature point, which on a voxel
+mesh sits on a staircase corner and is a known over-estimate; `vM p99.9` is the 99.9th
+percentile and is the number to design to.
+
+| δ (mm) | F linear (N) | **F nonlinear (N)** | k_secant | k_tangent | vM p99.9 (MPa) | vM max (MPa) | > 450 MPa? |
+|---|---|---|---|---|---|---|---|
+| 0.25 | 0.2693 | **0.2695** | 1.078 | — | 99.7 | 183.7 | no |
+| 0.50 | 0.5386 | **0.5400** | 1.080 | 1.082 | 199.6 | 364.8 | no |
+| 0.75 | 0.8078 | **0.8123** | 1.083 | 1.089 | 299.6 | 543.3 | no |
+| **1.00** | 1.0771 | **1.0872** | 1.087 | 1.100 | **400.0** | 719.4 | no (89% of flag) |
+| 1.25 | 1.3464 | **1.3655** | 1.092 | 1.113 | 500.7 | 893.2 | **flag** |
+| **1.50** | 1.6157 | **1.6481** | 1.099 | 1.130 | **601.5** | 1064.7 | **flag** |
+| 1.75 | 1.8849 | **1.9358** | 1.106 | 1.151 | 703.4 | 1234.1 | **flag** |
+| 2.00 | 2.1542 | **2.2297** | 1.115 | 1.175 | 806.5 | 1401.5 | **flag** |
+
+**Behaviour: a smooth, mildly stiffening spring. No snap-through, no buckling, no
+softening.** The tangent stiffness rises monotonically from 1.077 to 1.175 N/mm — a 9%
+membrane-stiffening effect over the full 2 mm, and geometric nonlinearity adds only
+0.1–3.5% to the force. The tangent never goes negative and Newton never needed a limit
+point handled, so there is no instability anywhere in 0–2 mm. That is a genuinely good
+result for the *character* of the spring; the problem is purely its magnitude.
+
+## 3.4 Verdict
+
+| | target | generator estimate | **FEA** |
+|---|---|---|---|
+| stiffness k | 0.15 – 0.35 N/mm | 0.251 N/mm | **1.06 ± 0.03 N/mm** |
+| F at 1.0 mm | 0.15 – 0.35 N | 0.25 N | **1.09 N** |
+| F at 1.5 mm | 0.23 – 0.53 N | 0.38 N | **1.65 N** |
+| character | plateau-ish | linear | smooth, mildly stiffening |
+
+**Verdict: FAIL on magnitude, PASS on character.** k is **3.0× the top of the target band
+and 7.1× the bottom**. The generator's estimate is optimistic by 4.2×, for the structural
+reason in §3.2 — this is a model error, not a tuning error.
+
+The redesign is nonetheless a huge improvement on the old block — ~1250× softer than the
+old blade's analytic weak-axis stiffness (1330 N/mm), ~4800× softer than the 5134 N/mm
+§1.3 reported (see §3.6 on why those differ) — and is now the right *kind* of structure: a thin-shell spring with a smooth, stable,
+near-linear response. It needs one more factor of 3–7 in compliance, not another
+architecture.
+
+### Stress margin
+
+At the **target** force (0.35 N) the wing is at δ ≈ 0.33 mm and vM p99.9 ≈ 130 MPa — a
+3.5× margin on the 450 MPa fatigue flag and 6.9× on yield. Comfortable.
+
+At the **actual** force it delivers over its working travel, the margin is thin: the
+450 MPa flag is crossed at **δ ≈ 1.12 mm** and yield (900 MPa, on p99.9) at δ ≈ 2.2 mm.
+So as built the wing has adequate static margin to 2 mm but only ~1.1 mm of
+fatigue-safe travel — less than the 1.5 mm the mag-float travel implies. **Softening it to
+target fixes the stress margin at the same time**, because both scale with the same
+sheet thickness.
+
+### What to change
+
+Bending stiffness of a shell goes as t³ at fixed geometry, so the cheapest lever is wall
+thickness — but 0.20 mm is already `min_wall`. The remaining levers, in order of
+leverage:
+
+1. **Lengthen the free span.** k ∝ L⁻³ for tip loading: 13.16 → 17.5 mm (+33%) buys the
+   full 2.4× needed to reach the middle of the band, with no change in wall or process.
+2. **Narrow the load-bearing chord** — reduce `wing_thick` (7 mm) or open the macro cell
+   further (12 → 16–18 mm) so fewer sheet chords cross the section. k is roughly linear
+   in chord, so 7 → 3 mm would give ~2.3×.
+3. **Neck the anchor harder.** `wing_anchor_w` = 2.40 mm over `wing_anchor_len` = 7 mm
+   already softens the foot; deepening that is the least disruptive knob.
+4. Do **not** reach for a plateau mechanism yet. The response is smooth and stable; get
+   the magnitude right first, then decide whether a flat band is worth a pre-curved
+   (post-buckling) element.
+
+## 3.5 A hard flat platen is a different, worse load case
+
+The sweep above loads the tip, matching the generator's tip-stiffness model. A rigid flat
+platen — the limiting case of a *hard* ear — behaves differently, and worth recording:
+
+| δ (mm) | F (N) | k (N/mm) | contact nodes | vM p99.9 (MPa) | vM max (MPa) |
+|---|---|---|---|---|---|
+| 0.05 | 0.2257 | 4.514 | 6 | 47.1 | 106.4 |
+| 0.10 | 0.4509 | 4.509 | 2 | 94.0 | 209.0 |
+| 0.25 | 1.1273 | 4.509 | 2 | 235.1 | 522.6 |
+
+Linear elasticity with the active-set frictionless contact of §1.0, h = 0.12 mm. Two
+things differ from the tip-load case:
+
+* **the platen does not touch the tip.** The outermost point of the wing along the press
+  normal sits at **s/L_free = 0.633** — mid-span. The lever arm is ~⅔ of the span, and
+  k ∝ L⁻³, so that alone accounts for most of the 4.2× rise to **4.51 N/mm**;
+* **contact is 2–6 nodes**, i.e. 0.03–0.09 mm². The platen is locally dimpling the sheet,
+  not bending the wing. The contact set *shrinks* with stroke (6 → 2) rather than
+  spreading, which is the signature of local indentation rather than global bending.
+
+A real ear is soft (cartilage/skin, order 10⁻¹–10¹ MPa) and will wrap and spread the load
+rather than point-load a 0.2 mm sheet, so the tip-load case is the better design model.
+But the platen case flags a real manufacturing/robustness concern: **this shell has very
+little local indentation resistance**, and anything hard and small pressing on it (an
+insertion tool, a drop onto a hard edge, a fingernail) loads a few mm² of 0.2 mm Ti.
+The 0.40 mm rolled edges help; the sheet faces are unprotected.
+
+## 3.6 Correction to §1.3 (old wing)
+
+While building this model I found a frame bug in the original `run_wing`: it computed the
+rotated node coordinates `p_rot = R @ m.p` to choose contact nodes and prescribed values,
+but assembled K on the **unrotated** mesh and constrained the global-z dof. The press
+therefore acted along global z, not along the stated n̂ = (0.866, 0.500, 0). Fixed in
+`_common.rotate_mesh`, which rotates the mesh itself (isotropic elasticity is
+frame-indifferent, so this is exact) and is now used by both wing scripts.
+
+**This does not change any conclusion in §1.** The number reported there — 5134 N/mm —
+was measured in an oblique direction rather than the weak bending axis, so it is not the
+weak-axis stiffness it was labelled as. What carries §1's conclusion is the independent
+analytic bound: a 4 × 7 mm section on an 11.55 mm span has a Timoshenko weak-axis
+stiffness of **1330 N/mm**, which is the *softest* the old block could possibly have been
+and is still ~4400× the 0.3 N/mm target. §1.4's "1.3 × 10⁴ to 5 × 10⁴×" should be read as
+"~4 × 10³ to 5 × 10⁴×, depending on load direction". The old block was superseded by
+commit `8db64d7` and was not re-run, because `generate.py` no longer builds it.
+
+## 3.7 Limitations
+
+- **Voxel hexes on a thin shell.** 1.7–2.5 elements through the wall; trilinear hexes lock
+  in bending (biasing stiffness **up**) while thickness quantisation jitters it ±3%. A
+  mid-surface shell-element model would be the better tool and would likely land somewhat
+  *below* 1.06 N/mm — i.e. the true value is probably at the low end of, or just under,
+  the quoted band. It would not close a 3–7× gap.
+- **St Venant-Kirchhoff, no plasticity.** Valid at these strains (<1%); the material is
+  elastic everywhere below the yield flag, and rows past δ ≈ 2.2 mm would need plasticity.
+- **Encastre at y = y_root.** The real root plug merges into the jacket rim, which has
+  some compliance, so the real k is somewhat *lower* than reported.
+- **One load direction** (the in-plane normal to the root→tip chord, the design press
+  direction). Loads out of that plane were not swept.
+- **No ear.** Rigid platen or distributed tip load; no tissue model.
+- **h = 0.08 mesh point** comes from a standalone run; the default `main()` sweeps
+  h = 0.12 and 0.10 and needs `--fine` for the third.
+
+---
+
 # Files
 
 | | |
@@ -577,7 +811,12 @@ Recommendations, in order:
 | `cad/iem/fea/rve_homogenise.py` | JOB 1a — direct micro-FE on the real gyroid, §1.2 |
 | `cad/iem/fea/wing_stiffness.py` | JOB 1b — wing contact FEA + jacket patch + collapse estimates, §1.3–1.6 |
 | `cad/iem/fea/magnet_pressure.py` | JOB 2 — pressure budget, §2.2–2.6 |
+| `cad/iem/fea/wing2_stiffness.py` | §3 — redesigned macro-gyroid wing: St Venant-Kirchhoff nonlinear solid, scalar displacement control, section bounds |
+| `cad/iem/fea/wing2_run.log` | §3 — raw solver log for the 2026-08-31 run |
 | `cad/iem/fea/*.json` | raw solver output for every table above |
 
-Reproduce: `cd cad/iem && .venv/bin/python fea/rve_homogenise.py && .venv/bin/python fea/wing_stiffness.py && .venv/bin/python fea/magnet_pressure.py`
-(`rve_homogenise.py` must run first; `wing_stiffness.py` reads its JSON.)
+Reproduce: `cd cad/iem && .venv/bin/python fea/rve_homogenise.py && .venv/bin/python fea/wing_stiffness.py && .venv/bin/python fea/magnet_pressure.py && .venv/bin/python fea/wing2_stiffness.py`
+(`rve_homogenise.py` must run first; `wing_stiffness.py` reads its JSON. `wing2_stiffness.py`
+is independent and takes ~90 min — add `--fine` for the h = 0.08 mesh point. It checkpoints
+`wing2_results.json` after every block. Note `wing_stiffness.py` now builds the *current*
+wing envelope, so it no longer reproduces §1; see §3.6.)

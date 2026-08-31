@@ -45,7 +45,12 @@ from earfit import ALIGNED, HERE, NOZZLE_T, transform
 
 VIZ = os.path.join(HERE, "viz")
 NOZZLE_FRAME_PARTS = {"carrier", "nozzle_insert_short"}
+PLUNGER_PARTS = ("plunger_foot", "plunger_pad", "plunger_pin", "plunger_cam")
 COLORS = {
+    "plunger_pad":         (220,  90,  90, 255),   # red -- the retention contact
+    "plunger_foot":        (150, 150, 158, 255),
+    "plunger_pin":         (150, 150, 158, 255),
+    "plunger_cam":         (120, 190, 120, 255),   # green -- the seating DOF
     "ear":                 (205, 175, 135, 255),   # tan
     "core":                (190, 192, 200, 255),   # silver
     "faceplate":           (205, 207, 214, 255),   # silver, brighter
@@ -146,6 +151,31 @@ def export_ear(ds, eid, ear_faces=60000, part_faces=18000, row=None, seal=None,
         m.visual.face_colors = COLORS[name]
         scene.add_geometry(m, node_name=name, geom_name=name)
         print(f"  {name:<20} {len(m.faces):6d} faces")
+
+    # tripod plungers: each part is modelled in a canonical local frame with its
+    # axis along +X, so place it with [aim | u | v] about the boss mount, then
+    # apply the seating transform like everything else.
+    try:
+        import generate
+        g = generate.G(generate.PARAMS)
+        for j, pl in enumerate(getattr(g, "plungers", [])):
+            T = np.eye(4)
+            T[:3, 0] = pl["aim"]; T[:3, 1] = pl["u"]; T[:3, 2] = pl["v"]
+            T[:3, 3] = pl["mount"]
+            for name in PLUNGER_PARTS:
+                fp = os.path.join(sdir, f"{name}.stl")
+                if not os.path.exists(fp):
+                    continue
+                pm = trimesh.load(fp, force="mesh")
+                pm = cluster_decimate(pm, 6000)
+                pm.apply_transform(T)
+                pm.apply_transform(M)
+                pm.visual.face_colors = COLORS[name]
+                nm = f"{name}_{pl['name']}"
+                scene.add_geometry(pm, node_name=nm, geom_name=nm)
+            print(f"  plungers[{pl['name']}] placed")
+    except Exception as e:                                       # noqa: BLE001
+        print(f"  plunger placement skipped: {type(e).__name__}: {e}")
 
     glb = os.path.join(VIZ, "seated_scene.glb")
     scene.export(glb)

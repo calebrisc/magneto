@@ -191,7 +191,8 @@ every run (automatically for a single ear, or with `--contract`).
 | jacket ear-face | **MUST REST** | in contact with the concha floor, never more than 2.5 mm into flesh |
 | nozzle + insert | **MUST NOT TOUCH** | recessed inside the skirt; any contact loads the canal wall directly |
 | core / faceplate | **MUST NOT TOUCH** | load reaches the ear only through the jacket and wing |
-| cable exit | **MUST CLEAR** | the ear |
+| cable exit | **MUST CLEAR** | the ear — checkable since `17810fd` added the boot |
+| plunger pads | **MUST TOUCH** | every pad reaches its site, within cam preset + spring travel |
 | **STABILITY** | **MUST RESIST** | quasi-static force/moment balance against the spec loads — retention *under load*, not just contact |
 
 ### The stability row
@@ -226,43 +227,55 @@ preloads as *equalities* rather than caps, which over-constrains the balance and
 returned margin 0.00 on every pose; caps are correct, because a preload bounds
 how hard a contact *can* push, it does not force it to be loaded.
 
-### P0023 on `8eb6ac1` — 4 pass, 2 fail, 1 not evaluable
+### P0023 on `17810fd` (tripod plungers + cable boot) — 5 pass, 3 fail
 
-> The geometry moved under this task: the generator committed `8eb6ac1`
-> (mag-plunger wing sizing) and regenerated `stl/` mid-run, so this table is the
-> **plunger-era build**, freshly re-seated, not the `dbc3b7b` geometry the earlier
-> contract table in this session reported.
+Freshly re-seated on the plunger build. Every row is now evaluable: the cable
+boot exists, so `cable exit` is checkable for the first time.
 
 | part | intent | value | | detail |
 |---|---|---|---|---|
-| skirt land | MUST TOUCH | 92 % / 17° | **FAIL** | band only 92 % closed (needs 95 %); worst gap 17° is inside tolerance. Aperture 3.1 mm off centre vs a 9.4 mm rim, so the loop *does* enclose the canal |
-| wing / rail pad | MUST TOUCH | −0.58 mm | **PASS** | inside the spring band |
-| jacket ear-face | MUST REST | −1.22 mm | **PASS** | resting, within 2.5 mm |
-| nozzle + insert | MUST NOT TOUCH | +0.29 mm | **PASS** | recessed, clear |
-| core / faceplate | MUST NOT TOUCH | +0.63 mm | **PASS** | no direct flesh load |
-| **STABILITY** | MUST RESIST | **0.00×** | **FAIL** | pull-out capacity **0.20 N** vs demand **1.05 N**; friction budget 0.19 N; only **6 of 36** contacts interlock |
-| cable exit | MUST CLEAR | n/a | **n/a** | not modelled |
+| skirt land | MUST TOUCH | 92 % / 17° | **FAIL** | band 92 % closed against a 95 % rule; worst gap 17° is *inside* the 18° tolerance. Aperture 3.1 mm off centre vs a 9.4 mm rim, so the loop does enclose the canal |
+| wing / rail pad | MUST TOUCH | −0.58 mm | PASS | **see caveat below** |
+| jacket ear-face | MUST REST | −1.22 mm | PASS | resting, within 2.5 mm |
+| nozzle + insert | MUST NOT TOUCH | +0.29 mm | PASS | recessed, clear |
+| core / faceplate | MUST NOT TOUCH | +0.63 mm | PASS | no direct flesh load |
+| **plunger pads** | MUST TOUCH | **−14.64 mm** | **FAIL** | cymba −0.46, antihelix_undercut +0.36, **antitragus −14.64 NEVER REACHES**; window [−3.00, +3.75] |
+| **STABILITY** | MUST RESIST | **0.04×** | **FAIL** | capacity 0.27 N vs demand 1.05 N; friction budget 0.41 N; 8 of 48 contacts interlock |
+| cable exit | MUST CLEAR | +5.61 mm | **PASS** | boot clears the ear comfortably |
 
-**The stability failure is not marginal — it is a factor of five.** Pull-out
-capacity is 0.20 N against 1.05 N of demand, and the shell cannot even hold
-against its own always-on 0.31 N skirt reaction: the entire friction budget is
-0.19 N. Only 6 of 36 contacts oppose the escape direction at all.
+**Caveat on the wing row.** `wing_style` is now `"plungers"`, so there is no wing.
+That row is reading the 40 most-superior vertices of `jacket_wing`, which is now
+just the jacket's upper edge — it passes, but it is not measuring a retention
+feature any more. It should be retired or repointed for this build.
 
-Measured on the previous (`dbc3b7b`) wing the picture was starker still: **all 22
-wing contacts had normals pushing the shell *out*** — the wing was pressing on a
-surface that ejects it rather than hooking under anything. Retention was coming
-from friction alone, and there was not enough of it.
+### Does the 20.3 mm pad reach overshoot P0023? No — and that is not the problem
 
-**This is what the mag-plunger design is for, and the check cannot see it yet.**
-`plunger_pad`, `plunger_pin`, `plunger_foot` and `plunger_cam` exist as parts, and
-one of the three aims is literally `antihelix_undercut` (0.85 superior, −0.28
-medial) — direct geometric interlock, which is the missing ingredient. But the
-plungers are **not in `ASSEMBLY_PARTS`**, so they are not placed in the seated
-assembly and contribute no contacts. `stability.py` already carries the plunger
-force band and a plunger contact group; add the pads to the assembly and the row
-becomes meaningful. Order-of-magnitude: three pads at 0.18–0.49 N add
-0.54–1.47 N of normal force, which roughly triples-to-quadruples the friction
-budget *before* counting the undercut interlock.
+Pad-tip reach from the core centre is 20.29 / 20.42 / 20.17 mm (cymba /
+antihelix_undercut / antitragus). Measured against P0023's actual surface at the
+seated pose:
+
+| pad | overshoot into flesh | verdict |
+|---|---|---|
+| cymba | **−0.46 mm** (0.46 short) | on target; trivially dialled in |
+| antihelix_undercut | **+0.36 mm** proud | on target; trivially dialled back |
+| antitragus | **−14.64 mm** (14.6 short) | **unreachable** |
+
+**Two of the three pads land within half a millimetre of the ear — the reach is
+well chosen, and the cam's 3 mm is far more adjustment than they need.** The
+failure is not overshoot; it is that the *antitragus* pad misses this ear by
+14.6 mm, which is nearly 5× the cam range and cannot be dialled out. The seated
+GLB shows the same thing independently: the cymba and antihelix pads sit 0.02 and
+0.04 mm off the ear, while every antitragus part is 7.8–10 mm away.
+
+So the tripod is effectively a **bipod** on this ear, which is also why stability
+barely moved: capacity rose only 0.20 → 0.27 N against 1.05 N of demand, with 8
+of 48 contacts interlocking. Two working pads at the low end of the force band
+add ~0.36 N of normal, and the antitragus contribution is simply absent.
+
+The antitragus aim is (0.20, −0.96, −0.20), i.e. almost straight inferior. On
+P0023 the surface in that direction falls away far faster than the other two
+sites. Worth checking whether that is P0023-specific or general before re-aiming
+— it is the obvious next single-ear question.
 
 ### Auto-export
 

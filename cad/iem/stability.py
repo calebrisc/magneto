@@ -190,8 +190,10 @@ def stability_check(rec, P, field, transform_fn, contacts=None,
     f_wing = K_WING * max(-tip, 0.0)
     n_wing = add("wing", ["wing_tip", "wing_mid"], "cap", f_wing) if f_wing > 0 else 0
     n_jack = add("jacket", ["jacket"], "cap", JACKET_CAP)
-    if plungers:
-        add("plungers", ["plunger"], "cap", plungers * PLUNGER_FORCE[0])
+    n_plung = 0
+    # plunger pads: conservative low end of the force band per pad
+    n_plung = add("plungers", ["plunger"], "cap",
+                  max(1, len(P.get("_plunger", []))) * PLUNGER_FORCE[0])
 
     if not pts:
         return dict(verdict="FAIL", margin=0.0, reason="no contacts at all",
@@ -256,9 +258,11 @@ def stability_check(rec, P, field, transform_fn, contacts=None,
     return dict(verdict=verdict, margin=worst,
                 pullout_capacity=pullout_capacity, demand=demand,
                 interlock=interlock, n_contacts=len(pts),
-                friction_budget=MU * (SKIRT_PRELOAD + f_wing),
+                friction_budget=MU * (SKIRT_PRELOAD + f_wing
+                                      + len(P.get("_plunger", [])) * PLUNGER_FORCE[0]),
                 cable_dir=None if worst_dirs is None else worst_dirs[0].tolist(),
                 inert_dir=None if worst_dirs is None else worst_dirs[1].tolist(),
                 n_skirt=n_skirt, n_wing=n_wing, n_jacket=n_jack,
+                n_plunger=n_plung,
                 f_wing=f_wing, tip=tip, mu=MU,
                 f_inert=f_inert, plungers=plungers)

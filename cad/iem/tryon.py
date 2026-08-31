@@ -267,6 +267,46 @@ def contract_check(rec, patch, P, field):
         f"closest {cmin:+.2f} mm (load must reach the ear via the jacket only)",
         f"{cmin:+.2f} mm", cmin > 0.0)
 
+    # --- plunger pads: the retention contacts in the tripod build ---------- #
+    # Each pad rides on a spring giving 0.18-0.49 N over +-0.75 mm of travel, on a
+    # cam that presets its stand-off over a 3 mm range.  The cam is a SEATING
+    # degree of freedom -- it is set once per wearer -- so a pad that overshoots
+    # by less than the cam range is adjustable, and only overshoot beyond
+    # cam + travel is a geometry error.
+    lim = P.get("_plunger_limits", dict(travel=0.75, cam=3.0, force=(0.18, 0.49)))
+    pads = P.get("_plunger", [])
+    over = []
+    if pads:
+        for m in pads:
+            aim_w = M[:3, :3] @ np.array(m["aim"], float)
+            aim_w /= np.linalg.norm(aim_w)
+            mnt_w = transform(np.array(m["mount"], float)[None, :], M)[0]
+            tip_w = transform(np.array(m["tip"], float)[None, :], M)[0]
+            # signed distance at the pad tip: negative = pad is inside flesh
+            dtip = float(field.query(tip_w[None, :])[0])
+            over.append((m["name"], -dtip))          # >0 = overshoot into flesh
+        # EVERY pad has to reach.  The cam presets stand-off over its range, so a
+        # pad short by less than the cam range can be dialled out to meet flesh,
+        # and one overshooting by less than cam + travel can be dialled back.
+        # Anything outside that window is a geometry error, not an adjustment.
+        lo, hi = -lim["cam"], lim["cam"] + lim["travel"]
+        bad = [(n, o) for n, o in over if not (lo <= o <= hi)]
+        detail = "; ".join(
+            f"{n} {o:+.2f}" + ("" if lo <= o <= hi else
+                               (" NEVER REACHES" if o < lo else " TOO DEEP"))
+            for n, o in over)
+        worst = max(over, key=lambda t: abs(t[1]))[1]
+        row("plunger pads", "MUST TOUCH",
+            f"pad-tip overshoot into flesh (mm): {detail}. Adjustment window "
+            f"[{lo:+.2f}, {hi:+.2f}] = cam {lim['cam']:.1f} + travel "
+            f"{lim['travel']:.2f}"
+            + ("" if not bad else
+               f"  << {len(bad)} of {len(over)} pads OUTSIDE the window"),
+            f"{worst:+.2f} mm", not bad)
+    else:
+        row("plunger pads", "MUST TOUCH", "no plunger geometry in this build",
+            "n/a", None)
+
     # --- STABILITY: retention under load ----------------------------------- #
     # Contact says each part touches what it should.  This asks whether the
     # assembly STAYS PUT when something pulls on it -- a different failure, and
@@ -289,14 +329,17 @@ def contract_check(rec, patch, P, field):
            f"  << worst dir cable {np.round(st['cable_dir'], 2)}"),
         f"{mg:.2f}x", mg >= 1.0)
 
-    # --- cable exit -------------------------------------------------------- #
-    # There is no cable, boot or strain-relief geometry in the build; the only
-    # connector feature is the 2-pin socket, an internal pocket in the core.  So
-    # this row cannot be evaluated -- reporting it as a pass would be fiction.
-    row("cable exit", "MUST CLEAR",
-        "NOT MODELLED - no cable/boot geometry in the build; the 2-pin socket is "
-        "an internal pocket. Model the boot to make this checkable.",
-        "n/a", None)
+    # --- cable exit boot ---------------------------------------------------- #
+    if len(P.get("boot", [])):
+        bd = field.query(transform(P["boot"], M))
+        bmin = float(bd.min())
+        row("cable exit", "MUST CLEAR",
+            f"boot closest {bmin:+.2f} mm to the ear "
+            + ("(clear)" if bmin > 0 else "(FOULING the ear)"),
+            f"{bmin:+.2f} mm", bmin > 0.0)
+    else:
+        row("cable exit", "MUST CLEAR",
+            "no cable/boot geometry in this build", "n/a", None)
     return rows
 
 

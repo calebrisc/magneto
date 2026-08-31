@@ -325,6 +325,56 @@ def iem_points(stl_dir=None, seed=0, cant=None):
     except Exception:                                            # noqa: BLE001
         out["_cable_exit"] = out["_com"]
 
+    # --- tripod plunger pads and the cable boot ---------------------------- #
+    # The pads are the retention contacts in the plungers build, and the boot is
+    # the only part that can foul the ear outside the concha.  Both are taken
+    # from generate.G so they track the parameters rather than a stale copy.
+    out["plunger"] = np.zeros((0, 3))
+    out["_plunger"] = []
+    out["boot"] = np.zeros((0, 3))
+    try:
+        import generate
+        gp = generate.PARAMS if cant is None else dict(generate.PARAMS,
+                                                       nozzle_cant_deg=float(cant))
+        g = generate.G(gp)
+        pads, meta = [], []
+        for pl in getattr(g, "plungers", []):
+            a = np.asarray(pl["aim"], float)
+            tip = np.asarray(pl["mount"], float) + a * (g.pl_pad1 + gp["plunger_rocker"])
+            u, v = np.asarray(pl["u"], float), np.asarray(pl["v"], float)
+            rp = 0.30 * gp["plunger_foot_od"]
+            disc = [tip] + [tip + rp * (np.cos(t) * u + np.sin(t) * v)
+                            for t in np.linspace(0, 2 * np.pi, 8, endpoint=False)]
+            pads.extend(disc)
+            meta.append(dict(name=pl["name"], aim=a.tolist(), tip=tip.tolist(),
+                             mount=np.asarray(pl["mount"], float).tolist(),
+                             reach=float(np.linalg.norm(tip - np.array(g.core_c)))))
+        if pads:
+            out["plunger"] = np.array(pads)
+        out["_plunger"] = meta
+        out["_plunger_limits"] = dict(travel=float(gp["plunger_travel"]),
+                                      cam=float(gp["plunger_cam_range"]),
+                                      force=(0.18, 0.49))
+        if getattr(g, "boot", None) is not None:
+            a0, a1, r0, r1 = g.boot
+            a0 = np.asarray(a0, float); a1 = np.asarray(a1, float)
+            ax = a1 - a0
+            L = np.linalg.norm(ax); ax = ax / max(L, 1e-9)
+            bu = np.cross(ax, [0.0, 0.0, 1.0])
+            if np.linalg.norm(bu) < 1e-6:
+                bu = np.cross(ax, [1.0, 0.0, 0.0])
+            bu /= np.linalg.norm(bu); bv = np.cross(ax, bu)
+            bp = []
+            for f in np.linspace(0.0, 1.0, 7):
+                r = r0 + (r1 - r0) * f
+                c = a0 + ax * (L * f)
+                bp.extend(c + r * (np.cos(t) * bu + np.sin(t) * bv)
+                          for t in np.linspace(0, 2 * np.pi, 10, endpoint=False))
+            out["boot"] = np.array(bp)
+            out["_boot_tip"] = a1.tolist()
+    except Exception:                                            # noqa: BLE001
+        pass
+
     out["_bbox"] = np.vstack([core.bounds, face.bounds, jw.bounds, car.bounds])
     return out
 

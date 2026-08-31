@@ -393,16 +393,49 @@ sheet as a legacy option, unchanged.
 
 ### Sites (`plunger_aims`, parametric)
 
-| site | aim (x, y, z) | boss base | pad tip reach from the core centre |
-|---|---|---|---|
-| cymba | (+0.30, +0.94, −0.15) | (−4.92, +8.14, −0.79) | 20.29 mm |
-| antihelix undercut | (−0.45, +0.85, −0.28) | (−13.80, +7.26, −1.46) | 20.42 mm |
-| antitragus | (+0.20, −0.96, −0.20) | (−6.09, −8.40, −1.06) | 20.17 mm |
+| site | aim (x, y, z) | cam | boss | pad | reach | clearance to the nozzle stack |
+|---|---|---|---|---|---|---|
+| cymba | (+0.20, +0.98, −0.10) | 4 × 3.0 mm | 5.50 mm | Ø10.5 | 20.21 mm | +0.62 mm |
+| antihelix undercut | (−0.45, +0.85, −0.28) | 4 × 3.0 mm | 5.50 mm | Ø9.0 | 20.42 mm | +3.43 mm |
+| **tragus_inner** | (+0.82, −0.17, −0.54) | **6 × 4.5 mm** | 6.90 mm | Ø9.0 | 22.32 mm | **−6.53 mm — CLASH** |
 
-Each aim is normalised at load. The boss base is found by ray-casting the aim to
-the point where the core's outward normal *is* the aim, then offsetting by
-`clearance + jacket_thick` to the jacket's outer surface. So a new aim
-automatically lands its boss correctly on the shell — no hand-placed coordinates.
+Each aim is normalised at load and the boss base is found by ray-casting the aim
+to the point where the core's outward normal *is* the aim, then offsetting by
+`clearance + jacket_thick`. A new aim places its own boss — no hand-set
+coordinates. Clearance to the nozzle/insert/carrier/skirt stack is computed every
+run from the real stack profile (`nozzle_stack_profile()`), with the plunger
+modelled as two capsule sections because the boss is narrower than the pad.
+
+> ### tragus_inner does not fit — and the cam is not the reason
+>
+> The extended cam **does** fit its local depth budget: 6 detents over 4.5 mm
+> needs `cam_h` 4.70 mm and a 6.90 mm boss, which the leg carries fine.
+>
+> The aim itself is the problem. **(+0.82, −0.17, −0.54) sits 15.2° off the canted
+> nozzle axis**, so the plunger drives almost parallel to and alongside the
+> nozzle / insert / carrier / skirt stack and runs straight into it —
+> **−6.53 mm of interference**, not a near miss. No cam, boss or pad change
+> recovers that; the leg is aiming down the same corridor the nozzle already
+> occupies.
+>
+> Three ways out, none of which I picked unilaterally: move the aim off the nozzle
+> corridor (more −Y / +Z), reduce `nozzle_cant_deg` so the stack swings clear, or
+> accept that the tragus inner wall is unreachable from a shell that also fires a
+> canted nozzle at it. The geometry is built and flagged so a try-on pass can be
+> scored against the other two legs meanwhile.
+
+### The cymba lip bias
+
+`cymba_lip_bias` = **7°** rotates the cymba aim toward +Y, in the plane it shares
+with +Y, so the pad lands *under* the cymba's overhanging lip rather than on it.
+That leg also gets `cymba_pad_extra` = **1.5 mm** of extra pad diameter (Ø9.0 →
+Ø10.5) on a **0.40 mm rolled shoulder** (`plunger_pad_roll`), so the extended
+shoulder can tuck under the lip and interlock instead of digging in. It is a
+separate STL, `plunger_pad_cymba`; the assembly picks it for that site only.
+
+The bias narrowed the cymba boss's clearance to the nozzle insert's socket flange
+to **+0.62 mm** — legal, but the tightest joint on the shell and worth watching if
+`plunger_boss_od` grows.
 
 ### The plunger stack
 
@@ -422,7 +455,7 @@ s =  4.55 ..  5.90   silicone pad, 1.00 mm + 0.35 mm rocker crown
 | **depth stack** (fixed ring back → moving ring face) | **4.75 mm** |
 | **dynamic travel** | **±0.75 mm**, hard stops at s = 2.00 and 3.50 |
 | force per pair (from MECH_VALIDATION §5.2) | 0.493 N at −0.75 → 0.284 N at rest → 0.180 N at +0.75, ratio 2.73 |
-| cam preset | 4 detents over 3.0 mm of coarse engagement |
+| cam preset | 4 detents over 3.0 mm; **6 over 4.5 mm** on `plunger_cam_ext_sites` |
 | guide pin | Ø2.0 through both ring IDs, 0.30 mm polymer sleeve in the jacket bore |
 
 The inward stop is a 0.8 mm-wall skirt on the foot that bottoms on the boss face;
@@ -434,7 +467,8 @@ so magnets and guidance are coaxial — that is why the ring geometry was chosen
 ### Parts
 
 `plunger_foot`, `plunger_pad`, `plunger_pin`, `plunger_cam` are each **one STL,
-printed three times**; they are bodies of revolution so their standalone STLs are
+printed three times**, plus two per-site variants — `plunger_pad_cymba` (wider
+shoulder) and `plunger_cam_ext` (6 × 4.5 mm); they are bodies of revolution so their standalone STLs are
 axis-aligned about +X and the assembly transforms three copies onto each site.
 The jacket carries the three bosses (Ø9.6, 5.5 mm tall) with the cam bore, the
 sleeved pin bore and four detent notches.
@@ -449,6 +483,16 @@ Also open: pad tip reach is ~20.2–20.4 mm from the core centre at rest, which 
 generous against a concha depth envelope of 8–18 mm. The 3 mm cam takes up
 per-ear variation, but the aims and `plunger_boss_h` want a try-on pass before
 anyone cuts metal.
+
+### Did the bosses disturb the skirt rim?
+
+No. The v6 seal rescore flagged P0023's skirt band at 92 % against the 95 % rule,
+and the plunger bosses were the obvious suspect. They are not the cause: the
+carrier's rim cross-section was sampled at 721 azimuths and compared against the
+pre-plunger commit (`dbc3b7b`), and the rim radius is **bit-identical — max,
+min and RMS delta all 0.0000 mm**, a flat 9.482 mm all the way round. The bosses
+live on `jacket_wing`; `carrier_field` shares no parameter with them. The 92 % is
+a seating/pose effect, not geometry.
 
 ## 6b. Cable exit boot
 

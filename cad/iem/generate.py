@@ -203,7 +203,14 @@ PARAMS = dict(
     # -Y inferior, -Z ear-facing.  Normalised at load.
     plunger_aims=(("cymba",              (0.30,  0.94, -0.15)),
                   ("antihelix_undercut", (-0.45, 0.85, -0.28)),
-                  ("antitragus",         (0.20, -0.96, -0.20))),
+                  ("tragus_inner",       (0.82, -0.17, -0.54))),
+    cymba_lip_bias=7.0,        # deg the cymba aim rotates toward +Y, so the pad
+                               #   lands UNDER the cymba's overhanging lip
+    cymba_pad_extra=1.50,      # mm of extra pad diameter on the cymba leg only
+    plunger_pad_roll=0.40,     # mm rolled edge on the pad shoulder
+    plunger_cam_ext_sites=("tragus_inner",),   # legs that get the extended cam
+    plunger_cam_ext_steps=6,   # detents on the extended cam
+    plunger_cam_ext_range=4.5, # mm of coarse engagement on the extended cam
     plunger_mag_od=5.00,       # mm plunger ring OD   (N35, 5 x 2.5 x 1)
     plunger_mag_id=2.50,       # mm plunger ring ID   -- the guide pin runs through it
     plunger_mag_t=1.00,        # mm plunger ring thickness
@@ -519,18 +526,39 @@ class G:
         for name, aim in P["plunger_aims"]:
             a = np.array(aim, dtype=float)
             a /= np.linalg.norm(a)
+            if name == "cymba" and P["cymba_lip_bias"]:
+                # rotate the aim toward +Y in the plane it shares with +Y, so the
+                # pad lands under the cymba's overhanging lip and can interlock
+                yv = np.array([0.0, 1.0, 0.0])
+                perp = yv - a * np.dot(yv, a)
+                if np.linalg.norm(perp) > 1e-6:
+                    perp /= np.linalg.norm(perp)
+                    t = math.radians(P["cymba_lip_bias"])
+                    a = a * math.cos(t) + perp * math.sin(t)
+                    a /= np.linalg.norm(a)
+            ext = name in P["plunger_cam_ext_sites"]
+            cam_h = 0.2 + (P["plunger_cam_ext_range"] if ext
+                           else P["plunger_cam_range"])
+            boss_h = max(P["plunger_boss_h"],
+                         cam_h + P["plunger_mag_t"] + 1.20)
             # point on the core where the outward normal is a, then out to the
             # jacket's outer surface, then up the boss to the mount face
             surf = np.array(self.core_c) + (rr_ ** 2 * a) / np.linalg.norm(rr_ * a)
             base = surf + a * (P["clearance"] + P["jacket_thick"])
-            mount = base + a * P["plunger_boss_h"]
+            mount = base + a * boss_h
             ref = np.array([0.0, 0.0, 1.0])
             if abs(np.dot(ref, a)) > 0.9:
                 ref = np.array([1.0, 0.0, 0.0])
             u = np.cross(a, ref); u /= np.linalg.norm(u)
             v = np.cross(a, u)
-            self.plungers.append(dict(name=name, aim=a, base=base, mount=mount,
-                                      u=u, v=v))
+            self.plungers.append(dict(
+                name=name, aim=a, base=base, mount=mount, u=u, v=v,
+                ext=ext, cam_h=cam_h, boss_h=boss_h,
+                cam_steps=(P["plunger_cam_ext_steps"] if ext
+                           else P["plunger_cam_steps"]),
+                cam_range=(P["plunger_cam_ext_range"] if ext
+                           else P["plunger_cam_range"]),
+                pad_extra=(P["cymba_pad_extra"] if name == "cymba" else 0.0)))
         # canonical axial stations, measured from the mount face along the aim
         self.pl_mag_fix = -P["plunger_mag_t"]                      # fixed ring back
         self.pl_mag_mov = P["plunger_gap"]                         # moving ring face
@@ -1187,28 +1215,28 @@ def part_jacket_wing(g):
         else:
             # ---- three radial mag-plunger bosses
             d = jacket
-            nstep = int(P["plunger_cam_steps"])
             for pl in g.plungers:
+                nstep = int(pl["cam_steps"])
                 A, R, TH = g.pl_coords(pl, X, Y, Z)
                 boss = np.maximum(R - 0.5 * P["plunger_boss_od"],
-                                  slab(A, -P["plunger_boss_h"] - 2.5, 0.0))
+                                  slab(A, -pl["boss_h"] - 2.5, 0.0))
                 d = smin(d, boss, 0.8)
                 # cam + fixed-ring bore
                 d = S(d, np.maximum(R - (0.5 * P["plunger_cam_od"] + 0.05),
-                                    slab(A, -(P["plunger_cam_h"]
+                                    slab(A, -(pl["cam_h"]
                                               + P["plunger_mag_t"] + 0.15), 0.40)))
                 # sleeved guide-pin bore
                 d = S(d, np.maximum(
                     R - (0.5 * P["plunger_pin_od"] + P["plunger_pin_sleeve"]),
-                    slab(A, -P["plunger_boss_h"] - 3.0, 0.5)))
+                    slab(A, -pl["boss_h"] - 3.0, 0.5)))
                 # detent notches for the cam bumps
                 for i in range(nstep):
                     a_ = -np.pi + (i + 0.5) * (2 * np.pi / nstep)
                     rn = 0.5 * P["plunger_cam_od"] + 0.05
                     dd = np.sqrt((R - rn) ** 2 + (rn * _wrap(TH - a_)) ** 2)
                     d = S(d, np.maximum(dd - 0.42,
-                                        slab(A, -(P["plunger_cam_h"] + 1.15) + 0.25,
-                                             -(P["plunger_cam_h"] + 1.15) + 1.05)))
+                                        slab(A, -(pl["cam_h"] + 1.15) + 0.25,
+                                             -(pl["cam_h"] + 1.15) + 1.05)))
 
         # ---- matching magnet pockets + locating pins
         for (px_, py_) in g.jacket_mags:
@@ -1231,7 +1259,7 @@ def part_jacket_wing(g):
         ymax = -1e9
         for pl in g.plungers:
             tip = pl["mount"] + pl["aim"] * (g.pl_pad1 + P["plunger_rocker"])
-            pad = 0.5 * P["plunger_boss_od"] + 1.0
+            pad = 0.5 * (P["plunger_boss_od"] + P["cymba_pad_extra"]) + 1.0
             xmin = min(xmin, float(min(tip[0], pl["base"][0])) - pad)
             ymax = max(ymax, float(max(tip[1], pl["base"][1])) + pad)
             zmin = min(zmin, float(min(tip[2], pl["base"][2])) - pad)
@@ -1259,6 +1287,64 @@ def _ring(A, R, ri, ro, a0, a1):
     return np.maximum(np.maximum(ri - R, R - ro), slab(A, a0, a1))
 
 
+def _seg_seg_dist(p1, q1, p2, q2):
+    """Shortest distance between two 3-D segments."""
+    d1, d2 = q1 - p1, q2 - p2
+    r = p1 - p2
+    a, e, f = np.dot(d1, d1), np.dot(d2, d2), np.dot(d2, r)
+    c = np.dot(d1, r)
+    b = np.dot(d1, d2)
+    den = a * e - b * b
+    sN = np.clip((b * f - c * e) / den, 0, 1) if den > 1e-12 else 0.0
+    tN = np.clip((b * sN + f) / e, 0, 1) if e > 1e-12 else 0.0
+    sN = np.clip((b * tN - c) / a, 0, 1) if a > 1e-12 else 0.0
+    return float(np.linalg.norm((p1 + d1 * sN) - (p2 + d2 * tN)))
+
+
+def _seg_pt_dist(p1, q1, pt):
+    d = q1 - p1
+    t = np.clip(np.dot(pt - p1, d) / max(np.dot(d, d), 1e-12), 0.0, 1.0)
+    return float(np.linalg.norm(p1 + d * t - pt))
+
+
+def nozzle_stack_profile(g):
+    """The nozzle/insert/carrier/skirt stack as a swept-sphere profile:
+    (point on the canted axis, radius) samples along it."""
+    P = g.P
+    nb, ax = np.array(g.nozzle_base), np.array(g.n_ax)
+    spans = [(g.socket_x0, g.flange_x1, 0.5 * P["socket_od"]),
+             (g.flange_x1, g.carrier_x0, 0.5 * P["insert_od"]),
+             (g.carrier_x0, g.carrier_x1, 0.5 * P["carrier_od"])]
+    out = []
+    for x0, x1, r in spans:
+        for t in np.linspace(x0, x1, 12):
+            out.append((nb + ax * t, r))
+    # skirt: a cone, radius growing from the carrier OD to the rim
+    for t in np.linspace(g.skirt_root_x, g.skirt_rim_x, 16):
+        f = (t - g.skirt_root_x) / max(g.skirt_rim_x - g.skirt_root_x, 1e-9)
+        out.append((nb + ax * t, g.skirt_root_r + f * (g.skirt_rim_r - g.skirt_root_r)))
+    return out
+
+
+def plunger_clearance(g, pl):
+    """Clearance from a plunger's swept envelope to the nozzle stack.
+
+    The plunger is a capsule from its boss base to the pad tip at full outward
+    travel.  Negative means interference.
+    """
+    P = g.P
+    # two sections, because the boss is narrower than the pad: only the
+    # protruding envelope counts -- inside the shell the parts cannot meet
+    base = np.array(pl["base"])
+    mount = np.array(pl["mount"])
+    tip = mount + pl["aim"] * (g.pl_pad1 + P["plunger_rocker"] + P["plunger_travel"])
+    secs = [(base, mount, 0.5 * P["plunger_boss_od"]),
+            (mount, tip, 0.5 * (P["plunger_foot_od"] + pl["pad_extra"]))]
+    prof = nozzle_stack_profile(g)
+    return min(_seg_pt_dist(a0, a1, c) - r - ra
+               for a0, a1, ra in secs for c, r in prof)
+
+
 def part_plunger_foot(g):
     """Moving piston: magnet pocket, pin bore, and the inward travel stop."""
     P = g.P
@@ -1279,21 +1365,29 @@ def part_plunger_foot(g):
                 (-ro - 0.6, ro + 0.6))
 
 
-def part_plunger_pad(g):
-    """Soft contact pad with the rocker crown."""
+def part_plunger_pad(g, extra=0.0):
+    """Soft contact pad: rocker crown plus a rolled shoulder so the edge can tuck
+    under an overhanging lip instead of digging into it."""
     P = g.P
-    ro = 0.5 * P["plunger_foot_od"]
+    ro = 0.5 * (P["plunger_foot_od"] + extra)
+    rl = P["plunger_pad_roll"]
 
     def fn(X, Y, Z, C):
         A, R = X, np.sqrt(Y ** 2 + Z ** 2)
-        crown = g.pl_pad1 + P["plunger_rocker"] * np.clip(1.0 - (R / ro) ** 2, 0.0, 1.0)
-        d = np.maximum(R - ro, np.maximum(g.pl_plate1 - A, A - crown))
+        crown = P["plunger_rocker"] * np.clip(1.0 - (R / ro) ** 2, 0.0, 1.0)
+        # rounded-box profile in (axial, radial): gives a >= rl rolled edge all
+        # the way round the shoulder
+        qa = np.abs(A - 0.5 * (g.pl_plate1 + g.pl_pad1 + crown)) \
+            - (0.5 * (g.pl_pad1 + crown - g.pl_plate1) - rl)
+        qr = R - (ro - rl)
+        d = (np.sqrt(np.maximum(qa, 0) ** 2 + np.maximum(qr, 0) ** 2)
+             + np.minimum(np.maximum(qa, qr), 0.0) - rl)
         d = S(d, np.maximum(R - (0.5 * P["plunger_pin_od"] + 0.10),
                             slab(A, g.pl_plate1 - 0.5, g.pl_pad1 + 1.5)))
         return d
 
-    return fn, ((g.pl_plate1 - 0.5, g.pl_pad1 + P["plunger_rocker"] + 0.5),
-                (-ro - 0.5, ro + 0.5), (-ro - 0.5, ro + 0.5))
+    return fn, ((g.pl_plate1 - 0.8, g.pl_pad1 + P["plunger_rocker"] + 0.8),
+                (-ro - 0.8, ro + 0.8), (-ro - 0.8, ro + 0.8))
 
 
 def part_plunger_pin(g):
@@ -1310,13 +1404,14 @@ def part_plunger_pin(g):
     return fn, ((x0 - 0.5, g.pl_plate1 + 0.5), (-2.2, 2.2), (-2.2, 2.2))
 
 
-def part_plunger_cam(g):
-    """Cam preset ring: a 4-step staircase top face gives coarse engagement."""
+def part_plunger_cam(g, steps=None, rng=None):
+    """Cam preset ring: a staircase top face gives coarse engagement."""
     P = g.P
-    n = int(P["plunger_cam_steps"])
-    step = P["plunger_cam_range"] / max(n - 1, 1)
+    n = int(steps if steps else P["plunger_cam_steps"])
+    rng = rng if rng else P["plunger_cam_range"]
+    step = rng / max(n - 1, 1)
     ro = 0.5 * P["plunger_cam_od"]
-    hmax = 0.2 + P["plunger_cam_range"]
+    hmax = 0.2 + rng
 
     def fn(X, Y, Z, C):
         A, R = X, np.sqrt(Y ** 2 + Z ** 2)
@@ -1751,6 +1846,11 @@ PARTS = {
     "carrier_mold_core": (part_mold_core, "solid"),
     "plunger_foot": (part_plunger_foot, "solid"),
     "plunger_pad": (part_plunger_pad, "solid"),
+    "plunger_pad_cymba": (lambda g: part_plunger_pad(g, g.P["cymba_pad_extra"]),
+                          "solid"),
+    "plunger_cam_ext": (lambda g: part_plunger_cam(g, g.P["plunger_cam_ext_steps"],
+                                                   g.P["plunger_cam_ext_range"]),
+                        "solid"),
     "plunger_pin": (part_plunger_pin, "solid"),
     "plunger_cam": (part_plunger_cam, "solid"),
     "driver_carrier": (part_driver_carrier, "solid"),
@@ -2019,14 +2119,19 @@ def main():
                 T = np.eye(4)
                 T[:3, 0], T[:3, 1], T[:3, 2] = pl["aim"], pl["u"], pl["v"]
                 T[:3, 3] = pl["mount"]
+                pick = {"plunger_pad": ("plunger_pad_cymba"
+                                        if pl["pad_extra"] else "plunger_pad"),
+                        "plunger_cam": ("plunger_cam_ext" if pl["ext"]
+                                        else "plunger_cam")}
                 for k in PLUNGER_PARTS:
-                    if k not in meshes:
+                    src = pick.get(k, k)
+                    if src not in meshes:
                         continue
-                    mk = meshes[k].copy()
+                    mk = meshes[src].copy()
                     if k == "plunger_cam":       # cam sits below the fixed ring
                         Tc = T.copy()
                         Tc[:3, 3] = pl["mount"] - pl["aim"] * (
-                            P["plunger_cam_h"] + P["plunger_mag_t"] + 0.15)
+                            pl["cam_h"] + P["plunger_mag_t"] + 0.15)
                         mk.apply_transform(Tc)
                     else:
                         mk.apply_transform(T)
@@ -2059,14 +2164,34 @@ def main():
             print(f"  MEASURED on plunger_foot.stl: stop skirt reaches s = "
                   f"{sk:.2f} mm -> {g.pl_mag_mov - sk:.2f} mm of inward travel "
                   f"before it bottoms on the boss")
+        clash = []
         for pl in g.plungers:
             tip = pl["mount"] + pl["aim"] * (g.pl_pad1 + P["plunger_rocker"])
+            cl = plunger_clearance(g, pl)
+            ang = math.degrees(math.acos(min(1.0, abs(float(
+                np.dot(pl["aim"], g.n_ax))))))
+            if cl < 0.3:
+                clash.append((pl["name"], cl, ang))
             print(f"    {pl['name']:20s} aim ({pl['aim'][0]:+.2f},"
-                  f"{pl['aim'][1]:+.2f},{pl['aim'][2]:+.2f})  boss base "
-                  f"({pl['base'][0]:+6.2f},{pl['base'][1]:+6.2f},"
-                  f"{pl['base'][2]:+6.2f})  pad tip reach "
-                  f"{float(np.linalg.norm(tip - np.array(g.core_c))):5.2f} mm "
-                  f"from the core centre")
+                  f"{pl['aim'][1]:+.2f},{pl['aim'][2]:+.2f})  cam "
+                  f"{pl['cam_steps']}x{pl['cam_range']:.1f}mm  boss "
+                  f"{pl['boss_h']:.2f} mm  pad Ø"
+                  f"{P['plunger_foot_od'] + pl['pad_extra']:.1f}  reach "
+                  f"{float(np.linalg.norm(tip - np.array(g.core_c))):5.2f} mm  "
+                  f"{ang:4.1f} deg off the nozzle axis  clearance "
+                  f"{cl:+6.2f} mm"
+                  + ("  *** CLASH ***" if cl < 0.3 else ""))
+        if clash:
+            print(f"  *** {len(clash)} plunger(s) interfere with the nozzle/carrier/"
+                  f"skirt stack: "
+                  + ", ".join(f"{n} {c:+.2f} mm ({a:.0f} deg off the nozzle axis)"
+                              for n, c, a in clash))
+        if P["cymba_lip_bias"]:
+            print(f"  cymba lip bias: aim rotated {P['cymba_lip_bias']:.0f} deg "
+                  f"toward +Y, pad Ø{P['plunger_foot_od']:.1f} -> Ø"
+                  f"{P['plunger_foot_od'] + P['cymba_pad_extra']:.1f} with a "
+                  f"{P['plunger_pad_roll']:.2f} mm rolled shoulder, so contact "
+                  f"happens under the cymba lip")
         if "jacket_wing" in meshes:
             m_ti = meshes["jacket_wing"].volume * 4.43e-3      # g, Ti-6Al-4V
             print(f"  jacket + 3 bosses = {meshes['jacket_wing'].volume:.0f} mm3 "

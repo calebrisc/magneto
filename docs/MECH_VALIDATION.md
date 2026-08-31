@@ -578,13 +578,31 @@ Recommendations, in order:
 # Macro-gyroid wing (as-redesigned)
 
 Re-run 2026-08-31 against `cad/iem/generate.py` at commit `8db64d7`, in which the wing
-was rebuilt as a compliant shell in response to §1.4/§1.7. Script
+was rebuilt as a compliant shell in response to §1.4/§1.7. **The wing changed again in
+`dbc3b7b` while this was solving — see the box below.** Script
 `cad/iem/fea/wing2_stiffness.py`; run log `fea/wing2_run.log`, results
 `fea/wing2_results.json`.
 
 **Headline: the redesign works as a concept and is the right shape of thing — but it is
 still about 4× stiffer than the generator's own estimate and about 3–7× stiffer than the
 0.15–0.35 N/mm target. k = 1.06 ± 0.03 N/mm, F(1.0 mm) = 1.09 N.**
+
+> ### ⚠ Geometry has moved since this run
+>
+> This section was solved against commit `8db64d7`. Commit `dbc3b7b` ("shorten + splay the
+> wing") then changed it again: **free span 13.161 → 10.398 mm** and the root wall
+> 0.22 → 0.20 mm. Everything below still describes `8db64d7`.
+>
+> The generator's own estimate for the two geometries is 0.2506 → **0.2941 N/mm**. Using
+> that model as a transfer function (same model both sides, so the *ratio* is far more
+> trustworthy than either absolute), the FEA number scales to
+>
+> > **k ≈ 1.06 × (0.2941 / 0.2506) ≈ 1.24 N/mm** for the current wing,
+>
+> which is **3.5–8.3×** the 0.15–0.35 N/mm target — i.e. the shortening made it *stiffer*,
+> and the gap slightly worse. Shortening the span was the opposite of recommendation 1 in
+> §3.4 (k ∝ L⁻³). That projection is an estimate, not a solve; re-run
+> `fea/wing2_stiffness.py` (~90 min) to confirm before acting on it.
 
 ## 3.1 What changed, and why the FEA had to change with it
 

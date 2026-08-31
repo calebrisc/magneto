@@ -95,6 +95,21 @@ PARAMS = dict(
     magnet_pocket_clear=0.05,  # mm added to magnet OD/thickness for the pocket
     magnet_encap=0.50,         # mm of silicone over the moving ring's axial faces
 
+    # ---- posterior-inferior corner roll (docs/TRYON_REPORT.md v2) ----------
+    corner_chamfer=4.00,       # mm cut back along corner_dir at the faceplate corner
+    corner_dir=(-0.41, -0.65, 0.49),   # protrusion-sensitivity diagonal, (x, y, z)
+    corner_roll=1.50,          # mm blend radius -- a roll, not a knife edge
+    corner_min_wall=0.90,      # mm of Ti kept over every internal pocket
+    corner_ramp=1.20,          # mm over which the cut opens up above the magnet band
+
+    # ---- body trim (docs/TRYON_REPORT.md, recalibrated 13e75b3) ------------
+    body_trim_mm=5.00,         # mm of PROTRUSION to remove by shrinking the shell
+    body_trim_w=(0.41, 0.65, 0.49),   # mm of protrusion removed per mm cut on X/Y/Z
+    body_trim_min_wall=0.90,   # mm of Ti kept around the driver pocket while trimming
+    body_trim_min_front_cc=0.50,   # cc of acoustic void that must survive the trim
+    body_trim_keep_magnets=True,   # refuse an X trim that worsens the faceplate rim
+    body_trim_force=None,      # (tx, ty, tz) override, set by solve_body_trim()
+
     # ---- core shell ---------------------------------------------------
     core_rx=8.5,               # mm half-extent along X (nozzle axis)
     core_ry=7.0,               # mm half-extent along Y (up)
@@ -145,6 +160,12 @@ PARAMS = dict(
     skirt_wall_hinge=0.20,     # mm wall in the compliance groove behind the land
     skirt_wall_land=0.25,      # mm wall through the contact land
     skirt_hinge_w=0.60,        # mm slant width of the compliance groove
+    # ---- intertragic-notch sector (docs/TRYON_REPORT.md seal rescore 5ff456f)
+    notch_sector_ext=1.75,     # mm of extra radial flare over the notch sector
+    notch_sector_deg=90.0,     # deg of skirt perimeter treated as the notch sector
+    notch_sector_center_deg=180.0,  # deg from +Y_local; 180 = inferior
+    notch_sector_trans_deg=20.0,    # deg of smooth azimuthal blend at each edge
+    notch_sector_wall=0.22,    # mm land wall inside the sector (vs skirt_wall_land)
 
     # ---- jacket skin (fine gyroid, structural-rigid by design) ----------
     jacket_thick=1.60,         # mm total jacket thickness (lattice + skin)
@@ -191,7 +212,8 @@ PARAMS = dict(
     socket_w=5.60,             # mm 2-pin socket pocket width  (Y)
     socket_h=2.80,             # mm 2-pin socket pocket height (Z)
     socket_d=6.00,             # mm 2-pin socket pocket depth  (X)
-    socket_z=1.20,             # mm socket pocket centre Z (toward the top)
+    socket_z=-0.60,            # mm socket pocket centre Z; keeps the full 2.8 mm
+                               #     height under the faceplate parting plane
     bone_w=4.00,               # mm bone-conduction sensor pocket (X)
     bone_h=3.00,               # mm bone sensor pocket (Z)
     bone_d=1.50,               # mm bone sensor pocket depth (into -Y)
@@ -235,6 +257,14 @@ def I(*ds):
 def S(a, b):
     """Subtract b from a."""
     return np.maximum(a, -b)
+
+
+def ssub(a, b, k):
+    """Smooth subtraction: remove b from a with a blend radius of roughly k."""
+    if k <= 1e-9:
+        return np.maximum(a, -b)
+    h = np.clip(0.5 - 0.5 * (a + b) / k, 0.0, 1.0)
+    return a * (1.0 - h) + (-b) * h + k * h * (1.0 - h)
 
 
 def smin(a, b, k):
@@ -369,16 +399,82 @@ class G:
         self.mov_od, self.mov_id, self.mov_t = m["moving"]
         mc = P["magnet_pocket_clear"]
 
-        self.core_cx = -P["core_rx"]
-        self.core_r = (P["core_rx"], P["core_ry"], P["core_rz"])
+        # ---- body trim ------------------------------------------------------
+        # Distribute the requested protrusion reduction across X/Y/Z in proportion
+        # to each axis's efficiency, then clamp each axis to what the driver
+        # pocket and the faceplate/driver stack actually allow.
+        w = np.array(P["body_trim_w"], dtype=float)
+        pr0 = 0.5 * (P["driver_carrier_od"] + P["driver_pocket_clear"])
+        alpha = P["body_trim_mm"] / float(np.dot(w, w))
+        req = alpha * w                                   # full-extent cuts, mm
+        mw = P["body_trim_min_wall"]
+        zfloor = max(P["driver_pocket_depth"] - P["faceplate_z"] + mw,
+                     P["faceplate_z"] + 1.5)
+        cap = np.array([2.0 * (P["core_rx"] - (pr0 + mw)),
+                        2.0 * (P["core_ry"] - (pr0 + mw)),
+                        2.0 * (P["core_rz"] - zfloor)])
+        cap = np.maximum(cap, 0.0)
+        # the faceplate magnets live on the rim between the driver pocket and the
+        # shell; if that rim is already tight, an X trim cannot make it worse
+        st = math.hypot(6.5, 2.9)
+        if P["body_trim_keep_magnets"] and \
+                st - pr0 - 0.5 * P["jmag_dia"] < 0.30:
+            cap[0] = 0.0
+            self.trim_block_x = (f"faceplate magnet rim already "
+                                 f"{st - pr0 - 0.5 * P['jmag_dia']:.2f} mm")
+        else:
+            self.trim_block_x = None
+        got = np.minimum(req, cap)
+        if P["body_trim_force"] is not None:
+            got = np.array(P["body_trim_force"], dtype=float)
+        self.trim_req, self.trim_cap, self.trim_got = req, cap, got
+        self.trim_protrusion_req = float(np.dot(w, req))
+        self.trim_protrusion_got = float(np.dot(w, got))
+        rx = P["core_rx"] - 0.5 * got[0]
+        ry = P["core_ry"] - 0.5 * got[1]
+        rz = P["core_rz"] - 0.5 * got[2]
+
+        self.core_cx = -rx
+        self.core_r = (rx, ry, rz)
         self.core_c = (self.core_cx, 0.0, 0.0)
         self.inner_r = tuple(v - P["core_wall"] for v in self.core_r)
+        self.core_rx, self.core_ry, self.core_rz = rx, ry, rz
         self.z_cut = P["faceplate_z"]
 
         self.pocket_r = 0.5 * (P["driver_carrier_od"] + P["driver_pocket_clear"])
         self.pocket_z1 = self.z_cut
         self.pocket_z0 = self.z_cut - P["driver_pocket_depth"]
         self.front_wall_x = self.core_cx + self.pocket_r
+
+        # ---- posterior-inferior corner roll --------------------------------
+        # The v2 try-on found the worst-protruding point is a corner, not a face:
+        # median (-11.5, -4.1, +3.7), i.e. the -X/-Y/+Z octant of the faceplate,
+        # with protrusion sensitivity 0.65 / 0.49 / 0.41 mm per mm on +Y / +Z / +X.
+        # Cut perpendicular to that diagonal, which is the most material-efficient
+        # direction available.
+        n = np.array(P["corner_dir"], dtype=float)
+        self.corner_n = n / np.linalg.norm(n)
+        cn = self.corner_n
+        rr = np.array(self.core_r)
+        self.corner_h = float(np.dot(self.core_c, cn) + np.linalg.norm(rr * cn))
+
+        # How deep can the cut go before it breaks into something?  Only CLOSED
+        # internals bound it: the driver pocket and the acoustic cavity.  The
+        # 2-pin socket pocket is an intentional opening in the shell, so "keep
+        # 0.9 mm of Ti over it" is not a meaningful constraint.
+        sup = []
+        pr, pz0, pz1 = self.pocket_r, self.pocket_z0, self.pocket_z1
+        sup.append(self.core_cx * cn[0] + pr * math.hypot(cn[0], cn[1])
+                   + max(pz0 * cn[2], pz1 * cn[2]))                    # driver pocket
+        ir = np.array(self.inner_r)
+        sup.append(float(np.dot(self.core_c, cn) + np.linalg.norm(ir * cn)))   # cavity
+        self.corner_sup = max(sup)
+        self.corner_c_core = float(np.clip(
+            self.corner_h - self.corner_sup - P["corner_min_wall"],
+            0.0, P["corner_chamfer"]))
+        # the faceplate's own magnet pockets sit in z = [z_cut, z_cut + jmag_depth];
+        # the full-depth cut only opens above them
+        self.corner_z_lo = self.z_cut
 
         # ---- canted nozzle frame ------------------------------------------
         # The nozzle axis is rotated about +Y by nozzle_cant_deg, so +X -> -Z.
@@ -392,8 +488,8 @@ class G:
         self.n_az = np.array([sa, 0.0, ca])
         # the axis passes through the core centre, so the nozzle root is buried
         # the full ellipsoid support distance -- that is what carries the side load
-        self.nozzle_t_exit = 1.0 / math.sqrt((ca / P["core_rx"]) ** 2
-                                             + (sa / P["core_rz"]) ** 2)
+        self.nozzle_t_exit = 1.0 / math.sqrt((ca / self.core_rx) ** 2
+                                             + (sa / self.core_rz) ** 2)
         self.nozzle_base = np.array(self.core_c) + self.nozzle_t_exit * self.n_ax
         T = np.eye(4)
         T[:3, 0], T[:3, 1], T[:3, 2] = self.n_ax, self.n_ay, self.n_az
@@ -462,10 +558,14 @@ class G:
         self.tip_protrusion_max = self.carrier_x1 + P["carrier_travel"]
 
         # ---- faceplate / jacket magnet stations
-        outer_half_x = P["core_rx"] * math.sqrt(max(1e-9, 1 - (self.z_cut / P["core_rz"]) ** 2))
+        outer_half_x = self.core_rx * math.sqrt(max(1e-9, 1 - (self.z_cut / self.core_rz) ** 2))
         self.fp_mag_off = 0.5 * (self.pocket_r + 0.5 * P["jmag_dia"] + 0.35
                                  + outer_half_x - 0.5 * P["jmag_dia"] - 0.35)
         self.fp_mag_off = max(self.fp_mag_off, self.pocket_r + 0.5 * P["jmag_dia"] + 0.3)
+        # A diagonal pair, not an axial one: an axial -X station sits inside the
+        # posterior-inferior corner roll.  Both are >= pocket_r + jmag_dia/2 from
+        # the driver pocket centre and on the wide part of the faceplate rim.
+        self.fp_mags = [(self.core_cx - 6.5, 2.9), (self.core_cx + 6.5, -2.9)]
 
         # jacket magnets (3) + locating pins (2) on the -Z hemisphere, as (x, y)
         cx = self.core_cx
@@ -473,7 +573,7 @@ class G:
         self.jacket_pins = [(cx - 3.0, 4.0), (cx - 3.0, -4.0)]
 
         # ---- wing centreline (quadratic Bezier in XY)
-        y_root = P["core_ry"] + P["clearance"]
+        y_root = self.core_ry + P["clearance"]
         back = math.radians(P["wing_back_deg"])
         self.wing_p0 = (cx + P["wing_root_dx"], y_root - 1.6)
         self.wing_p1 = (cx + P["wing_root_dx"], y_root + 0.62 * P["wing_rise"])
@@ -535,6 +635,21 @@ class G:
                 f"L-slot needs the carrier to reach x={need + 0.2:.2f} mm but it ends at "
                 f"{self.carrier_x1:.2f}; raise carrier_len to "
                 f"{need + 0.2 - self.carrier_x0:.2f} mm")
+
+    def corner_cut(self, X, Y, Z):
+        """Half-space to remove at the posterior-inferior corner.
+
+        Depth ramps with Z: below the faceplate magnet band it is limited to what
+        the driver pocket / cavity / socket sleeve allow; above it, the full
+        corner_chamfer.
+        """
+        P = self.P
+        cn = self.corner_n
+        t = np.clip((Z - self.corner_z_lo) / P["corner_ramp"], 0.0, 1.0)
+        c = self.corner_c_core + (P["corner_chamfer"] - self.corner_c_core) \
+            * (t * t * (3.0 - 2.0 * t))
+        # negative INSIDE the region to remove, which is what ssub() expects
+        return (self.corner_h - c) - (X * cn[0] + Y * cn[1] + Z * cn[2])
 
     def nz(self, X, Y, Z):
         """World -> nozzle-local coordinates (the canted frame)."""
@@ -671,7 +786,7 @@ def part_core(g):
         d = U(d, np.maximum(stub, Z - g.z_cut))
 
         # 2-pin socket sleeve (unioned so the pocket never opens into the cavity)
-        sx0 = cx - P["core_rx"] - 0.6
+        sx0 = cx - g.core_rx - 0.6
         sx1 = sx0 + P["socket_d"] + 0.6
         sl_h = (0.5 * (sx1 - sx0), 0.5 * P["socket_w"] + 0.7, 0.5 * P["socket_h"] + 0.7)
         sl_c = (0.5 * (sx0 + sx1), 0.0, P["socket_z"])
@@ -679,7 +794,7 @@ def part_core(g):
         d = U(d, sleeve)
 
         # bone-sensor boss on the -Y (tragus) flank
-        bone_y = -(P["core_ry"] + 0.55)
+        bone_y = -(g.core_ry + 0.55)
         boss = rbox(X, Y, Z, (cx, bone_y, -1.0),
                     (0.5 * P["bone_w"] + 1.1, 1.5, 0.5 * P["bone_h"] + 1.1), 0.7)
         d = smin(d, boss, 0.8)
@@ -697,11 +812,11 @@ def part_core(g):
         # vents
         fv = g.bore_path[len(g.bore_path) // 2]
         void = U(void, capsule(X, Y, Z, fv,
-                               (fv[0], -P["core_ry"] - 3.0, -P["core_rz"] - 3.0),
+                               (fv[0], -g.core_ry - 3.0, -g.core_rz - 3.0),
                                0.5 * P["vent_dia"]))
         void = U(void, capsule(X, Y, Z,
                                (cx - 3.0, 0.0, -1.0),
-                               (cx - 5.5, -P["core_ry"] - 3.0, -P["core_rz"] - 3.0),
+                               (cx - 5.5, -g.core_ry - 3.0, -g.core_rz - 3.0),
                                0.5 * P["vent_dia"]))
 
         # 2-pin socket pocket
@@ -729,9 +844,8 @@ def part_core(g):
                                  zs - 0.4, zs + P["pin_depth"]))
 
         # faceplate magnet pockets in the +Z rim
-        for sgn in (+1, -1):
-            void = U(void, cyl_z(X, Y, Z, cx + sgn * g.fp_mag_off, 0.0,
-                                 0.5 * P["jmag_dia"] + 0.05,
+        for (mx, my) in g.fp_mags:
+            void = U(void, cyl_z(X, Y, Z, mx, my, 0.5 * P["jmag_dia"] + 0.05,
                                  g.z_cut - P["jmag_depth"], g.z_cut + 1.0))
 
         # fixed-magnet counterbore lives in the nozzle INSERT, not here (v0.2 change)
@@ -741,22 +855,23 @@ def part_core(g):
         # gasket groove around the parting line at z = 0
         groove = I(np.abs(Z) - 0.5 * P["gasket_w"],
                    -(outer + P["gasket_d"]),
-                   X - (cx + P["core_rx"] - 2.0))
+                   X - (cx + g.core_rx - 2.0))
         d = S(d, groove)
+        d = ssub(d, g.corner_cut(X, Y, Z), P["corner_roll"])
         return d
 
     tip = g.nozzle_base + g.n_ax * (g.stub_x1 + 0.6)
-    b = ((cx - P["core_rx"] - 1.6, max(0.0, float(tip[0])) + 4.2),
-         (-P["core_ry"] - 3.2, P["core_ry"] + 1.6),
-         (min(-P["core_rz"], float(tip[2]) - 4.2) - 1.6, g.z_cut + 1.2))
+    b = ((cx - g.core_rx - 1.6, max(0.0, float(tip[0])) + 4.2),
+         (-g.core_ry - 3.2, g.core_ry + 1.6),
+         (min(-g.core_rz, float(tip[2]) - 4.2) - 1.6, g.z_cut + 1.2))
     return fn, b
 
 
 def _lower_z(g, x, y):
     """Z of the core's lower (-Z) surface at (x, y), on the bare ellipsoid."""
     P = g.P
-    t = 1.0 - ((x - g.core_cx) / P["core_rx"]) ** 2 - (y / P["core_ry"]) ** 2
-    return -P["core_rz"] * math.sqrt(max(t, 1e-4))
+    t = 1.0 - ((x - g.core_cx) / g.core_rx) ** 2 - (y / g.core_ry) ** 2
+    return -g.core_rz * math.sqrt(max(t, 1e-4))
 
 
 # --------------------------------------------------------------------------
@@ -767,18 +882,18 @@ def part_faceplate(g):
     P, cx = g.P, g.core_cx
 
     def fn(X, Y, Z, C):
-        d = I(g.core_outer(X, Y, Z, C), g.z_cut - Z)
-        inner = tuple(v - 1.0 for v in g.core_r)
-        d = S(d, I(ellipsoid(X, Y, Z, g.core_c, inner), g.z_cut + 0.9 - Z))
-        for sgn in (+1, -1):
-            d = S(d, cyl_z(X, Y, Z, cx + sgn * g.fp_mag_off, 0.0,
-                           0.5 * P["jmag_dia"] + 0.05,
+        outer = ssub(g.core_outer(X, Y, Z, C), g.corner_cut(X, Y, Z), P["corner_roll"])
+        d = I(outer, g.z_cut - Z)
+        # shell by eroding the CHAMFERED outer, so the roll keeps a uniform wall
+        d = S(d, np.maximum(outer + 1.0, g.z_cut + 0.9 - Z))
+        for (mx, my) in g.fp_mags:
+            d = S(d, cyl_z(X, Y, Z, mx, my, 0.5 * P["jmag_dia"] + 0.05,
                            g.z_cut - 1.0, g.z_cut + P["jmag_depth"]))
         return d
 
-    b = ((cx - P["core_rx"] - 1.0, 1.0),
-         (-P["core_ry"] - 1.0, P["core_ry"] + 1.0),
-         (g.z_cut - 1.0, P["core_rz"] + 1.0))
+    b = ((cx - g.core_rx - 1.0, 1.0),
+         (-g.core_ry - 1.0, g.core_ry + 1.0),
+         (g.z_cut - 1.0, g.core_rz + 1.0))
     return fn, b
 
 
@@ -915,10 +1030,10 @@ def part_jacket_wing(g):
         return d
 
     ymax = max(p[1] for p in pts) + 3.0
-    xmin = min(min(p[0] for p in pts), cx - P["core_rx"]) - 3.5
+    xmin = min(min(p[0] for p in pts), cx - g.core_rx) - 3.5
     b = ((xmin, P["jacket_x_clip"] + 1.0),
-         (-P["core_ry"] - 3.0, ymax),
-         (-P["core_rz"] - thick - 2.0, 1.0))
+         (-g.core_ry - 3.0, ymax),
+         (-g.core_rz - thick - 2.0, 1.0))
     return fn, b
 
 
@@ -1007,13 +1122,30 @@ def skirt_field(g, X, Y, Z):
     sl = px * ux + pr * ur                 # station along the slant
     dn = px * nx + pr * nr                 # +ve outside the cone face
     w = np.interp(sl, g.skirt_wall_xp, g.skirt_wall_fp)
+
+    # ---- intertragic-notch sector -------------------------------------------
+    # The inferior sector of the perimeter carries 77-88% of the remaining seal
+    # failures, so it gets more reach and a thinner, more compliant land.  The
+    # extension ramps from zero at the root to full at the rim, which both angles
+    # it for demoulding and leaves the structural neck untouched.
+    hw = math.radians(0.5 * P["notch_sector_deg"])
+    tr = math.radians(P["notch_sector_trans_deg"])
+    th = np.arctan2(Z, Y)
+    dth = np.abs(_wrap(th - math.radians(P["notch_sector_center_deg"])))
+    tb = np.clip((dth - (hw - tr)) / tr, 0.0, 1.0)
+    b = 1.0 - tb * tb * (3.0 - 2.0 * tb)
+    ramp = np.clip(sl / g.skirt_slant, 0.0, 1.0)
+    dn = dn - P["notch_sector_ext"] * b * ramp * ur      # ur = radial part of n_hat
+    land = np.clip((sl - (g.skirt_slant - g.skirt_land_w)) / 0.30, 0.0, 1.0)
+    w = w + (P["notch_sector_wall"] - P["skirt_wall_land"]) * b * land
+
     band = np.maximum(dn, -dn - w)         # between the cone and its inward offset
     d = np.maximum(band, np.maximum(-sl, sl - g.skirt_slant))
     # rolled rim lip: a torus tangent to the cone face, so the rim stays exactly
     # skirt_max_dia and there is no knife edge on the sealing lip
     lw = 0.5 * P["skirt_wall_land"]
     lipx = ax + ux * g.skirt_slant + nx * (-lw)
-    lipr = ar + ur * g.skirt_slant + nr * (-lw)
+    lipr = ar + ur * g.skirt_slant + nr * (-lw) + P["notch_sector_ext"] * b * ur
     lip = np.sqrt((X - lipx) ** 2 + (rho - lipr) ** 2) - lw
     return U(d, lip)
 
@@ -1044,7 +1176,7 @@ def carrier_field(g, X, Y, Z, C):
 
 def part_carrier(g):
     P = g.P
-    r = g.skirt_rim_r + 1.2
+    r = g.skirt_rim_r + P["notch_sector_ext"] + 1.2
 
     def fn(X, Y, Z, C):
         return carrier_field(g, X, Y, Z, C)
@@ -1057,7 +1189,7 @@ def mold_geom(g):
     P = g.P
     x0 = g.carrier_x0 - 3.5
     x1 = g.carrier_x1 + 3.5
-    r = g.skirt_rim_r + P["mold_wall"]
+    r = g.skirt_rim_r + P["notch_sector_ext"] + P["mold_wall"]
     return x0, x1, r
 
 
@@ -1240,7 +1372,7 @@ def wing_envelope_mesh(g, spacing=0.18):
 
     ymax = max(p[1] for p in pts) + 3.0
     xmin = min(p[0] for p in pts) - 4.0
-    b = ((xmin, g.core_cx + P["core_rx"] + 2.0),
+    b = ((xmin, g.core_cx + g.core_rx + 2.0),
          (g.y_root - 1.0, ymax),
          (-P["wing_width"] - 1.5, 1.5))
     f, o, sp = evaluate(fn, b, spacing)
@@ -1375,6 +1507,46 @@ def report_row(name, mesh, sp, dt):
             f"tris {len(mesh.faces):7d}  voxel {sp:.3f}  {dt:5.1f}s" + tail)
 
 
+def acoustic_void(g, spacing=0.20):
+    """Volume of the enclosed void inside the core shell, below the parting plane."""
+    fn, b = PARTS["core"][0](g)
+    f, o, sp = evaluate(fn, b, spacing)
+    X = (o[0] + sp * np.arange(f.shape[0])).reshape(-1, 1, 1)
+    Y = (o[1] + sp * np.arange(f.shape[1])).reshape(1, -1, 1)
+    Z = (o[2] + sp * np.arange(f.shape[2])).reshape(1, 1, -1)
+    ins = (g.core_outer(X, Y, Z, None) < 0) & (Z < g.z_cut)
+    return float((ins & (f > 0)).sum()) * sp ** 3
+
+
+def solve_body_trim(P):
+    """Largest trim that keeps every internal margin.
+
+    X and Y are bounded analytically (driver pocket wall, faceplate magnet rim).
+    Z is bounded by the acoustic void, which has to be measured, so it is found
+    by bisection on the real geometry.
+    """
+    g = G(P)
+    tx, ty, tz = g.trim_got
+    target = 1000.0 * P["body_trim_min_front_cc"]
+    if tz > 0:
+        def vol(t):
+            Q = copy.deepcopy(P)
+            Q["body_trim_force"] = (tx, ty, t)
+            return acoustic_void(G(Q))
+        if vol(tz) < target:
+            lo, hi = 0.0, tz
+            for _ in range(6):
+                mid = 0.5 * (lo + hi)
+                if vol(mid) >= target:
+                    lo = mid
+                else:
+                    hi = mid
+            tz = lo
+    P = copy.deepcopy(P)
+    P["body_trim_force"] = (float(tx), float(ty), float(tz))
+    return P
+
+
 def main():
     ap = argparse.ArgumentParser(description="Magneto IEM parametric STL generator")
     ap.add_argument("--all", action="store_true", help="generate every part + assembly")
@@ -1385,6 +1557,8 @@ def main():
     ap.add_argument("--voxel", type=float, default=None, help="override voxel size (mm)")
     ap.add_argument("--magnet-preset", default=PARAMS["magnet_preset"],
                     choices=sorted(MAGNET_PRESETS))
+    ap.add_argument("--trim", type=float, default=None,
+                    help="mm of protrusion to remove by shrinking the shell (default 5)")
     ap.add_argument("--cant", type=float, default=None,
                     help="nozzle cant in degrees about +Y (default 45)")
     ap.add_argument("--no-assembly", action="store_true")
@@ -1401,6 +1575,9 @@ def main():
         P["voxel"] = args.voxel
     if args.cant is not None:
         P["nozzle_cant_deg"] = args.cant
+    if args.trim is not None:
+        P["body_trim_mm"] = args.trim
+    P = solve_body_trim(P)
     g = G(P)
 
     here = os.path.dirname(os.path.abspath(__file__))
@@ -1506,6 +1683,78 @@ def main():
             print(f"whole jacket+wing, rim-down: worst {w2:.1f} deg, "
                   f"p99 {p2:.1f} deg, {100*f2:.1f}% of area over 45 deg")
 
+    # ---- body trim margins (docs/TRYON_REPORT.md, recalibrated)
+    if "core" in meshes:
+        print("-" * 100)
+        print(f"body trim: requested {P['body_trim_mm']:.1f} mm of protrusion, "
+              f"weights {P['body_trim_w']}")
+        print(f"  per-axis cut (mm of full extent)  X/Y/Z requested "
+              f"{g.trim_req[0]:.2f}/{g.trim_req[1]:.2f}/{g.trim_req[2]:.2f}   "
+              f"feasible {g.trim_cap[0]:.2f}/{g.trim_cap[1]:.2f}/{g.trim_cap[2]:.2f}   "
+              f"applied {g.trim_got[0]:.2f}/{g.trim_got[1]:.2f}/{g.trim_got[2]:.2f}")
+        print(f"  protrusion removed by the trim: {g.trim_protrusion_got:.2f} mm "
+              f"of the {g.trim_protrusion_req:.2f} mm asked for"
+              + (f"   [X blocked: {g.trim_block_x}]" if g.trim_block_x else ""))
+        print(f"  core {2*g.core_rx:.2f} x {2*g.core_ry:.2f} x {2*g.core_rz:.2f} mm")
+
+        # internal margins
+        mar = [("driver pocket wall, +/-X", g.core_rx - g.pocket_r),
+               ("driver pocket wall, +/-Y", g.core_ry - g.pocket_r),
+               ("shell under the driver pocket", g.core_rz + g.pocket_z0),
+               ("faceplate cap above the parting plane", g.core_rz - g.z_cut),
+               ("socket pocket to shell bottom",
+                g.core_rz + (P["socket_z"] - 0.5 * P["socket_h"]))]
+        for (mx, my) in g.fp_mags:
+            r = math.hypot(mx - g.core_cx, my)
+            mar.append((f"faceplate magnet rim at ({mx:.1f},{my:.1f})",
+                        r - g.pocket_r - 0.5 * P["jmag_dia"]))
+        for (mx, my) in g.jacket_mags:
+            zs = _lower_z(g, mx, my)
+            mar.append((f"jacket magnet depth at ({mx:.1f},{my:.1f})",
+                        -zs - P["jmag_depth"] - P["core_wall"] * 0.0))
+        bad = [n for n, v in mar if v < 0.30]
+        for n, v in mar:
+            print(f"    {'FLAG' if v < 0.30 else '    '} {n:44s} {v:6.2f} mm")
+
+        # acoustic volume actually left inside the shell (same probe the solver used)
+        vol = acoustic_void(g)
+        print(f"    {'FLAG' if vol < 500 else '    '} "
+              f"{'acoustic void inside the shell':44s} {vol:6.1f} mm3 "
+              f"(front-volume target 500 mm3 = 0.5 cc)")
+        if bad or vol < 500:
+            print(f"  *** {len(bad) + (vol < 500)} margin(s) under threshold: "
+                  + ", ".join(bad + ([] if vol >= 500 else ["acoustic volume"])))
+
+    # ---- posterior-inferior corner roll (docs/TRYON_REPORT.md v2)
+    if ("core" in meshes and "faceplate" in meshes):
+        cn = g.corner_n
+        after = max(float((mm.vertices @ cn).max())
+                    for mm in (meshes["core"], meshes["faceplate"]))
+        P0 = copy.deepcopy(P)
+        P0["corner_chamfer"] = 0.0
+        P0["body_trim_force"] = (0.0, 0.0, 0.0)     # baseline = untrimmed, unrolled
+        g0 = G(P0)
+        before = 0.0
+        for nm in ("core", "faceplate"):
+            f0, b0 = PARTS[nm][0](g0)
+            fld, org, spc = evaluate(f0, b0, 0.22)
+            before = max(before, float((polygonise(fld, org, spc).vertices @ cn).max()))
+        print("-" * 100)
+        print(f"corner roll {P['corner_chamfer']:.1f} mm along "
+              f"({cn[0]:+.2f},{cn[1]:+.2f},{cn[2]:+.2f}) with a "
+              f"{P['corner_roll']:.1f} mm blend")
+        print(f"  internals allow {g.corner_c_core:.2f} mm below z = "
+              f"{g.corner_z_lo:.1f} mm (driver pocket wall {P['corner_min_wall']} mm), "
+              f"so the roll lives in the faceplate")
+        print(f"  worst point along that diagonal, chamfer + trim COMBINED: "
+              f"{before:.2f} -> {after:.2f} mm = {before - after:.2f} mm removed "
+              f"(measured on the meshes)")
+        print(f"  for comparison, the report's per-axis coefficients predict "
+              f"{g.trim_protrusion_got:.2f} mm from the trim alone; they include "
+              f"re-seating gains this generator cannot see")
+        print(f"  core volume {meshes['core'].volume:.1f} mm3, faceplate "
+              f"{meshes['faceplate'].volume:.1f} mm3")
+
     # ---- protrusion stack along the nozzle axis (docs/TRYON_REPORT.md rec 1)
     rigid = [meshes[k] for k in ("core", "faceplate", "jacket_wing") if k in meshes]
     if rigid:
@@ -1538,6 +1787,31 @@ def main():
                    "borderline" if kpa <= 4.27 else "TOO MUCH")
             cells.append(f"Ø{dia:.0f}: {kpa:4.2f} kPa {tag}")
         print(f"  cone-normal pressure at F_max {f_max} N   " + " | ".join(cells))
+        # intertragic-notch sector + two-part mould draw check
+        hw = math.radians(0.5 * P["notch_sector_deg"])
+        tr = math.radians(P["notch_sector_trans_deg"])
+        th = np.linspace(-np.pi, np.pi, 2001)
+        dth = np.abs(_wrap(th - math.radians(P["notch_sector_center_deg"])))
+        tb = np.clip((dth - (hw - tr)) / tr, 0.0, 1.0)
+        bb = 1.0 - tb * tb * (3.0 - 2.0 * tb)
+        rr_ = g.skirt_rim_r + P["notch_sector_ext"] * bb
+        yy, zz = rr_ * np.cos(th), np.abs(rr_ * np.sin(th))
+        draw = []
+        for sgn in (1, -1):
+            m = sgn * yy >= 0
+            o = np.argsort(sgn * yy[m])
+            draw.append(int((np.diff(zz[m][o]) > 1e-6).sum()))
+        print(f"  notch sector: {P['notch_sector_deg']:.0f} deg centred "
+              f"{P['notch_sector_center_deg']:.0f} deg from +Y (inferior), "
+              f"+{P['notch_sector_ext']:.2f} mm radial reach -> Ø"
+              f"{2*(g.skirt_rim_r+P['notch_sector_ext']):.1f} mm there, Ø"
+              f"{2*g.skirt_rim_r:.1f} mm elsewhere; land wall "
+              f"{P['notch_sector_wall']} vs {P['skirt_wall_land']} mm, "
+              f"{P['notch_sector_trans_deg']:.0f} deg blends")
+        print(f"  two-part mould, split y=0, pull +/-Y: non-monotone rim steps "
+              f"{draw[0]} / {draw[1]}  -> "
+              + ("demoulds, no undercut" if max(draw) == 0
+                 else "*** UNDERCUT, angle the extension ***"))
 
     # verify what a slicer actually sees: re-read the exported binary STL
     print("-" * 100)

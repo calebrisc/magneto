@@ -150,6 +150,89 @@ or a two-piece shell.
 
 ---
 
+## 2c. Protrusion work: corner roll, body trim, notch sector
+
+Three changes answering `docs/TRYON_REPORT.md` v2 + the recalibration (`13e75b3`)
+and the seal rescore (`5ff456f`). All three are parametric and all three are
+measured and printed on every run.
+
+### Corner roll — `corner_chamfer` (4.0 mm requested)
+
+The worst-protruding point is a **corner**, median (−11.5, −4.1, +3.7): the −X/−Y/+Z
+octant of the faceplate, diagonal to all axes, with protrusion sensitivity
+0.65 / 0.49 / 0.41 mm per mm on +Y / +Z / +X. The roll cuts perpendicular to that
+diagonal (`corner_dir`), which is the most material-efficient direction available,
+with a `corner_roll` = 1.5 mm blend. Depth ramps with Z: below the parting plane it
+is limited to what the closed internals allow, above it the full 4 mm.
+
+**The driver pocket is the wall.** Ø12.2 needs 6.1 + 0.9 mm to the shell in every
+XY direction, and `core_ry` is exactly 7.0 — zero slack. The generator computes the
+allowance and reports it: **0.12 mm below the parting plane**. So the 4 mm roll
+lives entirely in the faceplate, and the worst point simply relocates to the core
+rim at z = 1.0. The faceplate magnet stations were moved to a diagonal pair,
+(cx ± 6.5, ∓2.9), because the old axial −X station sat inside the roll.
+
+### Body trim — `body_trim_mm` (5.0 mm requested)
+
+Distributes the requested protrusion reduction across X/Y/Z in proportion to
+`body_trim_w`, then clamps each axis to what the internals allow. X and Y are
+bounded analytically; Z is bounded by the acoustic void, which has to be measured,
+so `solve_body_trim()` bisects on the real geometry.
+
+| axis | requested | feasible | applied | what binds |
+|---|---|---|---|---|
+| X | 2.47 mm | **0.00** | 0.00 | faceplate magnet rim, already at 0.02 mm |
+| Y | 3.91 mm | **0.00** | 0.00 | driver pocket wall is exactly `body_trim_min_wall` |
+| Z | 2.95 mm | 4.20 | **1.34** | acoustic void hits the 0.5 cc floor |
+
+**Delivered: 0.65 mm of the 5.00 mm asked for.** Core 17.00 × 14.00 × 8.66 mm.
+Margins after the trim (flagged under 0.30 mm):
+
+```
+     driver pocket wall, +/-X        2.40      faceplate cap above parting  3.33
+     driver pocket wall, +/-Y        0.90      socket pocket to shell       2.33
+     shell under the driver pocket   2.33      acoustic void              504.6 mm3
+FLAG faceplate magnet rim (x2)       0.02
+```
+
+The two flagged magnet rims are **pre-existing**, not caused by the trim: a Ø2
+pocket needs 2 mm of rim and the annulus between the Ø12.2 pocket and the shell is
+1.17–2.23 mm. That mounting needs a rethink regardless.
+
+> **The honest verdict: 4–6 mm is not reachable while preserving the driver pocket,
+> the magnet stations and 0.5 cc.** The report's own worked example (6 X + 4 Y + 4 Z)
+> would take the shell to 11 × 10 × 6 mm around a 14 mm-minimum driver pocket. The
+> recalibration removed the *need* for a driver-stack redesign at the ≤10 mm
+> threshold, but the geometry still says a driver change is the only route past
+> ~1 mm. Relax `body_trim_keep_magnets` or `body_trim_min_front_cc` to trade.
+
+**Combined chamfer + trim, measured on the meshes along the sensitivity diagonal:
+10.47 → 10.20 mm = 0.27 mm.** The report's coefficients predict 0.65 mm from the
+trim alone; they include re-seating gains this generator cannot see, so a try-on
+re-run is the arbiter.
+
+### Intertragic-notch sector — `notch_sector_ext`
+
+The inferior sector carries 77–88 % of the remaining seal failures, so it gets more
+reach and a more compliant land, and nothing else changes:
+
+| | |
+|---|---|
+| sector | `notch_sector_deg` 90° centred `notch_sector_center_deg` 180° from +Y_local (inferior) |
+| extra reach | **+1.75 mm** radial → **Ø22.5 mm** there, **Ø19.0 mm** elsewhere |
+| land wall | **0.22 mm** in the sector vs 0.25 mm elsewhere |
+| blends | 20° smoothstep at each edge |
+| land width | 4.50 mm, unchanged all the way round |
+
+The extension ramps from zero at the root to full at the rim, so it is angled by
+construction and the structural neck is untouched. **Mould draw is checked
+numerically every run** — the rim outline is sampled and each half tested for
+monotone |z| against |y| out from the y = 0 split: `non-monotone rim steps 0 / 0
+-> demoulds, no undercut`. Rotating `notch_sector_center_deg` off 180° re-runs
+that check, so an undercut cannot be introduced silently.
+
+---
+
 ## 3. Parts
 
 | STL | Material / process | What it is |

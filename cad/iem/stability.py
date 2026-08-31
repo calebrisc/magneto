@@ -155,13 +155,23 @@ def _max_scale(W, owner, groups, w_always, w_scaled):
     return float(res.x[-1]) if res.success else 0.0
 
 
+LIP_SEARCH = 3.0     # mm, radius to look for undercut surface under a pad
+
+
 def stability_check(rec, P, field, transform_fn, contacts=None,
-                    plungers=0, cable_point=None, com=None):
+                    plungers=0, cable_point=None, com=None,
+                    lip_upper_bound=False, cable_tug=None, mu=None):
     """Worst-case load scale the seated pose can resist.  See module docstring."""
     M = np.array(rec["transform"], float)
+    global MU
+    mu_save = MU
+    if mu is not None:
+        MU = float(mu)
+    tug = CABLE_TUG if cable_tug is None else float(cable_tug)
 
     # ---- gather contacts, grouped by the part that presses them ------------- #
     groups, pts, nrms, owner_of = {}, [], [], []
+    gnames = {}
 
     def add(key, keys, kind, cap):
         got = []
@@ -183,6 +193,7 @@ def stability_check(rec, P, field, transform_fn, contacts=None,
             _, idx = field.tree.query(p[None, :])
             pts.append(p); nrms.append(field.nrm[int(idx[0])]); owner_of.append(gi)
         groups[gi] = (kind, cap)
+        gnames[gi] = key
         return len(got)
 
     def add_ring(cap, n_keep=24):
@@ -220,6 +231,7 @@ def stability_check(rec, P, field, transform_fn, contacts=None,
             _, idx = field.tree.query(pt[None, :])
             pts.append(pt); nrms.append(field.nrm[int(idx[0])]); owner_of.append(gi)
         groups[gi] = ("cap", cap)
+        gnames[gi] = "skirt"
         return len(keep)
 
     n_skirt = add_ring(SKIRT_PRELOAD)
@@ -238,6 +250,25 @@ def stability_check(rec, P, field, transform_fn, contacts=None,
 
     pts = np.array(pts); nrms = np.array(nrms)
     owner = np.array(owner_of)
+
+    # UPPER BOUND on the cymba lip hook: pretend every pad point found the
+    # undercut it is sitting beside.  For each plunger contact, substitute the
+    # most strongly interlocking ear normal within LIP_SEARCH mm.  This is an
+    # optimistic bound, not a prediction -- it asks "how much is the hook worth
+    # if it seated perfectly?", which brackets the geometric fix.
+    if lip_upper_bound and len(pts):
+        pull_w = -(M[:3, :3] @ __import__("earfit").NOZZLE_AXIS)
+        pull_w = pull_w / np.linalg.norm(pull_w)
+        for i in range(len(pts)):
+            if gnames.get(owner[i]) != "plungers":
+                continue
+            near = field.tree.query_ball_point(pts[i], LIP_SEARCH)
+            if not near:
+                continue
+            k = field.nrm[near] @ pull_w
+            j = int(np.argmin(k))
+            if k[j] < 0:
+                nrms[i] = field.nrm[near[j]]
     if com is None:
         com = pts.mean(axis=0)
 
@@ -279,23 +310,25 @@ def stability_check(rec, P, field, transform_fn, contacts=None,
     pullout_capacity = _max_scale(W, own2, groups, np.zeros(6), w_pull)
     comp = nrms @ pull
     interlock = int((comp < 0).sum())
-    demand = SKIRT_PRELOAD + CABLE_TUG + f_inert
+    demand = SKIRT_PRELOAD + tug + f_inert
 
     worst, worst_dirs = 1e9, None
     for cd in cable_dirs:
         for idd in inert_dirs:
-            F = CABLE_TUG * cd + f_inert * idd
-            Mo = np.cross(cable_point - com, CABLE_TUG * cd)
+            F = tug * cd + f_inert * idd
+            Mo = np.cross(cable_point - com, tug * cd)
             w = np.concatenate([F, Mo])
             sc = _max_scale(W, own2, groups, w_always, w)
             if sc < worst:
                 worst, worst_dirs = sc, (cd, idd)
 
     verdict = "stable" if worst >= 1.5 else "marginal" if worst >= 1.0 else "FAIL"
+    MU = mu_save
     return dict(verdict=verdict, margin=worst,
                 pullout_capacity=pullout_capacity, demand=demand,
                 interlock=interlock, n_contacts=len(pts),
-                friction_budget=MU * (SKIRT_PRELOAD + f_wing
+                mu_used=(mu if mu is not None else mu_save), tug=tug,
+                friction_budget=(mu if mu is not None else mu_save) * (SKIRT_PRELOAD + f_wing
                                       + len(P.get("_plunger", [])) * PLUNGER_FORCE[0]),
                 cable_dir=None if worst_dirs is None else worst_dirs[0].tolist(),
                 inert_dir=None if worst_dirs is None else worst_dirs[1].tolist(),

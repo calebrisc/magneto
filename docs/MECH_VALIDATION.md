@@ -1000,6 +1000,17 @@ to be good. If ±1.5 mm turns out to be genuinely needed, the depth budget must 
 - **No tissue or friction model.** Guide-pin friction and pad hysteresis are not in these
   numbers, and stiction is the most likely way the force window degrades in practice.
   L/D = 2.5 is a rule of thumb for no-cock, not a computed result.
+
+  > **Cross-reference — where the tissue side is now covered.**
+  > `docs/TRYON_REPORT.md` carries a quasi-static rigid-body stability check
+  > (`cad/iem/stability.py`) that puts the plunger forces from §5 against a real
+  > ear: 0.31 N skirt reaction, a 0.5 N cable tug and 3 g inertial, resisted by
+  > contact normals and Coulomb friction. Its verdict on P0023 turns almost
+  > entirely on the **skin friction coefficient**, which neither document
+  > measures — the design fails at μ = 0.4 and passes from μ ≈ 0.7 upward. That
+  > makes a pad-on-skin friction measurement the highest-value bench test for the
+  > first build; see the sensitivity grid in TRYON_REPORT. The plunger force band
+  > used there (0.18–0.49 N per pad) is §5's output.
 - **Rail and pin masses are estimates** from nominal dimensions (0.8 mm Ti rail, 2.0 mm
   pins, 1 mm silicone pad), not from a CAD solid.
 - **Stray field is the on-axis single-puck value.** The pair cancellation and the sensor's

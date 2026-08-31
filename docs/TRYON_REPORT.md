@@ -321,30 +321,72 @@ resting mostly beside it rather than under it. The credit is real but partial,
 and the remaining move is geometric — bias the pad another millimetre or two into
 the overhang.
 
-### What a fix must supply
+### What a fix must supply — the friction sensitivity grid
 
 Worst unresisted direction is a cable tug at **(−0.50, −0.71, −0.50)** —
 posterior, inferior and medial together. Capacity is 0.47 N against 1.05 N of
-demand, so **a fix must supply roughly 0.6 N more resisted load along that
-direction.** Three levers, swept on this ear:
+demand at the conservative assumption, so roughly **0.6 N** is missing there.
 
-| lever | result |
-|---|---|
-| stiffer springs | 1.25 N/pad needed for margin 1.0 — **7× the shipped 0.18 N** and 2.5× the 0.49 N high end. Not plausible. |
-| **friction** | μ 0.4 → 0.31×, μ 0.6 → 0.79×, **μ 0.8 → 1.19× (passes)** |
-| interlock | currently 1 of 9 cymba points both touching and interlocking; seating the pad fully under the lip converts friction-limited holding into geometric holding |
+Stiffer springs cannot supply it: margin 1.0 needs **1.25 N per pad**, which is
+7× the shipped 0.18 N and 2.5× the 0.49 N high end. **Friction and interlock are
+the only realistic levers**, and of the two, friction dominates.
 
-**The verdict hinges on μ, which is an assumption rather than a measurement.**
-μ = 0.40 was chosen as a deliberately dry, conservative value; published
-skin-on-elastomer figures span roughly 0.3–1.0, and at μ = 0.8 this build passes.
-So the honest statement is: *this design fails at conservative friction and
-passes at optimistic friction, and nobody has measured the real number.*
-Measuring pad-material friction against skin is now the highest-value
-experiment available — it is worth more than any further geometry iteration,
-because it decides whether ~0.6 N is missing at all.
+Two cable cases matter because the 35° boot exists precisely to change this: a
+cable left **hanging** takes the full 0.5 N, while **over-ear routing** — what
+the boot rakes the exit for — attenuates it to roughly 0.2 N.
 
-Failing that, the geometric route is the cymba lip-hook: it needs no more spring
-force, only for the pad to sit under the overhang the scans already show.
+**As built** (cymba hook at partial credit, 1 of 9 pad points interlocked):
+
+| μ | cable 0.5 N (hanging) | cable 0.2 N (over-ear) |
+|---|---|---|
+| 0.4 | 0.31× fail | 0.46× fail |
+| 0.6 | 0.79× fail | **1.14× PASS** |
+| 0.8 | **1.19× PASS** | **1.76× PASS** |
+| 1.0 | **5.97× PASS** | **11.01× PASS** |
+
+**Upper bound** — the same check with every cymba pad point forced onto the
+undercut it is sitting beside (`--lip_upper_bound`; optimistic by construction,
+it asks what the hook is worth if it seated perfectly):
+
+| μ | cable 0.5 N (hanging) | cable 0.2 N (over-ear) |
+|---|---|---|
+| 0.4 | 0.52× fail | 0.88× fail |
+| 0.6 | 0.89× fail | **1.46× PASS** |
+| 0.8 | **2.01× PASS** | **2.99× PASS** |
+| 1.0 | **7.46× PASS** | **11.26× PASS** |
+
+**The design passes 5 of 8 cells as built: everything at μ ≥ 0.8, plus over-ear
+routing at μ = 0.6.** It fails only the dry-friction corner — μ = 0.4 in both
+cable cases, and μ = 0.6 with the cable hanging free.
+
+Seating the cymba hook fully lifts every margin by 40–70 % (0.31 → 0.52 at the
+worst cell, 1.19 → 2.01 at μ = 0.8) but **does not unlock a new cell** — it takes
+μ = 0.4 / over-ear from 0.46× to 0.88×, close but still short. So the hook is
+worth doing and is not by itself sufficient; μ decides the outcome.
+
+### Where μ actually sits
+
+Published tribology puts **dry skin against glass at μ ≈ 0.25 and wet skin at
+μ ≈ 1.4** (Tribology Letters 2012; PMC4168723). Two adjustments both push
+upward from the dry figure: skin against **soft silicone** runs higher than
+against glass, because a compliant counter-surface adds a real adhesion/hysteresis
+term on top of load-bearing friction; and the **in-ear environment is warm and
+occluded**, so the skin is moist rather than dry. That places the realistic
+working band at **μ ≈ 0.6–1.0** — the region where this design passes in every
+cell except a free-hanging cable at the very bottom of the band.
+
+The μ = 0.40 used elsewhere in this report was chosen as a deliberately dry,
+conservative anchor. On this evidence it is *too* conservative for an in-ear
+silicone pad, and the honest reading is that the design is **probably adequate
+and not demonstrated**.
+
+> **Measure at first build.** This is settled empirically in an afternoon: press
+> a pad coupon against forearm or in-ear skin at a known normal load with a
+> kitchen scale, pull tangentially through a second scale, and read μ = F_slip /
+> F_normal. Repeat wet/dry and at body temperature. That single number decides
+> whether ~0.6 N is missing at all, and it is worth more than any further
+> geometry iteration. Cross-referenced in `MECH_VALIDATION.md` §5.4, whose
+> "no tissue or friction model" limitation this check answers.
 
 ## Deriving the third plunger aim from data
 

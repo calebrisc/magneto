@@ -43,7 +43,7 @@ grade is the worst of them, with `worst_metric` naming the one that drove it:
     seal        cover >= 0.75 pass | >= 0.50 marginal | else fail
     retention   wing_tip in [-2.5, 0.0] pass | [-4, 1.0] marginal | else fail
     clearance   hard_min >= -1.0 pass | >= -2.5 marginal | else fail
-    protrusion  <= 2 mm pass | <= 5 mm marginal | else fail
+    protrusion  <= PROT_PASS pass | <= PROT_MARGINAL marginal | else fail
 
 Usage:
     python tryon.py                       # everything in ears/aligned/
@@ -66,6 +66,32 @@ import trimesh
 from earfit import ALIGNED, EarField, iem_points, transform
 
 GRADES = ("pass", "marginal", "fail")
+
+# PROTRUSION THRESHOLDS -- design-team calibration, 2026-08-31.
+#
+# The original <= 2 mm / <= 5 mm pair was aspirational rather than physical: it
+# describes a custom-moulded IEM sitting nearly flush, and across 107 ears it was
+# cleared by exactly one, which makes it useless as a discriminator.  A universal
+# IEM is a body parked in the concha with the shell standing proud of the tragus
+# plane; the question is how much is tolerable, not whether it is zero.
+#
+# Published specs are of limited help because manufacturers quote OVERALL SHELL
+# DEPTH, not protrusion past the tragus plane, and the concha swallows an
+# unstated part of the former.  For scale: the SIMGOT EA1000 is 22 x 17 x
+# 20.7 mm, and ~20-22 mm of overall shell depth is typical.  With a 9-17 mm
+# concha depth (docs/EAR_ANTHROPOMETRY.md) that leaves single-digit millimetres
+# proud on a typical ear, which is the band these thresholds encode.
+#
+# These are therefore a DESIGN-TEAM CALIBRATION, not a measured industry
+# standard: 10 mm proud is accepted as normal for a universal fit, 14 mm as the
+# limit before the shell fouls the helix/antihelix on insertion and starts
+# levering itself out.  Revisit with real worn measurements when a prototype
+# exists.
+PROT_PASS = 10.0
+PROT_MARGINAL = 14.0
+# the pre-2026-08-31 strict pair, retained so the report can show both
+PROT_PASS_STRICT = 2.0
+PROT_MARGINAL_STRICT = 5.0
 
 
 def grade_worst(gs):
@@ -115,7 +141,8 @@ def score(rec, P, field):
     if np.isnan(prot):
         g_pro = "marginal"
     else:
-        g_pro = "pass" if prot <= 2.0 else "marginal" if prot <= 5.0 else "fail"
+        g_pro = ("pass" if prot <= PROT_PASS
+                 else "marginal" if prot <= PROT_MARGINAL else "fail")
 
     axes = dict(seal=g_seal, retention=g_ret, clearance=g_clr, protrusion=g_pro)
     overall = grade_worst(axes.values())

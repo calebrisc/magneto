@@ -10,29 +10,88 @@ Both sides of the comparison were re-run from scratch under an identical,
 corrected seating cost, so the numbers below are directly comparable. They are
 **not** comparable to the v1 tables; see [what changed in v2](#what-changed-in-v2).
 
+> **Scoring note.** The protrusion thresholds were recalibrated on 2026-08-31
+> from ≤2 mm / ≤5 mm to **≤10 mm pass / ≤14 mm marginal**. The old pair
+> described a custom-moulded IEM sitting flush and was cleared by 1 ear in 107,
+> which made it useless as a discriminator — and, as it turns out, it was
+> masking the cant's benefit. Justification:
+> [threshold calibration](#protrusion-threshold-calibration). Both scorings are
+> shown throughout.
+
 ## Verdict
 
-**The cant is a real improvement and should be kept. It does not fix the
-protrusion failure, and body shortening is still required.**
+**Keep the cant — under realistic thresholds it is worth far more than it first
+appeared. Shortening is still wanted, but ~4–6 mm, not ~12 mm. And the top
+failure axis is no longer protrusion: it is the seal.**
 
 | | cant 0 (baseline) | cant 45 (default) |
 |---|---|---|
-| pass / marginal / fail | 0 / 1 / 106 | **0 / 0 / 107** |
+| pass / marginal / fail — **recalibrated** | 0 / 20 / 87 | **0 / 40 / 67** |
+| pass / marginal / fail — strict (old) | 0 / 1 / 106 | 0 / 0 / 107 |
+| protrusion fails — **recalibrated** | 56 | **38** |
+| protrusion fails — strict (old) | 103 | 107 |
 | protrusion median | 14.19 mm | **12.88 mm** |
-| protrusion p90 | 21.08 mm | **17.83 mm** |
-| protrusion max | 24.53 mm | **20.26 mm** |
+| protrusion p90 / max | 21.08 / 24.53 mm | **17.83 / 20.26 mm** |
 
-The cant bought **1.31 mm of median protrusion** — it helped 72 ears and hurt
-35 — while clearly improving seal and clearance. That is nowhere near the
-~12 mm needed. On the overall grade the canted build actually scores *worse*
-(107 fails vs 106), because the one baseline ear that squeaked through on
-protrusion no longer does: the cant **compresses the distribution** rather than
-shifting it, raising the floor from −1.13 mm to +5.61 mm while pulling the
-ceiling down from 24.53 mm to 20.26 mm (IQR 7.71 → 5.19 mm).
+Three things follow, and the first two only become visible once the threshold is
+realistic:
 
-**Shortening still needed: yes — about 12 mm more.** Details and the sting in
-the tail (no single axis is an efficient place to cut) in
-[the shortening verdict](#shortening-verdict-yes-12-mm-and-no-single-axis-delivers-it).
+1. **The cant is worth much more than the strict scoring suggested.** Under
+   ≤2 mm it looked like the cant did nothing (103 → 107 fails, nominally
+   *worse*). Under ≤10 mm it removes **18 protrusion failures** (56 → 38) and
+   **20 overall failures** (87 → 67). The strict threshold was saturated — it
+   failed nearly everything either way, so it could not register the
+   improvement. This is the clearest argument for the recalibration.
+2. **Shortening is now cheap.** Because the distribution's centre sits just above
+   the new pass line rather than 12 mm above the old one, **4 mm** of reduction
+   takes protrusion to 64 % pass / 93 % within marginal, and **6 mm** to 74 % /
+   99 %. The earlier "~12 mm, and no efficient axis to cut it from" problem
+   largely dissolves — a corner chamfer plus a modest trim is now a plausible
+   route, and **no driver-stack redesign is required**.
+3. **The seal is now the binding constraint.** Among the 67 remaining failures,
+   **seal drives 44** against protrusion's 38. Worse, seal caps the whole design:
+   set protrusion to a perfect score on every ear and the build still only
+   reaches **2 pass / 58 marginal / 47 fail**, because just 10 ears pass seal at
+   all. Fixing protrusion alone cannot get this design to a pass.
+
+**Priority order is now: seal first, then ~4–6 mm of shortening.** Details in
+[the shortening verdict](#shortening-verdict-revised-46-mm-and-seal-is-now-the-binding-constraint).
+
+---
+
+## Protrusion threshold calibration
+
+The original ≤2 mm pass / ≤5 mm marginal pair was aspirational rather than
+physical. It describes a **custom-moulded** IEM, which is built to the ear
+impression and sits nearly flush; a **universal** IEM is a fixed body parked in
+the concha, and standing proud of the tragus plane is its normal condition, not
+a defect. Across 107 ears the old pass line was cleared exactly once, so it
+carried no information — every ear failed, and a metric that always fails cannot
+tell a good change from a bad one. That is precisely what happened to the cant.
+
+**What the published numbers can and cannot tell us.** Manufacturers quote
+*overall shell depth*, not protrusion past the tragus plane, and the concha
+swallows an unstated portion of the former — so specs cannot be converted into
+this metric directly. They do fix the order of magnitude: the SIMGOT EA1000 is
+22 × 17 × **20.7 mm**, and ~20–22 mm of overall shell depth is typical for a
+universal IEM. Against the 9–17 mm concha depth in
+`docs/EAR_ANTHROPOMETRY.md`, that leaves **single-digit millimetres standing
+proud on a typical ear**, which is the band these thresholds encode.
+
+**These thresholds are therefore a design-team calibration, not a measured
+industry standard**, and the report labels them as such:
+
+| | pass | marginal | fail |
+|---|---|---|---|
+| **recalibrated** (2026-08-31) | ≤ 10 mm | ≤ 14 mm | > 14 mm |
+| strict (original, retained for reference) | ≤ 2 mm | ≤ 5 mm | > 5 mm |
+
+10 mm proud is taken as normal for a universal fit; 14 mm as the limit before
+the shell fouls the helix/antihelix on insertion and starts levering itself out.
+Both live in `tryon.py` as `PROT_PASS` / `PROT_MARGINAL`, with the strict pair
+kept alongside. **Revisit once a prototype exists and can be measured worn** —
+this is the single assumption with the most leverage over the programme, and it
+is currently a judgement call rather than a measurement.
 
 ---
 
@@ -43,27 +102,49 @@ differs.
 
 ### Overall
 
+**Recalibrated thresholds (≤10 / ≤14 mm):**
+
 | dataset | n | cant 0 (P/M/F) | cant 45 (P/M/F) |
 |---|---|---|---|
-| hutubs | 58 | 0 / 0 / 58 | 0 / 0 / 58 |
-| sonicom | 45 | 0 / 1 / 44 | 0 / 0 / 45 |
-| synthetic | 4 | 0 / 0 / 4 | 0 / 0 / 4 |
+| hutubs | 58 | 0 / 6 / 52 | 0 / 22 / 36 |
+| sonicom | 45 | 0 / 12 / 33 | 0 / 18 / 27 |
+| synthetic | 4 | 0 / 2 / 2 | 0 / 0 / 4 |
+| **all** | **107** | **0 / 20 / 87** | **0 / 40 / 67** |
+
+HUTUBS carries most of the gain (6 → 22 marginal). The synthetic corners go the
+other way (2 → 0): they are the envelope extremes, and the cant's compression of
+the distribution costs the two easy corners more than it wins back on the two
+hard ones.
+
+**Strict thresholds (≤2 / ≤5 mm), for reference:**
+
+| dataset | n | cant 0 (P/M/F) | cant 45 (P/M/F) |
+|---|---|---|---|
 | **all** | **107** | **0 / 1 / 106** | **0 / 0 / 107** |
 
 ### Per axis
 
+Only the protrusion row changes with the threshold; seal, retention and
+clearance are identical under both scorings.
+
 | axis | cant 0 pass | marg | fail | cant 45 pass | marg | fail | verdict |
 |---|---|---|---|---|---|---|---|
-| seal | 5 | 38 | **64** | 10 | 53 | **44** | **much better** |
+| seal | 5 | 38 | **64** | 10 | 53 | **44** | **much better — but now the worst axis** |
 | retention | 57 | 37 | 13 | 48 | 53 | **6** | fails halved, passes down |
 | clearance | 76 | 27 | 4 | **101** | 5 | 1 | **much better** |
-| protrusion | 1 | 3 | 103 | 0 | 0 | **107** | no real change |
+| protrusion — **recalibrated** | 18 | 33 | **56** | 21 | 48 | **38** | **18 fewer fails** |
+| protrusion — strict | 1 | 3 | 103 | 0 | 0 | 107 | saturated, no signal |
 
 Seal failures drop by 20 and clearance passes rise by 25 — the canted body sits
 lower in the bowl and presents the skirt to the aperture at a far better angle.
 Retention fails halve (13 → 6) but passes fall (57 → 48), i.e. the wing moves
 from "not touching" into "touching a bit too much or not quite enough": median
 `wing_tip` goes −0.29 → −1.16 mm, straight through the −0.5 to −2.0 mm target.
+
+The two protrusion rows are the case for the recalibration in miniature. The
+strict row says the cant made things *worse* (103 → 107); the recalibrated row
+says it removed a third of the protrusion failures (56 → 38). The underlying
+millimetres are identical — only the strict row's saturation differs.
 
 ### Metric medians
 
@@ -100,7 +181,8 @@ you want from it, and exactly why it cannot substitute for shortening.
 
 ### Worst 5 ears
 
-Ranked by number of failing axes, then seating cost.
+Ranked by number of failing axes, then seating cost, under the **recalibrated**
+thresholds.
 
 **cant 0 (baseline)**
 
@@ -116,35 +198,45 @@ Ranked by number of failing axes, then seating cost.
 
 | ear | failing axes | cover | max gap | wing tip | protrusion | hard interf |
 |---|---|---|---|---|---|---|
-| synthetic xl_shallow | protrusion + retention + seal | 0.39 | 0.66 | +3.05 | 11.87 | −1.25 |
-| sonicom P0048 | clearance + protrusion + seal | 0.46 | 5.87 | −0.16 | 9.50 | −2.60 |
-| sonicom P0009 | protrusion + retention + seal | 0.46 | 4.17 | +1.05 | 13.24 | −1.03 |
-| hutubs pp67 | protrusion + retention + seal | 0.36 | 1.47 | +1.24 | 12.87 | −0.42 |
-| sonicom P0044 | protrusion + seal | 0.43 | 2.15 | +0.17 | **16.15** | +0.62 |
+| synthetic xl_shallow | retention + seal | 0.39 | 0.66 | +3.05 | 11.87 | −1.25 |
+| sonicom P0044 | protrusion + seal | 0.43 | 2.15 | +0.17 | 16.15 | +0.62 |
+| hutubs pp63 | protrusion + seal | 0.26 | 0.76 | −1.37 | 17.67 | +3.00 |
+| hutubs pp77 | protrusion + retention | 0.64 | 4.45 | +1.49 | **19.32** | +1.65 |
+| hutubs pp10 | protrusion + retention | 0.65 | 3.14 | +3.32 | 17.93 | −0.43 |
 
-The tail is visibly less bad: no canted ear fails four axes (the baseline's
-P0044 does), the worst canted protrusion in the top 5 is 16.15 mm against the
-baseline's 19.05 mm, and P0044 — worst on the baseline with four failing axes —
-drops to two. `xl_shallow`, the small-aperture/shallow-concha synthetic corner,
-is now the hardest ear in the set: a 4.5 mm-deep bowl simply cannot swallow this
-shell at any angle.
+The tail is markedly less bad. The baseline's worst ear fails **four** axes; the
+canted build's worst fails **two**, and no canted ear fails more than two.
+P0044 — worst on the baseline with all four axes failing — drops to two.
+
+Two things to read off this table. **Seal appears in three of the five**, which
+is the pattern that makes seal the priority. And `xl_shallow`, the
+small-aperture/shallow-concha synthetic corner, is now the hardest ear in the
+set *without failing protrusion at all* (11.87 mm, inside the marginal band): an
+8 mm-deep bowl on a 7 × 4.5 mm aperture defeats the skirt and the wing, not the
+shell depth. That is the envelope tail this design is furthest from serving.
 
 ---
 
-## Shortening verdict: yes, ~12 mm — and no single axis delivers it
+## Shortening verdict, revised: ~4–6 mm — and seal is now the binding constraint
 
-Further reduction needed **on top of** the cant, measured on the canted build:
+Further reduction needed **on top of** the cant, measured on the canted build.
+Under the recalibrated thresholds the economics change completely:
 
-| along-normal stack removed | protrusion ≤ 2 mm | ≤ 5 mm |
-|---|---|---|
-| 0 mm (today) | 0.0 % | 0.0 % |
-| 4 mm | 2.8 % | 12.1 % |
-| 8 mm | 19.6 % | 50.5 % |
-| 10 mm | 38.3 % | 67.3 % |
-| **12 mm** | **64.5 %** | **84.1 %** |
-| **14 mm** | **73.8 %** | **96.3 %** |
+| stack removed | ≤ 10 mm (pass) | ≤ 14 mm (marginal) | > 14 mm (fail) |
+|---|---|---|---|
+| 0 mm (today) | 20 % | 64 % | 36 % |
+| 2 mm | 38 % | 74 % | 26 % |
+| 3 mm | 50 % | 84 % | 16 % |
+| **4 mm** | **64 %** | **93 %** | **7 %** |
+| **6 mm** | **74 %** | **99 %** | **1 %** |
+| 8 mm | 93 % | 100 % | 0 % |
 
-**But there is no cheap axis to cut.** Sensitivity of protrusion to 1 mm removed
+For reference, the same sweep against the strict ≤2 mm line needed **12 mm** for
+64 % and **14 mm** for 74 %. The requirement fell by two thirds purely because
+the target moved to a defensible place — which is why the threshold, not the
+geometry, was the highest-leverage thing on this list.
+
+**4–6 mm is reachable; 12 mm was not.** Sensitivity of protrusion to 1 mm removed
 from the shell along each design axis (1.00 would be perfectly efficient):
 
 | design axis | what it is | mm of protrusion removed per mm cut |
@@ -153,35 +245,36 @@ from the shell along each design axis (1.00 would be perfectly efficient):
 | +Z | faceplate normal / stack height | 0.49 |
 | +X | body long axis, toward the nozzle | 0.41 |
 
-The reason is that the worst-protruding point is a **corner**, not a face: in
-design coordinates it sits at a median of (−11.5, −4.1, +3.7) — the
-posterior-inferior corner of the faceplate, which is diagonal to all three axes.
-Cutting 12 mm of protrusion out of the +Z stack alone would need 24 mm of Z, and
-the entire rigid Z stack is 13.2 mm. Even an aggressive combined trim — 6 mm of
-X, 4 mm of Y, 4 mm of Z — buys only ≈ 7 mm.
+The worst-protruding point is a **corner**, not a face: in design coordinates it
+sits at a median of (−11.5, −4.1, +3.7), the posterior-inferior corner of the
+faceplate, diagonal to all three axes. That was fatal when 12 mm was needed —
+24 mm of +Z out of a 13.2 mm stack. At a 4–6 mm target it is merely a
+constraint on *where* to cut: a combined trim of 6 mm X + 4 mm Y + 4 mm Z buys
+≈ 7 mm, comfortably past the 6 mm mark, and a corner chamfer alone plausibly
+covers the 4 mm case.
 
-So the honest recommendation is **not** "shave the shell":
+### Revised priority
 
-1. **Chamfer the posterior-inferior faceplate corner first.** It is the single
-   protruding point on most ears and it is diagonal, so a corner break is worth
-   more per mm of material than any face cut. Cheap, and worth re-measuring
-   before anything structural.
-2. **Then attack the driver/mag-float stack itself.** The core is
-   17.0 × 16.0 × 9.8 mm, 394 mm³. Getting 12 mm of protrusion out means the
-   shell has to get materially smaller in *volume*, not just thinner in one
-   direction — this is a driver-selection and magnet-layout question, not a
-   surfacing one.
-3. **Re-check the ≤2 mm pass threshold.** It is strict. Even the baseline only
-   ever cleared it on 1 ear of 107, and real universal IEMs do stand somewhat
-   proud of the tragus plane. If 8–10 mm is in fact acceptable in the industrial
-   design, the canted build is already at 6 % / 20 % rather than 0 %, and the
-   shortening target drops by more than half. **This threshold should be settled
-   before committing to a driver change** — it moves the requirement more than
-   any geometry change available.
+1. **Fix the seal — it is now the ceiling, not protrusion.** Seal drives **44 of
+   the 67** remaining failures, against protrusion's 38. And it binds
+   independently: give every ear a perfect protrusion score and the build still
+   only reaches **2 pass / 58 marginal / 47 fail**, because only 10 ears pass
+   seal at all. No amount of shortening rescues this design on its own. The
+   v1 seal analysis still stands — median rim gap 2.76 mm against a
+   0.25 mm-wall land, i.e. the skirt is asked for travel it does not have — and
+   the reworked 4.5 mm contact land moved seal passes only 5 → 10. Treat skirt
+   compliance (or a smaller rim that lands inside the cavum floor) as the
+   primary open problem.
+2. **Chamfer the posterior-inferior faceplate corner.** Highest value per mm of
+   material removed, since it is the actual protruding point on most ears, and
+   it is cheap. Re-measure after; it may cover the 4 mm case by itself.
+3. **Trim 4–6 mm of stack if the chamfer is not enough** — a combined X/Y/Z trim,
+   not a single-axis cut. **A driver-stack redesign is no longer indicated**:
+   that recommendation was an artefact of the 12 mm target.
 
 Tune the cant angle only after the above: at 45° the jacket has already started
 lifting off the concha floor (+0.93 mm), so more cant trades seal and bedding
-for a protrusion gain that the tail data says is nearly exhausted.
+for a protrusion gain the tail data says is nearly exhausted.
 
 ---
 
@@ -272,23 +365,33 @@ canted build under a different sampling seed (`--field-seed 7`):
 | `protrusion` | 0.98 mm | 4.18 mm |
 | `hard_min` | 0.51 mm | 2.31 mm |
 
+Grade agreement under the **recalibrated** thresholds:
+
 | axis | same grade | fail count, seed 0 → 7 |
 |---|---|---|
-| protrusion | **107 / 107** | 107 → 107 |
 | clearance | 98 / 107 | 1 → 0 |
+| protrusion | 81 / 107 | 38 → 36 |
 | seal | 57 / 107 | 44 → 34 |
 | retention | 55 / 107 | 6 → 10 |
-| **overall** | **107 / 107** | **107 → 107** |
+| **overall** | **78 / 107** | **0/40/67 → 1/42/64** |
 
-**The protrusion conclusion and the overall verdict are exactly reproducible**
-(107/107 on both). The **seal and retention axis counts are noisy** — agreement
-only 57/107 and 55/107, because most of the population sits near those
-thresholds, and the wing tip rests on the antihelix ridge where a sampled
-signed-distance field's sign flips within ~0.3 mm. Read "seal improved
-substantially, most ears remain marginal" and "retention fails roughly halved"
-as the findings; **do not quote the individual seal/retention counts as
-precise.** The side-by-side conclusions above rest on protrusion and clearance,
-which are stable.
+Under the strict thresholds the protrusion row read 107/107 — but only because
+every ear failed under both seeds, which is agreement without information. The
+recalibrated row (81/107) is the honest figure, and it is the one to trust.
+
+What survives reseeding, and what does not:
+
+- **Robust — the conclusions this report rests on.** Aggregate counts move by
+  only a few ears (protrusion fails 38 → 36, overall fails 67 → 64), so the
+  cant's ~18-failure improvement and the ~4–6 mm shortening estimate are far
+  larger than the noise. Clearance is near-exact (98/107).
+- **Noisy — do not quote per-ear.** Seal (57/107) and retention (55/107) agree
+  barely more than half the time, because most of the population sits close to
+  those thresholds and the wing tip rests on the antihelix ridge, where a
+  sampled signed-distance field's sign flips within ~0.3 mm. Individual seal and
+  retention counts are directional only.
+- **Seal's primacy holds either way**: it is the largest fail count under both
+  seeds (44 and 34), and under both it exceeds protrusion.
 
 Tables in this report are `--field-seed 0`.
 
@@ -311,8 +414,12 @@ validate anything that enters the canal, including the three nozzle inserts.
   seal numbers are optimistic. The 103 real ears carry the conclusions.
 - **Both scan populations are European-recruited university cohorts**; the four
   synthetic corners are the only coverage of the envelope tails.
-- **The ≤2 mm protrusion pass threshold is unvalidated** against industrial
-  design intent — see recommendation 3 above.
+- **The protrusion thresholds are a design-team calibration, not a measurement.**
+  ≤10 / ≤14 mm is a judgement about what a universal fit may stand proud of the
+  tragus plane, anchored only on published *overall shell depths* (a different
+  quantity) and the concha-depth range. It is the highest-leverage assumption in
+  this report — it moved the shortening requirement from ~12 mm to ~4–6 mm — and
+  it should be replaced with worn measurements from a prototype.
 
 ## Reproducing
 

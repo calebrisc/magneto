@@ -174,10 +174,10 @@ def stability_check(rec, P, field, transform_fn, contacts=None,
                 got.append(w[j])
         if not got:
             return 0
-        # decimate to at most 12 representative points per group
+        # decimate to at most 18 representative points per group
         got = np.array(got)
-        if len(got) > 12:
-            got = got[np.linspace(0, len(got) - 1, 12).astype(int)]
+        if len(got) > 18:
+            got = got[np.linspace(0, len(got) - 1, 18).astype(int)]
         gi = len(groups)
         for p in got:
             _, idx = field.tree.query(p[None, :])
@@ -185,7 +185,44 @@ def stability_check(rec, P, field, transform_fn, contacts=None,
         groups[gi] = (kind, cap)
         return len(got)
 
-    n_skirt = add("skirt", ["rim", "soft"], "cap", SKIRT_PRELOAD)
+    def add_ring(cap, n_keep=24):
+        """The skirt as a DISTRIBUTED ring, not a clump of nearby samples.
+
+        The sealing land presses the aperture funnel all the way round.  Spread
+        evenly by AZIMUTH, that ring resists lateral translation and -- because
+        the contacts sit at a radius from the centre of mass -- rotation about
+        every axis.  What it cannot resist is pull-out along its own axis, since
+        every one of its normals is roughly perpendicular to that.  Sampling it
+        as a handful of adjacent points would silently throw away the moment
+        arm, so the ring is decimated by angle rather than by index.
+        """
+        import seal_compliance as sc
+        ring = transform_fn(sc.rim_from_mesh(n=360), M)
+        d = field.query(ring)
+        hit = np.where(np.abs(d) <= CONTACT_BAND)[0]
+        if len(hit) == 0:
+            return 0
+        c = ring.mean(axis=0)
+        ax = M[:3, :3] @ __import__("earfit").NOZZLE_AXIS
+        ax = ax / np.linalg.norm(ax)
+        u, v = _basis(ax)
+        off = ring[hit] - c
+        az = np.degrees(np.arctan2(off @ v, off @ u)) % 360.0
+        keep, seen = [], []
+        step = 360.0 / n_keep
+        for k, j in enumerate(hit):
+            b = int(az[k] // step)
+            if b not in seen:
+                seen.append(b); keep.append(j)
+        gi = len(groups)
+        for j in keep:
+            pt = ring[j]
+            _, idx = field.tree.query(pt[None, :])
+            pts.append(pt); nrms.append(field.nrm[int(idx[0])]); owner_of.append(gi)
+        groups[gi] = ("cap", cap)
+        return len(keep)
+
+    n_skirt = add_ring(SKIRT_PRELOAD)
     tip = float(np.median(field.query(transform_fn(P["wing_tip"], M))))
     f_wing = K_WING * max(-tip, 0.0)
     n_wing = add("wing", ["wing_tip", "wing_mid"], "cap", f_wing) if f_wing > 0 else 0

@@ -235,11 +235,26 @@ def contract_check(rec, patch, P, field):
         f"{100*cover:.0f}% / {gap:.0f}deg", continuous and inside)
 
     # --- wing / rail pad --------------------------------------------------- #
+    # Only meaningful on a gyroid-wing build.  With wing_style="plungers" there is
+    # no wing at all, and this row was reading the 40 most-superior vertices of
+    # jacket_wing -- i.e. the jacket's top edge, which is not a retention feature.
+    # Retire it rather than report a pass or fail about a part that is gone.
+    has_wing = True
+    try:
+        import generate
+        has_wing = generate.PARAMS.get("wing_style", "gyroid") == "gyroid"
+    except Exception:                                            # noqa: BLE001
+        pass
     tip = float(np.median(q("wing_tip")))
     lo, hi = CONTRACT_WING_BAND
-    row("wing / rail pad", "MUST TOUCH",
-        f"tip median {tip:+.2f} mm; spring band [{lo:+.1f}, {hi:+.1f}]",
-        f"{tip:+.2f} mm", lo <= tip <= hi)
+    if has_wing:
+        row("wing / rail pad", "MUST TOUCH",
+            f"tip median {tip:+.2f} mm; spring band [{lo:+.1f}, {hi:+.1f}]",
+            f"{tip:+.2f} mm", lo <= tip <= hi)
+    else:
+        row("wing / rail pad", "MUST TOUCH",
+            "no wing in this build (wing_style=plungers); retention is the "
+            "plunger pads row below", "n/a", None)
 
     # --- jacket ear-face --------------------------------------------------- #
     jac = q("jacket")

@@ -7,39 +7,39 @@
  "note": "Seated pose exactly as scored in docs/TRYON_REPORT.md. Carrier and nozzle insert are modelled in the nozzle-local frame and carry NOZZLE_T before the seating transform. Meshes are decimated by vertex clustering for viewing only -- do not measure them.",
  "scores": {
   "grade": "fail",
-  "worst_metric": "protrusion",
+  "worst_metric": "protrusion+retention",
   "rim_cover": 0.7222222222222222,
-  "rim_gap": 3.624519754924521,
-  "rim_press": -2.0209956714767885,
-  "wing_tip": -0.5769622343467433,
-  "wing_mid": 1.6787682209695147,
-  "jacket_mean": 4.2649401539654,
-  "protrusion": 15.867280842350038,
-  "hard_min": -0.8892721484220281,
+  "rim_gap": 3.211066117491943,
+  "rim_press": -2.056018646969383,
+  "wing_tip": 1.0166163039814209,
+  "wing_mid": 1.6183466356182037,
+  "jacket_mean": 3.462740191516309,
+  "protrusion": 16.05576898723939,
+  "hard_min": -1.0092994921439717,
   "g_seal": "marginal",
-  "g_retention": "pass",
-  "g_clearance": "pass",
+  "g_retention": "fail",
+  "g_clearance": "marginal",
   "g_protrusion": "fail"
  },
  "seal_compliance": {},
  "seating_transform": [
   [
-   0.6860268404420959,
-   -0.331111146092117,
-   0.6478677203925194,
-   -4.770665795630599
+   0.708365679848668,
+   -0.2847010216437872,
+   0.6458818714652997,
+   -4.6340418503355005
   ],
   [
-   0.7179809292419558,
-   0.4522224616894518,
-   -0.5291485900844771,
-   -92.0568355816612
+   0.6951072960309626,
+   0.4403769059683198,
+   -0.5682376507186877,
+   -92.31063010169056
   ],
   [
-   -0.11777333924913962,
-   0.8281668032933321,
-   0.5479682349233483,
-   -1.2212020451121686
+   -0.12265362048084089,
+   0.8514772509966154,
+   0.5098456437179673,
+   -0.9867451641906904
   ],
   [
    0.0,

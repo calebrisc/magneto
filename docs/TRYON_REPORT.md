@@ -277,6 +277,75 @@ P0023 the surface in that direction falls away far faster than the other two
 sites. Worth checking whether that is P0023-specific or general before re-aiming
 — it is the obvious next single-ear question.
 
+## P0023 on `e2df120` (two-leg build) — 6 pass, 1 fail, 1 n/a
+
+Two plungers — cymba with a lip-hook pad, antihelix_undercut — with `tragus_inner`
+disabled after the aim sweep proved it unreachable. Freshly re-seated.
+
+| part | intent | value | | detail |
+|---|---|---|---|---|
+| skirt land | MUST TOUCH | 96 % / 8° | **PASS** | was 92 % / 17° on the three-leg build; aperture 2.9 mm off centre vs a 9.4 mm rim, so the loop encloses the canal |
+| wing / rail pad | MUST TOUCH | n/a | **n/a** | **retired** — `wing_style=plungers`, there is no wing |
+| jacket ear-face | MUST REST | −1.05 mm | PASS | resting, within 2.5 mm |
+| nozzle + insert | MUST NOT TOUCH | +0.53 mm | PASS | recessed, clear |
+| core / faceplate | MUST NOT TOUCH | +0.63 mm | PASS | no direct flesh load |
+| plunger pads | MUST TOUCH | +1.37 mm | **PASS** | cymba +1.37, antihelix −0.25 — **both legs inside the window** for the first time |
+| **STABILITY** | MUST RESIST | **0.31×** | **FAIL** | capacity 0.47 N vs demand 1.05 N; 13 of 43 contacts interlock |
+| cable exit | MUST CLEAR | +5.49 mm | PASS | boot clears |
+
+Dropping the unreachable third leg *improved* every other row: the skirt seals
+properly (96 %/8°), both remaining pads land in their adjustment window, and
+stability rose from **0.04× to 0.31×** with interlocking contacts up from 8/48 to
+13/43. The `wing / rail pad` row is now reported as n/a rather than passing or
+failing — on a plunger build it was reading the jacket's top edge, which is not a
+retention feature.
+
+### The skirt is now a distributed ring contact
+
+Previously the skirt was sampled as up to 12 points taken in index order from
+`rim` and `soft`, which can clump. It is now decimated **by azimuth** into 24
+points around the sealing land, so the ring keeps its moment arm. That matters
+because of what the skirt can and cannot do: pressing the aperture funnel all the
+way round, it resists **lateral translation and rotation about every axis**, but
+**not pull-out along its own axis** — every one of its normals is roughly
+perpendicular to that direction. Sampling it as a clump silently discarded the
+rotational resistance.
+
+### Cymba lip-hook: partial interlock credit
+
+The lip-hook pad does now reach undercut surface — pad-point `n · pull_out` runs
+down to **−0.86**, against **+0.41 median with no interlock at all** on the
+previous build, and 3 of its 9 sample points sit on interlocking surface. But
+only **1 of 9 both touches and interlocks**: the pad has found the lip and is
+resting mostly beside it rather than under it. The credit is real but partial,
+and the remaining move is geometric — bias the pad another millimetre or two into
+the overhang.
+
+### What a fix must supply
+
+Worst unresisted direction is a cable tug at **(−0.50, −0.71, −0.50)** —
+posterior, inferior and medial together. Capacity is 0.47 N against 1.05 N of
+demand, so **a fix must supply roughly 0.6 N more resisted load along that
+direction.** Three levers, swept on this ear:
+
+| lever | result |
+|---|---|
+| stiffer springs | 1.25 N/pad needed for margin 1.0 — **7× the shipped 0.18 N** and 2.5× the 0.49 N high end. Not plausible. |
+| **friction** | μ 0.4 → 0.31×, μ 0.6 → 0.79×, **μ 0.8 → 1.19× (passes)** |
+| interlock | currently 1 of 9 cymba points both touching and interlocking; seating the pad fully under the lip converts friction-limited holding into geometric holding |
+
+**The verdict hinges on μ, which is an assumption rather than a measurement.**
+μ = 0.40 was chosen as a deliberately dry, conservative value; published
+skin-on-elastomer figures span roughly 0.3–1.0, and at μ = 0.8 this build passes.
+So the honest statement is: *this design fails at conservative friction and
+passes at optimistic friction, and nobody has measured the real number.*
+Measuring pad-material friction against skin is now the highest-value
+experiment available — it is worth more than any further geometry iteration,
+because it decides whether ~0.6 N is missing at all.
+
+Failing that, the geometric route is the cymba lip-hook: it needs no more spring
+force, only for the pad to sit under the overhang the scans already show.
+
 ## Deriving the third plunger aim from data
 
 `plunger_aim_search.py` sweeps candidate aims on a 10° grid and, for each ear,

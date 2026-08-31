@@ -21,8 +21,10 @@ corrected seating cost, so the numbers below are directly comparable. They are
 ## Verdict
 
 **Keep the cant — under realistic thresholds it is worth far more than it first
-appeared. Shortening is still wanted, but ~4–6 mm, not ~12 mm. And the top
-failure axis is no longer protrusion: it is the seal.**
+appeared. Shortening is still wanted, but ~4–6 mm, not ~12 mm. Do NOT redesign
+the seal geometry: once the skirt is modelled as compliant rather than rigid it
+mostly works, and its residual failures are one specific, local problem at the
+intertragic notch. Protrusion is the top failure axis.**
 
 | | cant 0 (baseline) | cant 45 (default) |
 |---|---|---|
@@ -48,14 +50,19 @@ realistic:
    99 %. The earlier "~12 mm, and no efficient axis to cut it from" problem
    largely dissolves — a corner chamfer plus a modest trim is now a plausible
    route, and **no driver-stack redesign is required**.
-3. **The seal is now the binding constraint.** Among the 67 remaining failures,
-   **seal drives 44** against protrusion's 38. Worse, seal caps the whole design:
-   set protrusion to a perfect score on every ear and the build still only
-   reaches **2 pass / 58 marginal / 47 fail**, because just 10 ears pass seal at
-   all. Fixing protrusion alone cannot get this design to a pass.
+3. **The seal is *not* the binding constraint — that was an artefact of scoring
+   a compliant skirt as rigid.** The rigid metric passed 10 ears. Scoring the
+   same 107 seatings with a deformation budget and an actual seal criterion
+   (a continuous closed loop, not a coverage fraction) passes **67 at the
+   conservative 2.5 mm budget and 99 at the optimistic 4.0 mm**. Substituting
+   that into the overall grade turns **0 / 40 / 67 into 10 / 52 / 45** — the
+   first ears in this programme to pass anything — and protrusion returns as the
+   dominant axis, driving **38** of the 45 remaining failures against seal's 8.
+   See [compliance-aware seal](#compliance-aware-seal-scoring).
 
-**Priority order is now: seal first, then ~4–6 mm of shortening.** Details in
-[the shortening verdict](#shortening-verdict-revised-46-mm-and-seal-is-now-the-binding-constraint).
+**Priority order: ~4–6 mm of shortening first, then a targeted intertragic-notch
+fix on the skirt.** A wholesale seal redesign is not indicated. Details in
+[the shortening verdict](#shortening-verdict-revised-46-mm-and-the-notch).
 
 ---
 
@@ -129,7 +136,7 @@ clearance are identical under both scorings.
 
 | axis | cant 0 pass | marg | fail | cant 45 pass | marg | fail | verdict |
 |---|---|---|---|---|---|---|---|
-| seal | 5 | 38 | **64** | 10 | 53 | **44** | **much better — but now the worst axis** |
+| seal (rigid metric) | 5 | 38 | **64** | 10 | 53 | **44** | **much better** — but see [compliance-aware seal](#compliance-aware-seal-scoring); the rigid metric badly understates it |
 | retention | 57 | 37 | 13 | 48 | 53 | **6** | fails halved, passes down |
 | clearance | 76 | 27 | 4 | **101** | 5 | 1 | **much better** |
 | protrusion — **recalibrated** | 18 | 33 | **56** | 21 | 48 | **38** | **18 fewer fails** |
@@ -137,6 +144,9 @@ clearance are identical under both scorings.
 
 Seal failures drop by 20 and clearance passes rise by 25 — the canted body sits
 lower in the bowl and presents the skirt to the aperture at a far better angle.
+(The seal row here is the **rigid** metric. Scored against a compliant skirt the
+same seatings pass 67 rather than 10; the cant's seal improvement survives, but
+the absolute counts in this row should not be read as the seal's real state.)
 Retention fails halve (13 → 6) but passes fall (57 → 48), i.e. the wing moves
 from "not touching" into "touching a bit too much or not quite enough": median
 `wing_tip` goes −0.29 → −1.16 mm, straight through the −0.5 to −2.0 mm target.
@@ -217,7 +227,123 @@ shell depth. That is the envelope tail this design is furthest from serving.
 
 ---
 
-## Shortening verdict, revised: ~4–6 mm — and seal is now the binding constraint
+## Compliance-aware seal scoring
+
+`tryon.py`'s seal axis is **wrong about the physics in two ways**, and both make
+it pessimistic. It treats the skirt as a rigid ring — scoring the fraction of the
+Ø19 rim lying within 1.5 mm of flesh — when the real part is a 0.35 mm
+Shore-A-10/15 silicone flare that folds and drapes over 2–4 mm, carried on a
+mag-float carrier with **1.5 mm of axial travel** to seat it. And it scores
+*coverage*, when what seals is a **closed loop**: a rim touching over 90 % of its
+perimeter with one continuous 36° hole leaks, while one touching 88 % broken into
+a dozen 3° specks does not.
+
+`seal_compliance.py` re-scores the **same cant-45 seatings** — no new seating
+optimisation, the poses are exactly as `align_ear.py` left them — with:
+
+- the rim sampled at **360 points** (1°; an 18° gap criterion needs finer
+  resolution than the 72 points `tryon.py` uses);
+- a **deformation budget** *B*: a sample is sealed where its signed distance
+  ≤ *B*. Negative means the lip is already pressed into flesh; positive means the
+  silicone must span that gap and can, within budget. (One-sided by design —
+  a lip pressed into flesh seals. Over-burial is bounded by the clearance axis
+  and by `c_soft` in the seating cost, not here.)
+- the carrier's **1.5 mm axial travel** modelled explicitly as a 1-D search along
+  the nozzle axis — a seating-*depth* search inside the seal metric, not a re-run
+  of the 6-DOF pose optimiser;
+- a **continuity** criterion: sealed over ≥ 95 % of the perimeter **and** largest
+  single unsealed arc ≤ 18°. Both, because either alone is gameable as above.
+
+### Seal pass counts
+
+| skirt budget | model | seal pass | fail | pass rate |
+|---|---|---|---|---|
+| 1.5 mm | rigid | 45 | 62 | 42 % |
+| **2.5 mm** | **conservative** | **67** | 40 | **63 %** |
+| **4.0 mm** | **optimistic** | **99** | 8 | **93 %** |
+
+For comparison, `tryon.py`'s rigid coverage metric passes **10**. Note the
+1.5 mm row here already passes 45 — most of that difference is the *criterion*
+(continuity instead of a 0.75 coverage fraction), before any extra compliance.
+
+### Where the gain comes from
+
+| skirt budget | pass, drape only | pass, drape + 1.5 mm travel | travel contributes |
+|---|---|---|---|
+| 1.5 mm | 26 | 45 | +19 |
+| 2.5 mm | 49 | 67 | +18 |
+| 4.0 mm | 90 | 99 | +9 |
+
+The carrier travel is worth ~18 ears on its own at the conservative budget — it
+is doing as much work as the silicone, and it is the cheaper of the two to
+guarantee. Median travel actually used: 1.40 mm at 1.5 mm budget, 1.10 mm at
+2.5 mm, 0.00 mm at 4.0 mm (at the optimistic budget the drape alone closes it).
+
+| skirt budget | median sealed arc | median worst gap |
+|---|---|---|
+| 1.5 mm | 92 % | 25° |
+| 2.5 mm | 99 % | 2° |
+| 4.0 mm | 100 % | 0° |
+
+At the conservative budget the median ear is sealed over 99 % of its rim with a
+2° worst gap. The seal problem is **not** a broad, population-wide failure — it
+is a small number of ears with one large hole each.
+
+### The hole is at the intertragic notch
+
+The intertragic notch — the soft gap between tragus and antitragus at the
+inferior-anterior margin of the concha — is where the skirt has no cartilage wall
+to land on. Classifying each failing ear by where its largest unsealed arc sits
+(notch sector = ±45° about the inferior-anterior direction, i.e. **25 % of the
+perimeter**):
+
+| skirt budget | failing ears | gap at the notch | elsewhere | notch share | enrichment vs uniform |
+|---|---|---|---|---|---|
+| 1.5 mm | 62 | **48** | 14 | 77 % | **3.1×** |
+| 2.5 mm | 40 | **33** | 7 | 82 % | **3.3×** |
+| 4.0 mm | 8 | **7** | 1 | 88 % | **3.5×** |
+
+**This is the finding.** The notch occupies a quarter of the rim but takes
+three-quarters to seven-eighths of all seal failures, and the enrichment *rises*
+with budget — the more compliance you add, the more exclusively the residual
+leak is a notch problem. Everything else closes up; the notch does not.
+
+The 8 ears still leaking at the optimistic 4.0 mm budget, 7 of them at the notch:
+
+| ear | sealed arc | worst gap | at notch |
+|---|---|---|---|
+| hutubs pp76 | 94 % | 20° | yes |
+| hutubs pp22 | 93 % | 27° | yes |
+| hutubs pp88 | 93 % | 27° | yes |
+| hutubs pp49 | 91 % | 31° | yes |
+| hutubs pp41 | 89 % | 39° | yes |
+| hutubs pp72 | 87 % | 48° | yes |
+| sonicom P0048 | 86 % | 49° | no |
+| synthetic xs_shallow | 76 % | 88° | yes |
+
+`xs_shallow` — the 7 × 4.5 mm aperture on an 8 mm concha — is in a different
+regime: an 88° hole is a quarter of the rim open, and no plausible skirt closes
+it. That corner needs a smaller rim, not more compliance.
+
+### What this implies for the design
+
+**Do not redesign the seal geometry wholesale.** At the conservative budget the
+skirt already closes 63 % of ears and the median ear seals over 99 % of its rim.
+The targeted change is a **local compliance increase across the
+inferior-anterior sector of the skirt** — a deeper or thinner-walled flare, or
+more free length, over roughly the 90° facing the intertragic notch — plus
+**protecting the 1.5 mm of carrier travel**, which is worth ~18 ears by itself
+and must not be eroded by tolerance stack-up in the mag-float assembly.
+
+Two caveats. This is a **kinematic** compliance model: it asks whether the
+silicone can *reach*, not whether it reaches with enough contact pressure to seal
+acoustically — that needs the FEA in `MECH_VALIDATION.md`, and the 4.0 mm budget
+in particular assumes a drape that is nearly free. And the 2.5 / 4.0 mm budgets
+are engineering estimates of the flare's travel, not measurements.
+
+---
+
+## Shortening verdict, revised: ~4–6 mm — and the notch
 
 Further reduction needed **on top of** the cant, measured on the canted build.
 Under the recalibrated thresholds the economics change completely:
@@ -255,22 +381,27 @@ covers the 4 mm case.
 
 ### Revised priority
 
-1. **Fix the seal — it is now the ceiling, not protrusion.** Seal drives **44 of
-   the 67** remaining failures, against protrusion's 38. And it binds
-   independently: give every ear a perfect protrusion score and the build still
-   only reaches **2 pass / 58 marginal / 47 fail**, because only 10 ears pass
-   seal at all. No amount of shortening rescues this design on its own. The
-   v1 seal analysis still stands — median rim gap 2.76 mm against a
-   0.25 mm-wall land, i.e. the skirt is asked for travel it does not have — and
-   the reworked 4.5 mm contact land moved seal passes only 5 → 10. Treat skirt
-   compliance (or a smaller rim that lands inside the cavum floor) as the
-   primary open problem.
-2. **Chamfer the posterior-inferior faceplate corner.** Highest value per mm of
-   material removed, since it is the actual protruding point on most ears, and
-   it is cheap. Re-measure after; it may cover the 4 mm case by itself.
-3. **Trim 4–6 mm of stack if the chamfer is not enough** — a combined X/Y/Z trim,
-   not a single-axis cut. **A driver-stack redesign is no longer indicated**:
+Now that the seal is scored against a compliant skirt, the ordering inverts.
+Overall grade with the compliance-aware seal (conservative budget) substituted
+into the recalibrated scoring: **10 pass / 52 marginal / 45 fail**, up from
+0 / 40 / 67 — and of those 45 failures, **protrusion drives 38**, seal 8,
+retention 6, clearance 1.
+
+1. **Chamfer the posterior-inferior faceplate corner.** Protrusion is the
+   dominant axis again, and this is the highest value per mm of material
+   removed, since it is the actual protruding point on most ears. Cheap.
+   Re-measure after; it may cover the 4 mm case by itself.
+2. **Trim 4–6 mm of stack if the chamfer is not enough** — a combined X/Y/Z
+   trim, not a single-axis cut. **A driver-stack redesign is not indicated**:
    that recommendation was an artefact of the 12 mm target.
+3. **Add local skirt compliance across the inferior-anterior 90°**, facing the
+   intertragic notch, and **protect the 1.5 mm of carrier travel** in the
+   mag-float tolerance stack. This is a targeted fix worth ~8 ears, not the
+   wholesale seal redesign the rigid metric appeared to demand.
+4. **Treat the small-aperture/shallow-concha corner separately.** `xs_shallow`
+   fails seal (88° hole), retention and protrusion at once. A Ø19 rim on a
+   7 × 4.5 mm aperture in an 8 mm bowl is the wrong size of part, and no amount
+   of compliance fixes it — if that tail matters, it needs a smaller rim.
 
 Tune the cant angle only after the above: at 45° the jacket has already started
 lifting off the concha floor (+0.93 mm), so more cant trades seal and bedding
@@ -434,6 +565,7 @@ done
 # canted default (this report's headline)
 .venv/bin/python generate.py --all
 .venv/bin/python align_ear.py --reseat --jobs 8 && .venv/bin/python tryon.py
+.venv/bin/python seal_compliance.py           # compliance-aware seal re-score
 
 # collinear baseline, same checkout
 .venv/bin/python generate.py --all --cant 0 --out stl_cant0 --ear right

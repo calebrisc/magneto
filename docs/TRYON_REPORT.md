@@ -722,6 +722,129 @@ which is right for a face-on contact and wrong for one hooked under a lip. It
 therefore understates exactly the mechanism recommendation 1 relies on — another
 reason to measure interlock directly rather than search aims.
 
+## Marked single ear — P0023, seated by construction
+
+`viz_marked.py` → **`viz/marked_P0023.glb`** (2.67 MB). No optimiser anywhere in
+it. The pose is built directly from the landmarks:
+
+- skirt rim centre placed on the detected aperture centroid — lands **0.000 mm**
+  from it, by construction;
+- faceplate forced to face out of the head;
+- nozzle on the canal axis — **constructed, not probed.** A constrained probe
+  (cone about the inward floor normal) returns only **1.48 mm** of run and
+  saturates at the cone edge, because these scans have no canal to find. The
+  unconstrained `canal_probe` is worse: on P0023 it points **98° from the floor
+  normal**, skimming along the concha wall. So the axis is set anatomically —
+  inward concha-floor normal raked **40°** anteriorly, the angle
+  `EAR_ANTHROPOMETRY.md` gives — and the render says so.
+
+Markers: the **magenta ring is measured, not drawn** — 81 points found by casting
+rays radially outward from the aperture centroid and taking the first surface
+hit, so it traces the real funnel wall (mean radius 3.15 mm). A magenta sphere
+marks the centroid; 5022 ear faces within 11 mm are tinted as the cavum floor.
+
+Worth seeing in the render: by-construction seating is **not collision-free** —
+core and jacket come to 0.03–0.04 mm of flesh. That is the honest consequence of
+placing the part where the landmarks say it goes rather than where a cost
+function negotiates.
+
+## Gyro-arm region variance — how many stages does the anatomy demand?
+
+`gyro_arm_variance.py`, in the skirt-datum frame (origin = aperture centroid,
++Z = the constructed canal axis, +Y superior, +X anterior; azimuth measured from
+anterior toward superior).
+
+**Two corrections made while building this, both of which changed the answer.**
+The cached patch is the whole 85 mm ear window — pinna, helix and a slab of
+scalp — so an unconstrained radial band returned the *helix* as the concha rim
+and reported 30–48 mm pocket depths against an anatomical 9–17 mm. The
+measurement region is now the bowl only (r 4–15 mm, |z| < 12 mm). And the four
+synthetic corners are excluded: they are parametric bowls, and mixing them into
+an anatomical variance study inflates the very number being measured. **n = 9
+real ears.** The same script runs unchanged over all ~103 aligned ears, which is
+the obvious next step.
+
+### Feature statistics (raw, mm)
+
+| feature | mean | SD | range | n |
+|---|---|---|---|---|
+| **crus helicis, distance from origin** | **14.27** | **1.30** | 13.04–15.91 | **4** |
+| cymba lip centroid, distance | 14.32 | 2.32 | 11.41–18.41 | 9 |
+| cymba floor, distance | 9.27 | 4.13 | 4.04–15.02 | 9 |
+| cymba pocket depth | 9.89 | 3.87 | 4.15–14.13 | 9 |
+| antihelix lip, closest point | 8.40 | 4.21 | 4.22–13.74 | 7 |
+| antihelix arc radius | 3.35 | 1.68 | 1.31–6.21 | 7 |
+| antihelix arc extent | 278° | **91°** | 143–357° | 7 |
+
+Size proxy (basin inscribed radius, independent of these detectors): 7.04 ±
+1.45 mm, **21 % CV**.
+
+### Where variance is lowest — candidate fixed geometry
+
+Concha rim path, point-wise across-ear SD by region:
+
+| rim region | SD (raw) |
+|---|---|
+| **anterior / crus** | **1.11 mm** |
+| cymba | 2.52 mm |
+| antihelix | 3.08 mm |
+| posterior | 3.07 mm |
+
+**The anterior/crus sector is the stable datum.** Five azimuths (−30° to +10°)
+come in under 1 mm — 0.80, 0.93, 0.94, 0.96, 0.98 mm — and the crus helicis
+distance is the tightest single feature in the study at **14.27 ± 1.30 mm,
+CV 0.09**. The antihelix and posterior rim are three times worse, and the
+antihelix arc *extent* varies 143–357°, which is not a tolerance so much as a
+different shape.
+
+> Caveat: the crus detector fires on only **4 of 9** ears. Its low SD is
+> encouraging but it is four ears; confirming it is the first thing the ~103-ear
+> run should settle.
+
+### Scale or shape? Shape.
+
+Normalising every length by the independent size proxy and recomputing CV:
+
+| feature | CV raw | CV scaled | verdict |
+|---|---|---|---|
+| cymba floor dist | 0.45 | 0.38 | mixed |
+| cymba pocket depth | 0.39 | 0.39 | no change |
+| cymba lip dist | 0.16 | 0.28 | **shape** |
+| antihelix closest | 0.50 | 0.54 | **shape** |
+| antihelix arc radius | 0.50 | 0.72 | **shape** |
+| crus dist | 0.09 | 0.11 | already tight |
+
+The rim path tells the same story: raw SD 2.30 mm; normalised 0.43 × 7.04 ≈
+**3.0 mm equivalent — worse.**
+
+**Dividing out ear size does not remove the variance, and mostly increases it.**
+Only the cymba floor distance improves at all. So the population does **not**
+differ by uniform scale, and the tempting conclusion — one spring-loaded arc plus
+a single size adjustment — **is not supported.** These ears are different shapes,
+not different sizes.
+
+### How many stages does this actually demand?
+
+The measured variance has a clear gradient from proximal to distal, and it maps
+onto the staged concept rather well — but it demands more than extension:
+
+| stage | target | required travel (±2 SD) | DOF |
+|---|---|---|---|
+| anchor | anterior / crus rim | **±2.2 mm** | near-fixed geometry; compliance only |
+| 1 | cymba pocket | ±5 mm (rim) to ±7.7 mm (depth) | extension |
+| 2 | antihelix undercut | ±6.2 mm | extension **plus angular freedom** |
+
+**Verdict: two actuated stages beyond a fixed anterior anchor — and the distal
+stage needs an angular degree of freedom, not just reach.** The antihelix arc
+extent spanning 143–357° means the distal segment meets a lip of genuinely
+different curvature and angular span on different ears; a purely telescoping
+segment will land on it at the wrong attitude however far it travels. That is the
+one place the data argues for articulation rather than compliance.
+
+The user's staged-deployment concept survives this data. What it should change:
+anchor proximally at the crus (the only sub-millimetre feature found), and put
+the articulation distally at the antihelix, where the shape variance actually is.
+
 ## Deriving the third plunger aim from data
 
 `plunger_aim_search.py` sweeps candidate aims on a 10° grid and, for each ear,

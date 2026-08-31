@@ -1,0 +1,56 @@
+{
+ "ear": "sonicom/P0023",
+ "seating": "BY CONSTRUCTION - no optimiser",
+ "aperture": [
+  -12.18402099609375,
+  -74.72145829715373,
+  -10.350957870483398
+ ],
+ "canal_dir": [
+  0.050100994734604,
+  0.9581448837548214,
+  -0.2818656986244745
+ ],
+ "canal_dir_source": "CONSTRUCTED from anatomy, not probed",
+ "canal_rake_deg": 40.0,
+ "probe_run_mm": 1.4769501007215105,
+ "probe_dir": [
+  0.18777899245890223,
+  0.7023687552980086,
+  -0.6865982679647875
+ ],
+ "canal_off_floor_normal_deg": 39.99999999999999,
+ "transform": [
+  [
+   0.7415688263473658,
+   0.014718531374692879,
+   0.6707153201053059,
+   -6.869919856738116
+  ],
+  [
+   0.6405868713603637,
+   0.2814811483833958,
+   -0.7144346179640974,
+   -88.1948444734579
+  ],
+  [
+   -0.19930914688124968,
+   0.9594538696252868,
+   0.19930914688124965,
+   -6.4797051018413985
+  ],
+  [
+   0.0,
+   0.0,
+   0.0,
+   1.0
+  ]
+ ],
+ "markers": {
+  "ring_points": 81,
+  "ring_colour": "magenta",
+  "centroid_sphere": "magenta",
+  "cavum_tint_radius_mm": 11.0
+ },
+ "note": "Pose built directly from landmarks, no optimiser. Skirt rim centre on the detected aperture centroid; faceplate forced outward. The canal axis is CONSTRUCTED as the inward concha-floor normal raked 40 deg anteriorly -- the scan has no resolvable canal (probe run 1.5 mm), so probing it would be fiction. The magenta ring traces the real funnel wall by radial ray casting, not a drawn circle of assumed size."
+}

@@ -160,35 +160,125 @@ the seal plane, so `short` is the default in the assembly.
 
 ---
 
-## 6. Wing printability
+### The skirt's contact land
 
-Reported by `generate.py --all`, measured on the free-standing span of the wing
-beyond the jacket rim (inboard of that the wing is fused to and supported by the
-jacket shell). Build direction = the jacket rim plane flat on the bed, part
-growing in −Z.
+`MECH_VALIDATION.md` JOB 2 found the force is fine (0.155–0.307 N) but the
+geometry never committed to spreading it: a plain 35° cone with a uniform
+0.35 mm wall lands on a curved aperture as a **line** contact, giving
+17.9–34.1 kPa — 4–8× the 4.27 kPa capillary-closing flag. The required minimum
+band was **≥ 4.0 mm** of slant width.
 
-| metric | value |
+The skirt is now built as an **exact 35° outer cone with the wall cut from the
+inside**, so the outer face is a true conical band (Ø19.0 rim unchanged, and the
+rolled rim lip is a torus tangent to that cone so the diameter is exact):
+
+| slant station | wall | what it is |
+|---|---|---|
+| 0 → 1.91 mm | `skirt_wall_neck` 0.40 mm | structural neck into the carrier body |
+| 1.91 → 2.71 mm | `skirt_wall_hinge` 0.20 mm | compliance groove — lets the land rock and bed flat instead of digging in at its leading edge |
+| **2.71 → 7.41 mm** | `skirt_wall_land` 0.25 mm | **the contact land, 4.50 mm of slant width, Ø13.8 → Ø19.0 mm** |
+
+Cone-normal pressure at F_max = 0.307 N over that land, printed on every run:
+
+| contact Ø | 10 mm | 13 mm | 16 mm | 19 mm |
+|---|---|---|---|---|
+| **kPa** | **3.79** | **2.91** | **2.37** | **1.99** |
+| verdict | borderline | borderline | borderline | comfortable |
+
+Every diameter now clears the 4.27 kPa ischaemia flag (against 17.9–34.1 kPa for
+line contact). The shear-derated 2.15 kPa stretch target is met only at Ø19; that
+is the FEA's own conclusion — at Ø10 the 19 mm / 35° funnel cannot reach it
+without a lower preload or a wider flare. Note also FEA §2.8: real pressure peaks
+at the leading edge of contact at plausibly 1.5–3× the average, which is what the
+0.20 mm compliance groove is there to blunt.
+
+## 6. The wing: a macro-scale gyroid shell
+
+`docs/MECH_VALIDATION.md` (FEA, commit `658bf9d`) refuted the original wing: a
+1.2 mm-cell graded gyroid inside a 4 × 7 mm blade is **43–85 % dense** at printable
+walls and measured **k = 5 134 N/mm** against a target of ~0.3 N/mm — a rigid
+wedge, not a spring. A 1.2 mm cell simply cannot be open at a 0.20 mm minimum
+wall (ρ ≈ 3.09 t/a ≥ 0.51 by construction).
+
+**The fix is scale, not density.** The wing is now **1–2 gyroid unit cells at a
+12 mm cell** — at that size the gyroid is no longer a lattice, it is a single
+doubly-curved 0.2 mm Ti sheet that flexes like a leaf spring. The jacket's own
+fine 1.2 mm gyroid skin is unchanged; it is structural-rigid by design.
+
+| | value |
 |---|---|
-| designed taper on the wing's deep edge | **40°** (`wing_taper_deg`) |
-| area-weighted p99 overhang | **58.6°** |
-| absolute worst facet | 82.3° |
-| fraction of wing area over 45° | **0.8 %** |
+| unit cell (`gyroid_cell_wing`) | **12.0 mm** |
+| sheet wall (`wing_wall_root` → `wing_wall_tip`) | **0.22 → 0.20 mm** |
+| envelope (free span × press direction × depth into concha) | **13.2 × 7.0 × 5.0 mm** |
+| anchored foot (`wing_anchor_w` → `wing_width` over `wing_anchor_len`) | 2.4 → 5.0 mm over 7.0 mm |
+| relative density, nominal 3.09·t/a | **5.4 %** |
+| relative density, **measured from the SDF** incl. rolled edges | **5.2 %** |
+| solid Ti transition into the jacket rim (`wing_root_solid`) | 1.2 mm |
+| rolled rim on every exposed sheet edge (`wing_edge_wall`) | 0.40 mm over a 0.70 mm band |
 
-The 0.8 % / 82° tail is marching-cubes staircase on the knife edge where the
-40° taper closes, not a real ceiling: the whole tapered flank is a single 40°
-plane by construction and the sides above it are vertical. Everything else on
-the free span is at 0°.
+### Stiffness — shell-bending estimate
 
-For reference, the **whole** jacket+wing including the lattice reads worst 90°,
-p99 83°, 14.1 % over 45° — that number is the gyroid's own micro-facets. A sheet
-gyroid is self-supporting in LPBF in practice; do not read it as a defect. The
-generator also scans 42 build directions and prints the best one it finds
-(≈ +0.69, −0.67, −0.26, giving p99 52°) if you would rather tilt the plate.
+The wing is a shell, not a continuum, so a homogenised-modulus beam model is the
+wrong tool (it gives 20–120 N/mm and is meaningless at 1–2 cells: periodic
+homogenisation suppresses exactly the global inextensional modes that make a
+single sheet compliant). The model used instead treats the sheet as a set of
+plate strips:
 
-The core's −Z dome has a genuine horizontal pole and needs either supports or a
+> **k = 1 / ∫₀^L (L−s)² / EI(s) ds**,  with  **EI(s) = D · ℓ(s) · χ**
+> **D = E t(s)³ / 12(1−ν²)** — plate rigidity of the Ti sheet
+> **ℓ(s) = L_A · A_cut(s)** — sheet chord length in the cut, from the stereological
+> identity L_A = (π/4)·S_V with S_V = 3.09/a for a sheet gyroid
+> **χ = `shell_chi` = 0.40** — mean ⟨cos²θ⟩ orientation factor, because the sheet
+> meets any cut plane at ~45–55°, so only a fraction of each strip resists
+> press-direction bending
+
+E = 110 GPa, ν = 0.31 (Ti-6Al-4V). Integrated per station over the free span:
+
+| | value |
+|---|---|
+| **tip stiffness k** | **0.251 N/mm**  (target 0.15–0.35) |
+| **F at 1.0 mm** | **0.251 N**  (target 0.2–0.4 N) |
+| **F at 1.5 mm** | **0.376 N**  (target 0.2–0.4 N) |
+| sheet chord at the foot / at the tip | 3.4 / 7.1 mm |
+
+Sensitivity: χ is the weak link. χ = 0.30 → k = 0.19 N/mm; χ = 0.50 → k = 0.31.
+The whole band still lands inside the target, which is why these parameters were
+chosen, but **this is an estimate, not a measurement — the sibling FEA agent has
+to confirm it.** The generator prints the number on every run so a parameter
+change cannot silently drift out of band.
+
+The three tuning levers, in order of authority:
+
+1. `wing_anchor_w` — how much of the sheet is anchored at the foot. Necking the
+   foot from 5.0 to 2.4 mm over the first 7 mm is what took k from 0.32 to 0.25.
+2. `gyroid_cell_wing` — bigger cell, less sheet in any cut, softer. 12 mm is the
+   top of the briefed 8–12 mm range and is already used.
+3. `wing_wall_*` — k ∝ t³, so this is the strongest lever, but 0.20 mm is the
+   process floor and there is nowhere left to go.
+
+### Printability, rim-down
+
+| surface | worst | p99 (area-weighted) | area over 45° |
+|---|---|---|---|
+| **as-built wing sheet (y > rim)** | 89.8° | **82.9°** | **13.8 %** |
+| whole jacket + wing | 90.0° | 83.9° | 17.3 % |
+| wing *solid envelope* (a bounding shape, not the part) | 89.8° | 87.3° | 35.9 % |
+| best of 42 sampled build directions, on the envelope | 76.4° | 45.5° | 0.5 % |
+
+**This is the honest cost of going macro-scale.** A fine gyroid is self-supporting
+because every cell wall turns over within ~1 mm; a 12 mm-cell sheet has long,
+shallow runs and its saddle regions are locally horizontal. 13.8 % of the wing's
+area needs support rim-down. Either accept supports on the wing (it is a
+throwaway surface, the ear side is the jacket skin), or tilt the plate — the
+scan's best direction drops the envelope's over-45° area to 0.5 %.
+
+Minimum wall is enforced: the generator warns if `wall_face` < `min_wall` or
+`gyroid_cell` < `min_cell`. Every exposed sheet edge is rolled to 0.40 mm, so
+there are no knife edges at the tip or along the deep edge, and the wing
+cross-section is a rounded stadium (`wing_edge_round`) rather than a box.
+
+The core's −Z dome still has a genuine horizontal pole and needs supports or a
 tilted plate; that is normal for an ear shell and is not addressed here.
-
----
 
 ## 7. Every parameter
 
@@ -257,7 +347,12 @@ increases are forced by the 12 mm driver carrier, not stylistic.
 | `carrier_len` | **9.00 mm** | raised from 8.0: the encapsulated 2 mm ring plus lug width plus 1.5 mm travel plus margins does not fit in 8 mm. Checked at runtime |
 | `carrier_travel` | 1.50 mm | the travel the force study was run over; enforced by the L-slot pocket length (lug width + travel) |
 | `skirt_flare_deg` | 35.0° | as briefed |
-| `skirt_wall` | 0.35 mm | as briefed; the lip is rounded automatically (the skirt is a revolved capsule) |
+| `skirt_wall` | 0.35 mm | legacy nominal; superseded by the three-zone profile below |
+| `skirt_land_w` | **4.50 mm** | slant width of the conical contact land. FEA minimum is 4.0 mm at every contact diameter from Ø10 to Ø19 |
+| `skirt_wall_neck` | 0.40 mm | wall at the root — carries the preload into the carrier body |
+| `skirt_wall_hinge` | 0.20 mm | compliance groove behind the land, so the land rocks to match the ear instead of digging in |
+| `skirt_hinge_w` | 0.60 mm | slant width of that groove |
+| `skirt_wall_land` | 0.25 mm | wall through the land — thin enough to bed flat over its full width |
 | `skirt_max_dia` | 19.0 mm | covers the design envelope's 4.5–14 mm aperture width with room to conform |
 
 The skirt is modelled as **part of the carrier STL** — a single material for the
@@ -265,7 +360,7 @@ first prototypes. The production version casts the skirt in **Shore A 10–15**
 over a firmer (Shore A 40–50) carrier body, which needs a two-shot mould or an
 overmould step; the mould in this repo is the single-shot prototype version.
 
-### Jacket + wing
+### Jacket skin (fine gyroid — unchanged, structural-rigid by design)
 
 | param | default | why |
 |---|---|---|
@@ -273,23 +368,39 @@ overmould step; the mould in this repo is the single-shot prototype version.
 | `jacket_x_clip` | −2.00 mm | the jacket stops here so it never fouls the nozzle nose |
 | `gyroid_cell` | 1.20 mm | above `min_cell`, small enough for two cells through the jacket |
 | `wall_face` | 0.20 mm | soft against the ear at the outer/ear face |
-| `wall_root` | 0.40 mm | stiff where the wing takes bending load |
+| `wall_root` | 0.40 mm | stiff at the rim, where the jacket takes the magnet load |
 | `grade_len` | 6.00 mm | distance from the root corner over which the wall grades root → face |
 | `skin_t` | 0.60 mm | solid membrane on the ear-facing surface so the lattice never touches skin |
 | `perf_dia` / `perf_pitch` | 0.40 / 1.50 mm | sweat perforations through the membrane, on a square grid |
-| `solid_root` | 1.00 mm | solid Ti collar before the lattice starts, at the rim and the wing root |
-| `wing_thick` | 4.00 mm | blade thickness across the XY plane |
-| `wing_width` | 7.00 mm | blade depth in Z, into the concha |
-| `wing_z_top` | −0.20 mm | top of the wing, just under the parting plane so the whole part is at z ≤ 0 |
-| `wing_taper_deg` | 40.0° | the deep edge tapers at 40°, under the 45° self-support limit with margin for discretisation |
-| `wing_taper` | 2.60 mm | the depth over which that taper closes a 2.0 mm half-thickness at 40° |
-| `wing_rise` | 10.0 mm | tip lands 10 mm above the core rim, as briefed |
-| `wing_back_deg` | 30.0° | tip angled 30° toward −X, as briefed |
+| `solid_root` | 1.00 mm | solid Ti collar before the lattice starts |
+
+FEA measured this region at k = 185 300 N/mm over a 9 mm² patch. That is
+intentional — the jacket is the rigid backbone, the wing carries all compliance.
+
+### Wing (macro gyroid shell — see §6)
+
+| param | default | why |
+|---|---|---|
+| `gyroid_cell_wing` | **12.00 mm** | top of the briefed 8–12 mm range: 1–2 cells across the envelope, so the gyroid is a single doubly-curved sheet rather than a lattice. Bigger cell → less sheet in any cut → softer |
+| `wing_wall_root` / `wing_wall_tip` | **0.22 / 0.20 mm** | lightly graded; 0.20 mm is the process floor and k ∝ t³, so there is no room below |
+| `wing_edge_wall` | 0.40 mm | rolled/thickened rim on every exposed sheet edge — no knife edges at the tip |
+| `wing_edge_band` | 0.70 mm | distance over which the wall ramps up into that rolled edge |
+| `wing_root_solid` | 1.20 mm | solid Ti transition into the jacket rim (brief: ≥ 1 mm) |
+| `wing_thick` | 7.00 mm | envelope across the press direction (in XY) |
+| `wing_width` | 5.00 mm | envelope depth in Z, into the concha |
+| `wing_anchor_w` | **2.40 mm** | Z-width at the foot. The primary softening lever: necking 5.0 → 2.4 mm took k from 0.32 to 0.25 N/mm |
+| `wing_anchor_len` | 7.00 mm | distance over which the foot opens back out to the full 5 mm |
+| `wing_edge_round` | 0.85 | fraction of the half-section used as a corner radius, so the deep edge is a rounded stadium, not a flat ceiling |
+| `wing_taper_deg` | 40.0° | overhang of the deep-edge taper, under the 45° self-support limit |
+| `wing_taper` | 1.60 mm | depth over which that taper acts |
+| `wing_rise` | 11.0 mm | tip lands this far above the core rim; sets the free span (13.2 mm) and hence k ∝ 1/L³ |
+| `wing_back_deg` | 30.0° | tip angled toward −X, under the antihelix |
 | `wing_root_dx` | 1.00 mm | root offset from the core centre in X |
 | `wing_len` | 14.0 mm | nominal centreline length; the Bezier from rise + back angle lands close to this |
+| `shell_chi` | 0.40 | ⟨cos²θ⟩ sheet-orientation factor in the stiffness estimate. The single biggest uncertainty — see §6 |
 
-The wing centreline is a quadratic Bezier in XY; the blade is that curve offset
-by `wing_thick/2`, extruded in Z and tapered on its deep edge.
+The wing centreline is a quadratic Bezier in XY; the envelope is that curve offset
+by `wing_thick/2`, extruded in Z with the necked foot and a rounded deep edge.
 
 ### Jacket / core interface
 
@@ -351,8 +462,21 @@ jacket to a printer, re-run `--part jacket_wing --voxel 0.07`** (≈ 3 samples/w
 ## 8. Verification
 
 `generate.py` checks `trimesh.is_watertight` on every mesh and prints volume,
-bounding box, triangle count, voxel size and build time. `--all` exits non-zero
-if anything is not watertight.
+bounding box, triangle count, voxel size and build time, then **re-reads every
+exported binary STL** and reports boundary edges — because a slicer sees the file,
+not the in-memory mesh. `--all` exits non-zero if any exported surface is open.
+
+Two marching-cubes artefacts are cleaned automatically (`drop_specks`): positive
+components under 0.02 mm³ (sub-voxel islands that would be loose particles) and
+enclosed voids under 1.0 mm³ (trapped-powder pockets at gyroid/skin junctions —
+dropping the shell fills the pocket). The jacket sheds ~160 of these, 0.47 mm³
+total. Dropping whole closed components keeps the surface closed.
+
+`jacket_wing` re-reads as **0 holes, 2 pinch edges** — two places where the gyroid
+sheet touches itself along an edge shared by four triangles. `is_watertight`
+demands exactly two faces per edge so it reports False, but the surface is closed
+and slicers handle it. Holes are what break a print; pinches do not. That is why
+the tool reports both.
 
 One thing worth knowing if you touch `polygonise()`: **do not** call
 `merge_vertices()` on the marching-cubes output. skimage already returns a
@@ -381,17 +505,21 @@ transform the tool runs but says so, loudly.
 
 ## 10. Known gaps / v1 list
 
-1. **Moving-ring ID is not encapsulated** — 9 × 5.4 over a Ø5.2 bore leaves
+1. **The wing's stiffness is an estimate, not a measurement.** k = 0.251 N/mm
+   comes from a shell-bending model whose orientation factor χ = 0.40 is the
+   dominant uncertainty (χ = 0.3–0.5 spans k = 0.19–0.31). Sibling FEA to confirm.
+2. **13.8 % of the wing needs support rim-down** — the price of a 12 mm cell.
+3. **Moving-ring ID is not encapsulated** — 9 × 5.4 over a Ø5.2 bore leaves
    0.1 mm, so the ring's bore face is exposed and located by the mould core post.
    Watch it for delamination on the first cast.
-2. **Nozzle tilt** — add `nozzle_tilt_deg` so the nozzle/carrier stack can rake
+4. **Nozzle tilt** — add `nozzle_tilt_deg` so the nozzle/carrier stack can rake
    relative to the shell; the aperture azimuth range is 0–55°.
-3. **Two-shot carrier mould** — the current mould is single-shot; production
+5. **Two-shot carrier mould** — the current mould is single-shot; production
    wants a Shore A 10–15 skirt over a Shore A 40–50 body.
-4. **13.65 mm protrusion** is at the upper end of what a shallow concha will
+6. **13.65 mm protrusion** is at the upper end of what a shallow concha will
    take. The lever is `carrier_len` and the magnet gap, in that order —
    `asym_light` does not help because `carrier_len` dominates.
-5. **Core dome supports** — the −Z pole is a true horizontal overhang.
-6. **No front/rear volume tuning** — the acoustic cavity is whatever the shell
+7. **Core dome supports** — the −Z pole is a true horizontal overhang.
+8. **No front/rear volume tuning** — the acoustic cavity is whatever the shell
    leaves. Once a driver is in hand, tune `cavity_cap_z` and the vent diameters
    against a measured response.

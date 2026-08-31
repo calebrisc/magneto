@@ -134,11 +134,16 @@ PARAMS = dict(
     skirt_flare_deg=35.0,      # deg half-angle of the sealing skirt
     skirt_wall=0.35,           # mm skirt wall
     skirt_max_dia=19.0,        # mm skirt rim diameter (outer)
+    skirt_land_w=4.50,         # mm slant width of the conical contact land (FEA: >=4.0)
+    skirt_wall_neck=0.40,      # mm wall at the skirt root (structural)
+    skirt_wall_hinge=0.20,     # mm wall in the compliance groove behind the land
+    skirt_wall_land=0.25,      # mm wall through the contact land
+    skirt_hinge_w=0.60,        # mm slant width of the compliance groove
 
-    # ---- jacket + wing -------------------------------------------------
+    # ---- jacket skin (fine gyroid, structural-rigid by design) ----------
     jacket_thick=1.60,         # mm total jacket thickness (lattice + skin)
     jacket_x_clip=-2.00,       # mm, jacket stops here so it never fouls the nozzle
-    gyroid_cell=1.20,          # mm gyroid unit cell
+    gyroid_cell=1.20,          # mm gyroid unit cell, jacket skin
     wall_face=0.20,            # mm gyroid wall at the outer / ear face
     wall_root=0.40,            # mm gyroid wall at the root
     grade_len=6.00,            # mm over which the wall grades face->root
@@ -146,15 +151,27 @@ PARAMS = dict(
     perf_dia=0.40,             # mm sweat perforation diameter
     perf_pitch=1.50,           # mm perforation grid pitch
     solid_root=1.00,           # mm of solid Ti before the lattice starts
-    wing_len=14.0,             # mm wing length along its centreline
-    wing_thick=4.00,           # mm wing thickness (in the XY plane, across the blade)
-    wing_width=7.00,           # mm wing width (in Z, into the concha)
-    wing_z_top=-0.20,          # mm top of the wing (just under the parting plane)
-    wing_taper_deg=40.0,       # deg overhang of the wing's deep-edge taper (<45 = self-supporting)
-    wing_taper=2.60,           # mm of tapered depth on the wing's deep edge
-    wing_rise=10.0,            # mm the tip lands above the core rim
+
+    # ---- wing: MACRO-scale gyroid shell (a compliant doubly-curved sheet) --
+    gyroid_cell_wing=12.00,    # mm wing unit cell -- 1-2 cells across the envelope
+    wing_wall_root=0.22,       # mm sheet wall at the root
+    wing_wall_tip=0.20,        # mm sheet wall at the tip
+    wing_edge_wall=0.40,       # mm rolled/thickened rim on exposed sheet edges
+    wing_edge_band=0.70,       # mm over which the wall ramps up to the rolled edge
+    wing_root_solid=1.20,      # mm of solid Ti transition into the jacket rim
+    wing_len=14.0,             # mm nominal wing length along its centreline
+    wing_thick=7.00,           # mm envelope across the press direction (in XY)
+    wing_width=5.00,           # mm envelope depth in Z, into the concha
+    wing_anchor_w=2.40,        # mm Z-width at the anchor (necked foot; softens the wing)
+    wing_anchor_len=7.00,      # mm over which the Z-width opens anchor_w -> wing_width
+    wing_z_top=-0.20,          # mm top of the wing, just under the parting plane
+    wing_taper_deg=40.0,       # deg overhang of the wing's deep-edge taper
+    wing_edge_round=0.85,      # fraction of the half-section used as a corner radius
+    wing_taper=1.60,           # mm of tapered depth on the wing's deep edge
+    wing_rise=11.0,            # mm the tip lands above the core rim
     wing_back_deg=30.0,        # deg the tip is angled toward -X
     wing_root_dx=1.00,         # mm, wing root offset from the core centre in X
+    shell_chi=0.40,            # sheet-orientation factor <cos^2 th> for the k estimate
 
     # ---- jacket/core interface -----------------------------------------
     gasket_w=0.60,             # mm gasket groove width
@@ -388,13 +405,32 @@ class G:
         self.insert_lug_x1 = self.insert_lug_x0 + P["lug_w"]
         self.lslot_x1 = self.insert_lug_x1 + 0.35 + P["carrier_travel"]
 
-        # skirt: rim at the carrier tip so nothing protrudes past the seal plane
-        self.skirt_rim_r = 0.5 * P["skirt_max_dia"] - 0.5 * P["skirt_wall"]
+        # skirt.  The OUTER face is one exact 35 deg cone from the carrier OD to the
+        # Would-be rim diameter, so the contact land is a true conical band and the
+        # rim diameter is exactly skirt_max_dia.  All compliance is cut from the
+        # inside, by varying the wall along the slant.
+        fl = math.radians(P["skirt_flare_deg"])
         self.skirt_root_r = 0.5 * P["carrier_od"]
+        self.skirt_rim_r = 0.5 * P["skirt_max_dia"]
         dr = self.skirt_rim_r - self.skirt_root_r
-        self.skirt_dx = dr / math.tan(math.radians(P["skirt_flare_deg"]))
+        self.skirt_dx = dr / math.tan(fl)
+        self.skirt_slant = dr / math.sin(fl)
         self.skirt_rim_x = self.carrier_x1
         self.skirt_root_x = self.skirt_rim_x - self.skirt_dx
+        self.skirt_u = (self.skirt_dx / self.skirt_slant, dr / self.skirt_slant)
+        # wall profile along the slant: neck | compliance groove | contact land
+        land = min(P["skirt_land_w"], self.skirt_slant - P["skirt_hinge_w"] - 1.0)
+        s_l0 = self.skirt_slant - land
+        s_h1 = s_l0 - 0.20
+        s_h0 = s_h1 - P["skirt_hinge_w"]
+        s_n1 = max(0.05, s_h0 - 0.20)
+        self.skirt_land_w = land
+        self.skirt_wall_xp = [0.0, s_n1, s_h0, s_h1, s_l0, self.skirt_slant]
+        self.skirt_wall_fp = [P["skirt_wall_neck"], P["skirt_wall_neck"],
+                              P["skirt_wall_hinge"], P["skirt_wall_hinge"],
+                              P["skirt_wall_land"], P["skirt_wall_land"]]
+        self.skirt_land_x0 = self.skirt_root_x + s_l0 * self.skirt_u[0]
+        self.skirt_land_d0 = 2.0 * (self.skirt_root_r + s_l0 * self.skirt_u[1])
 
         self.tip_protrusion = self.carrier_x1                 # from the core face
         self.tip_protrusion_max = self.carrier_x1 + P["carrier_travel"]
@@ -497,7 +533,7 @@ def evaluate(fn, bounds, spacing, slab_mb=48.0):
     return field, origin, spacing
 
 
-def polygonise(field, origin, spacing):
+def polygonise(field, origin, spacing, tag=None):
     verts, faces, _, _ = measure.marching_cubes(field, level=0.0, spacing=(spacing,) * 3)
     verts = verts + np.asarray(origin)
     # NOTE: marching_cubes already emits a manifold, index-shared surface.  Do NOT
@@ -506,7 +542,35 @@ def polygonise(field, origin, spacing):
     mesh = trimesh.Trimesh(vertices=verts, faces=faces, process=False)
     if mesh.volume < 0:
         mesh.invert()
-    return mesh
+    return drop_specks(mesh, tag=tag)
+
+
+DROPPED = {}
+
+
+def drop_specks(mesh, min_body=0.02, min_void=1.0, tag=None):
+    """Clean up two marching-cubes artefacts, without breaking watertightness.
+
+    * positive components under min_body mm^3 -- sub-voxel islands where a lattice
+      wall grazes the sampling grid; they would be loose particles in the print.
+    * negative components (enclosed voids) under min_void mm^3 -- trapped-powder
+      pockets at gyroid/skin junctions.  Dropping the shell fills the pocket.
+
+    Dropping whole closed components leaves the surface closed, so the result is
+    still watertight.
+    """
+    comps = mesh.split(only_watertight=False)
+    if len(comps) <= 1:
+        return mesh
+    keep = [c for c in comps
+            if (c.volume >= min_body) or (c.volume <= -min_void)]
+    if not keep or len(keep) == len(comps):
+        return mesh
+    if tag:
+        DROPPED[tag] = (len(comps) - len(keep),
+                        sum(abs(c.volume) for c in comps if c not in keep))
+    out = trimesh.util.concatenate(keep)
+    return out if out.is_watertight else mesh
 
 
 def spacing_for(bounds, budget, override=None):
@@ -660,14 +724,17 @@ def _bezier_pts(p0, p1, p2, n=48):
     return (1 - t) ** 2 * p0 + 2 * (1 - t) * t * p1 + t ** 2 * p2
 
 
-def _bezier_dist2d(C, pts):
-    """Min distance from every (x, y) grid node to the polyline, cached."""
+def _bezier_dist_and_s(C, pts):
+    """(min distance, arc-length station of the closest point) for every (x, y)
+    grid node, against the wing centreline polyline.  Cached per evaluation."""
     key = ("bez", id(pts))
     if key in C.cache:
         return C.cache[key]
     x = C.x.reshape(-1, 1, 1)
     y = C.y.reshape(1, -1, 1)
-    best = None
+    seg = np.linalg.norm(np.diff(pts, axis=0), axis=1)
+    cum = np.concatenate([[0.0], np.cumsum(seg)])
+    best_d = best_s = None
     for i in range(len(pts) - 1):
         ax, ay = pts[i]
         bx, by = pts[i + 1]
@@ -676,9 +743,39 @@ def _bezier_dist2d(C, pts):
         px, py = x - ax, y - ay
         h = np.clip((px * dx + py * dy) / dd, 0.0, 1.0)
         d = np.sqrt((px - dx * h) ** 2 + (py - dy * h) ** 2)
-        best = d if best is None else np.minimum(best, d)
-    C.cache[key] = best
-    return best
+        st = cum[i] + h * seg[i]
+        if best_d is None:
+            best_d, best_s = d, st
+        else:
+            m = d < best_d
+            best_s = np.where(m, st, best_s)
+            best_d = np.minimum(d, best_d)
+    C.cache[key] = (best_d, best_s, float(cum[-1]))
+    return C.cache[key]
+
+
+def _bezier_dist2d(C, pts):
+    return _bezier_dist_and_s(C, pts)[0]
+
+
+def wing_envelope(g, X, Y, Z, D2):
+    """Swept wing envelope: constant `wing_thick` across the press direction, a
+    Z-depth that necks down to `wing_anchor_w` at the foot (the softening lever),
+    and a self-supporting taper on the deep edge."""
+    P = g.P
+    wy = np.maximum(0.0, Y - g.y_root)                 # distance beyond the jacket rim
+    half = 0.5 * (P["wing_anchor_w"] + (P["wing_width"] - P["wing_anchor_w"])
+                  * np.clip(wy / P["wing_anchor_len"], 0.0, 1.0))
+    z_c = P["wing_z_top"] - 0.5 * P["wing_width"]
+    z_bot = z_c - half
+    rate = math.tan(math.radians(P["wing_taper_deg"]))
+    shrink = rate * np.maximum(0.0, (-Z) + z_bot + P["wing_taper"])
+    # rounded (stadium) cross-section: no flat ceiling on the deep edge
+    rb = P["wing_edge_round"] * np.minimum(half, 0.5 * P["wing_thick"])
+    qa = D2 + shrink - (0.5 * P["wing_thick"] - rb)
+    qb = np.abs(Z - z_c) - (half - rb)
+    return (np.sqrt(np.maximum(qa, 0) ** 2 + np.maximum(qb, 0) ** 2)
+            + np.minimum(np.maximum(qa, qb), 0.0) - rb)
 
 
 def part_jacket_wing(g):
@@ -690,42 +787,47 @@ def part_jacket_wing(g):
     def fn(X, Y, Z, C):
         env = g.core_outer(X, Y, Z, C)
 
-        # --- jacket envelope: offset shell over the -Z hemisphere
+        # ---- jacket skin: fine gyroid in an offset shell over the -Z hemisphere
         shell = np.maximum(clear - env, env - clear - thick)
         shell = I(shell, Z, X - P["jacket_x_clip"])
 
-        # --- wing envelope: swept blade with a 45 deg taper on its deep edge
-        d2 = _bezier_dist2d(C, pts) - 0.5 * P["wing_thick"]
-        rate = math.tan(math.radians(P["wing_taper_deg"]))
-        shrink = rate * np.maximum(0.0, (-Z) - (P["wing_width"] - P["wing_taper"]))
-        wing = np.maximum(d2 + shrink,
-                          np.maximum(Z - P["wing_z_top"], -Z - P["wing_width"]))
-        wing = S(wing, env - clear)              # keep clear of the core
-
-        envelope = U(shell, wing)
-
-        # --- graded gyroid
         dz = np.maximum(0.0, -Z)
         dy = np.maximum(0.0, Y - g.y_root)
         root_dist = np.sqrt(dz * dz + dy * dy)
         t = np.clip(root_dist / P["grade_len"], 0.0, 1.0)
         wall = P["wall_root"] + (P["wall_face"] - P["wall_root"]) * t
         lat = gyroid(X, Y, Z, P["gyroid_cell"], wall)
-
-        # --- solid root collar
         solid = root_dist - P["solid_root"]
 
-        # --- perforated skin membrane on the ear-facing surface
         skin = np.maximum(shell, (clear + thick - P["skin_t"]) - env)
         mx = np.abs((X + 0.5 * P["perf_pitch"]) % P["perf_pitch"] - 0.5 * P["perf_pitch"])
         my = np.abs((Y + 0.5 * P["perf_pitch"]) % P["perf_pitch"] - 0.5 * P["perf_pitch"])
         perf = np.sqrt(mx * mx + my * my) - 0.5 * P["perf_dia"]
         skin = S(skin, perf)
 
-        d = I(U(lat, solid), envelope)
-        d = U(d, skin)
+        jacket = U(I(U(lat, solid), shell), skin)
 
-        # --- matching magnet pockets + locating pins
+        # ---- wing: MACRO gyroid, 1-2 cells, i.e. a doubly-curved 0.2 mm Ti sheet
+        D2, S_, L_tot = _bezier_dist_and_s(C, pts)
+        env_w = wing_envelope(g, X, Y, Z, D2)
+        env_w = S(env_w, env - clear)
+
+        wall_w = (P["wing_wall_root"]
+                  + (P["wing_wall_tip"] - P["wing_wall_root"])
+                  * np.clip(S_ / max(L_tot, 1e-6), 0.0, 1.0))
+        # roll/thicken every exposed sheet edge so the wing has no knife edges
+        prox = np.clip(1.0 + env_w / P["wing_edge_band"], 0.0, 1.0)
+        wall_w = wall_w + (P["wing_edge_wall"] - wall_w) * prox
+        sheet = gyroid(X, Y, Z, P["gyroid_cell_wing"], wall_w)
+
+        # solid transition into the jacket rim
+        wy = Y - g.y_root
+        root_plug = np.maximum(wy - P["wing_root_solid"], -wy - 0.6)
+
+        wing = I(U(sheet, root_plug), env_w)
+        d = smin(jacket, wing, 0.35)
+
+        # ---- matching magnet pockets + locating pins
         for (px_, py_) in g.jacket_mags:
             zs = _lower_z(g, px_, py_)
             d = S(d, cyl_z(X, Y, Z, px_, py_, 0.5 * P["jmag_dia"] + 0.05,
@@ -818,15 +920,34 @@ def part_nozzle_insert(g, name):
 # PART: mag-float carrier (+ moulds)
 # --------------------------------------------------------------------------
 
+def skirt_field(g, X, Y, Z):
+    """Sealing skirt: an exact 35 deg outer cone with a variable wall cut from the
+    inside -- structural neck, compliance groove, then the >=4 mm contact land."""
+    P = g.P
+    rho = np.sqrt(Y ** 2 + Z ** 2)
+    ax, ar = g.skirt_root_x, g.skirt_root_r
+    ux, ur = g.skirt_u
+    nx, nr = -ur, ux                       # outward cone normal in the meridian plane
+    px, pr = X - ax, rho - ar
+    sl = px * ux + pr * ur                 # station along the slant
+    dn = px * nx + pr * nr                 # +ve outside the cone face
+    w = np.interp(sl, g.skirt_wall_xp, g.skirt_wall_fp)
+    band = np.maximum(dn, -dn - w)         # between the cone and its inward offset
+    d = np.maximum(band, np.maximum(-sl, sl - g.skirt_slant))
+    # rolled rim lip: a torus tangent to the cone face, so the rim stays exactly
+    # skirt_max_dia and there is no knife edge on the sealing lip
+    lw = 0.5 * P["skirt_wall_land"]
+    lipx = ax + ux * g.skirt_slant + nx * (-lw)
+    lipr = ar + ur * g.skirt_slant + nr * (-lw)
+    lip = np.sqrt((X - lipx) ** 2 + (rho - lipr) ** 2) - lw
+    return U(d, lip)
+
+
 def carrier_field(g, X, Y, Z, C):
     P = g.P
     body = cyl_x(X, Y, Z, 0, 0, 0.5 * P["carrier_od"], g.carrier_x0, g.carrier_x1)
     collar = cyl_x(X, Y, Z, 0, 0, g.collar_r, g.carrier_x0, g.carrier_mag_face)
-    skirt = revolve_segment(X, Y, Z,
-                            (g.skirt_root_x, g.skirt_root_r),
-                            (g.skirt_rim_x, g.skirt_rim_r),
-                            0.5 * P["skirt_wall"])
-    d = U(body, collar, skirt)
+    d = smin(U(body, collar), skirt_field(g, X, Y, Z), 0.35)
 
     # counterbore that swallows the insert's magnet flange (this is the air gap)
     d = S(d, cyl_x(X, Y, Z, 0, 0, g.cbore_r,
@@ -848,7 +969,7 @@ def carrier_field(g, X, Y, Z, C):
 
 def part_carrier(g):
     P = g.P
-    r = g.skirt_rim_r + P["skirt_wall"] + 1.0
+    r = g.skirt_rim_r + 1.2
 
     def fn(X, Y, Z, C):
         return carrier_field(g, X, Y, Z, C)
@@ -861,7 +982,7 @@ def mold_geom(g):
     P = g.P
     x0 = g.carrier_x0 - 3.5
     x1 = g.carrier_x1 + 3.5
-    r = g.skirt_rim_r + P["skirt_wall"] + P["mold_wall"]
+    r = g.skirt_rim_r + P["mold_wall"]
     return x0, x1, r
 
 
@@ -910,7 +1031,7 @@ def _mold_half(g, upper):
                              0.5 * P["carrier_od"] - 0.4, r + 2.0))
         # vent from the skirt rim, from +Z
         void = U(void, cyl_z(X, Y, Z, g.skirt_rim_x - 0.4, 0.0,
-                             0.5 * P["mold_vent_dia"], g.skirt_rim_r - 0.6, r + 2.0))
+                             0.5 * P["mold_vent_dia"], g.skirt_rim_r - 0.8, r + 2.0))
         d = S(d, void)
 
         for px in pinx:
@@ -986,7 +1107,7 @@ def part_damper_jig(g):
 # OVERHANG ANALYSIS
 # --------------------------------------------------------------------------
 
-def overhang_stats(mesh, growth):
+def overhang_stats(mesh, growth, sel=None):
     """growth = unit vector the printer builds along.
 
     Returns (worst_deg, area_fraction_over_45).  A face whose outward normal
@@ -998,6 +1119,8 @@ def overhang_stats(mesh, growth):
     n = np.nan_to_num(np.asarray(mesh.face_normals, dtype=float), nan=0.0,
                       posinf=0.0, neginf=0.0)
     a = np.asarray(mesh.area_faces, dtype=float)
+    if sel is not None:
+        n, a = n[sel], a[sel]
     c = np.clip(n @ g, -1.0, 1.0)
     ang = 90.0 - np.degrees(np.arccos(c))
     m = c > 1e-6
@@ -1029,28 +1152,81 @@ def best_build_dir(mesh, n=42):
     return best
 
 
-def wing_envelope_mesh(g, spacing=0.22):
-    """The wing's macro envelope (no lattice) -- the meaningful overhang metric."""
+def wing_envelope_mesh(g, spacing=0.18):
+    """The wing's macro envelope (no sheet) -- the meaningful overhang metric."""
     P = g.P
     pts = _bezier_pts(g.wing_p0, g.wing_p1, g.wing_p2)
 
     def fn(X, Y, Z, C):
-        d2 = _bezier_dist2d(C, pts) - 0.5 * P["wing_thick"]
-        rate = math.tan(math.radians(P["wing_taper_deg"]))
-        shrink = rate * np.maximum(0.0, (-Z) - (P["wing_width"] - P["wing_taper"]))
-        wing = np.maximum(d2 + shrink,
-                          np.maximum(Z - P["wing_z_top"], -Z - P["wing_width"]))
+        D2 = _bezier_dist_and_s(C, pts)[0]
         # only the free-standing span beyond the jacket rim: inboard of that the
         # wing is fused to (and supported by) the jacket shell.
-        return I(wing, g.y_root - Y)
+        return I(wing_envelope(g, X, Y, Z, D2), g.y_root - Y)
 
     ymax = max(p[1] for p in pts) + 3.0
     xmin = min(p[0] for p in pts) - 4.0
     b = ((xmin, g.core_cx + P["core_rx"] + 2.0),
          (g.y_root - 1.0, ymax),
          (-P["wing_width"] - 1.5, 1.5))
-    f, o, s = evaluate(fn, b, spacing)
-    return polygonise(f, o, s)
+    f, o, sp = evaluate(fn, b, spacing)
+    return polygonise(f, o, sp)
+
+
+def wing_report(g, measure=True):
+    """Relative density (measured from the SDF) and a shell-bending estimate of
+    tip stiffness.  See README section 6 for the model and its assumptions."""
+    P = g.P
+    E, NU = 110000.0, 0.31                     # Ti-6Al-4V, N/mm^2
+    pts = _bezier_pts(g.wing_p0, g.wing_p1, g.wing_p2)
+
+    # free span: arc length of the centreline beyond the jacket rim
+    seg = np.linalg.norm(np.diff(pts, axis=0), axis=1)
+    cum = np.concatenate([[0.0], np.cumsum(seg)])
+    L_tot = float(cum[-1])
+    yv = pts[:, 1]
+    s_root = float(np.interp(g.y_root, yv, cum)) if yv[0] < g.y_root < yv[-1] else 0.0
+    L_free = L_tot - s_root
+
+    # ---- shell-bending stiffness, integrated per station
+    n = 800
+    sv = np.linspace(0.0, L_free, n)
+    tw = (P["wing_wall_root"] + (P["wing_wall_tip"] - P["wing_wall_root"])
+          * np.clip((s_root + sv) / L_tot, 0.0, 1.0))
+    half = 0.5 * (P["wing_anchor_w"] + (P["wing_width"] - P["wing_anchor_w"])
+                  * np.clip(sv / P["wing_anchor_len"], 0.0, 1.0))
+    A_cut = P["wing_thick"] * 2.0 * half                    # mm^2 of cut plane
+    L_A = (np.pi / 4.0) * (3.09 / P["gyroid_cell_wing"])    # sheet chord per unit area
+    chord = L_A * A_cut                                     # mm of sheet in the cut
+    D = E * tw ** 3 / (12.0 * (1.0 - NU ** 2))              # plate rigidity, N.mm
+    EI = D * chord * P["shell_chi"]
+    k = 1.0 / float(np.trapezoid((L_free - sv) ** 2 / EI, sv))
+
+    rho_nom = 3.09 * float(tw.mean()) / P["gyroid_cell_wing"]
+
+    out = dict(L_free=L_free, L_tot=L_tot, k=k, rho_nom=rho_nom,
+               chord_root=float(chord[0]), chord_tip=float(chord[-1]),
+               stations=(sv, tw, 2 * half, chord, EI))
+
+    if measure:
+        # measured as-built density over the free span, sheet region only
+        fn, _ = PARTS["jacket_wing"][0](g)
+
+        def wfn(X, Y, Z, C):
+            D2 = _bezier_dist_and_s(C, pts)[0]
+            return I(wing_envelope(g, X, Y, Z, D2),
+                     (g.y_root + P["wing_root_solid"]) - Y)
+
+        pts_x = [p[0] for p in pts]
+        b = ((min(pts_x) - 5.0, max(pts_x) + 5.0),
+             (g.y_root + P["wing_root_solid"], max(p[1] for p in pts) + 3.0),
+             (-P["wing_width"] - 1.0, 0.5))
+        sp = 0.055
+        fenv, _o, _s = evaluate(wfn, b, sp)
+        fpart, _o2, _s2 = evaluate(fn, b, sp)
+        inside = fenv < 0
+        out["vol_env"] = float(inside.sum()) * sp ** 3
+        out["rho_meas"] = (float((inside & (fpart < 0)).sum()) / max(inside.sum(), 1))
+    return out
 
 
 # --------------------------------------------------------------------------
@@ -1083,7 +1259,7 @@ def build(name, g, voxel=None):
     sp = spacing_for(bounds, budget, voxel)
     t0 = time.time()
     field, origin, sp = evaluate(fn, bounds, sp)
-    mesh = polygonise(field, origin, sp)
+    mesh = polygonise(field, origin, sp, tag=name)
     return mesh, sp, time.time() - t0
 
 
@@ -1094,13 +1270,29 @@ def mirror(mesh):
     return m
 
 
+def mesh_holes(mesh):
+    """Boundary edges (edges with a single face).  0 == the surface is closed.
+
+    trimesh's is_watertight also demands that no edge has MORE than two faces,
+    so a self-touching lattice sheet can be a closed surface and still report
+    False.  Holes are what actually break a slicer; pinches do not.
+    """
+    e = np.sort(mesh.edges, axis=1)
+    _, c = np.unique(e, axis=0, return_counts=True)
+    return int((c == 1).sum()), int((c > 2).sum())
+
+
 def report_row(name, mesh, sp, dt):
     b = mesh.bounds
     ext = b[1] - b[0]
+    tail = ""
+    if not mesh.is_watertight:
+        h, pn = mesh_holes(mesh)
+        tail = f"  [holes {h}, pinch edges {pn}]"
     return (f"{name:24s} {'YES' if mesh.is_watertight else 'NO ':>4s}  "
             f"vol {mesh.volume:9.1f} mm3  bbox "
             f"{ext[0]:6.2f} x {ext[1]:6.2f} x {ext[2]:6.2f}  "
-            f"tris {len(mesh.faces):7d}  voxel {sp:.3f}  {dt:5.1f}s")
+            f"tris {len(mesh.faces):7d}  voxel {sp:.3f}  {dt:5.1f}s" + tail)
 
 
 def main():
@@ -1169,6 +1361,10 @@ def main():
         meshes[n] = mesh
         rows.append(report_row(n, mesh, sp, dt))
         print(rows[-1])
+        if n in DROPPED:
+            cnt, vol = DROPPED[n]
+            print(f"{'':26s}cleaned {cnt} marching-cubes artefacts "
+                  f"({vol:.3f} mm3: sub-voxel islands + trapped-powder voids)")
         if args.ear in ("right", "both"):
             mesh.export(os.path.join(out, "right", f"{n}.stl"))
         if args.ear in ("left", "both"):
@@ -1191,23 +1387,67 @@ def main():
         w_rim, f_rim, p_rim = overhang_stats(we, (0, 0, -1))
         d, w_best, f_best, p_best = best_build_dir(we)
         print("-" * 100)
-        print(f"wing macro envelope, printed rim-down (build dir 0,0,-1): "
+        print(f"wing SOLID envelope (bounding shape, not the part), rim-down: "
               f"worst overhang {w_rim:.1f} deg, p99 {p_rim:.1f} deg, "
               f"{100*f_rim:.1f}% of area over 45 deg")
         print(f"best sampled build direction ({d[0]:+.2f},{d[1]:+.2f},{d[2]:+.2f}): "
               f"worst {w_best:.1f} deg, p99 {p_best:.1f} deg, "
               f"{100*f_best:.1f}% of area over 45 deg")
+        wr = wing_report(g, measure=("jacket_wing" in meshes))
+        print(f"wing macro gyroid: cell {P['gyroid_cell_wing']} mm, wall "
+              f"{P['wing_wall_root']}->{P['wing_wall_tip']} mm, envelope "
+              f"{wr['L_free']:.1f} long x {P['wing_thick']} (press) x {P['wing_width']} "
+              f"(deep) mm")
+        print(f"  relative density  nominal 3.09t/a = {100*wr['rho_nom']:.1f}%"
+              + (f"   as-built (incl. rolled edges) = {100*wr['rho_meas']:.1f}%"
+                 if "rho_meas" in wr else ""))
+        print(f"  shell-bending tip stiffness k = {wr['k']:.3f} N/mm  ->  "
+              f"F(1.0 mm) = {wr['k']:.3f} N, F(1.5 mm) = {1.5*wr['k']:.3f} N   "
+              f"(target k 0.15-0.35 N/mm; chi={P['shell_chi']})")
         if "jacket_wing" in meshes:
-            w2, f2, p2 = overhang_stats(meshes["jacket_wing"], (0, 0, -1))
-            print(f"full jacket+wing incl. lattice, rim-down: worst {w2:.1f} deg, "
-                  f"p99 {p2:.1f} deg, {100*f2:.1f}% of area over 45 deg "
-                  f"(gyroid micro-facets dominate this number; the gyroid is "
-                  f"self-supporting in practice)")
+            jw = meshes["jacket_wing"]
+            w2, f2, p2 = overhang_stats(jw, (0, 0, -1))
+            sel = jw.triangles_center[:, 1] > g.y_root
+            w3, f3, p3 = overhang_stats(jw, (0, 0, -1), sel=sel)
+            print(f"as-built wing sheet (y > rim), rim-down: worst {w3:.1f} deg, "
+                  f"p99 {p3:.1f} deg, {100*f3:.1f}% of area over 45 deg")
+            print(f"whole jacket+wing, rim-down: worst {w2:.1f} deg, "
+                  f"p99 {p2:.1f} deg, {100*f2:.1f}% of area over 45 deg")
 
-    bad = [n for n, mm in meshes.items() if not mm.is_watertight]
+    # ---- skirt contact land + pressure budget (docs/MECH_VALIDATION.md JOB 2)
+    if args.all or "carrier" in meshes:
+        fl = math.radians(P["skirt_flare_deg"])
+        w = g.skirt_land_w
+        print("-" * 100)
+        print(f"skirt contact land: {w:.2f} mm slant width at {P['skirt_flare_deg']}deg, "
+              f"Ø{g.skirt_land_d0:.1f} -> Ø{P['skirt_max_dia']:.1f} mm, wall "
+              f"{P['skirt_wall_land']} mm, compliance groove {P['skirt_wall_hinge']} mm "
+              f"x {P['skirt_hinge_w']} mm behind it   (FEA minimum 4.0 mm)")
+        f_max = g.mag["f_lo"]
+        cells = []
+        for dia in (10.0, 13.0, 16.0, 19.0):
+            area = math.pi * dia * w * math.sin(fl)      # mm^2, cone-normal
+            kpa = 1000.0 * f_max / area
+            tag = ("comfortable" if kpa <= 2.15 else
+                   "borderline" if kpa <= 4.27 else "TOO MUCH")
+            cells.append(f"Ø{dia:.0f}: {kpa:4.2f} kPa {tag}")
+        print(f"  cone-normal pressure at F_max {f_max} N   " + " | ".join(cells))
+
+    # verify what a slicer actually sees: re-read the exported binary STL
     print("-" * 100)
+    holed = []
+    for n in meshes:
+        rm = trimesh.load(os.path.join(out, "right", f"{n}.stl"), force="mesh")
+        if rm.is_watertight:
+            continue
+        h, pn = mesh_holes(rm)
+        print(f"  re-read {n}: holes {h}, pinch edges {pn}"
+              + ("  (closed surface; pinches only)" if h == 0 else "  *** OPEN ***"))
+        if h:
+            holed.append(n)
+    bad = [n for n, mm in meshes.items() if not mm.is_watertight] + holed
     print(f"{len(meshes)} parts written to {out}/  "
-          + ("ALL WATERTIGHT" if not bad else f"NOT WATERTIGHT: {bad}"))
+          + ("ALL WATERTIGHT" if not bad else f"NOT CLOSED: {sorted(set(bad))}"))
     return 1 if bad else 0
 
 

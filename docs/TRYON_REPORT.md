@@ -554,6 +554,99 @@ Caveats: translation-only equilibrium (no rotation), flat-force approximation,
 and the seatings were optimised without plunger contacts in the cost, so the
 poses are not the ones a plunger-aware optimiser would choose.
 
+## The proposed inferior seat cannot work — there is no anatomy there
+
+The topology fix under evaluation was a passive 2.5 mm silicone bumper on the
+jacket's inferior rim, facing along the plungers' co-directional reaction sum
+(+0.25, −1.82, +0.38), so the stacks would press the body onto it and
+self-energize. Modelled in `earfit.iem_points` as `seat` / `_seat` — **a proposal,
+not a built part** — and added to `float_equilibrium.py` as a compliant unilateral
+contact (soft over 1 mm, rigid beyond).
+
+**It makes contact on 0 of 13 ears.** Not marginal contact — no ray from that
+site reaches flesh at all. Checking in every direction rather than just along the
+aim:
+
+| | distance from seat tip to nearest flesh |
+|---|---|
+| min | 1.81 mm (`xs_deep`) |
+| median | **13.09 mm** |
+| max | 16.53 mm |
+
+and the *direction* to that flesh averages **(+0.18, +0.39, −0.90)** — medial and
+slightly superior, i.e. the concha floor — which is **123° away from the proposed
+seat aim**. Even the bare jacket surface at that location sits 6.0–14.8 mm from
+the ear.
+
+**Below the jacket's inferior rim the shell is hanging over open space.** That is
+the same void already documented three times in this report: the antitragus
+plunger missed 10 of 13 ears, the intertragic notch is an *opening* in the
+cartilage, and no inferior aim in the 10° sweep reached more than 6 of 13. A
+2.5 mm bumper cannot bridge a 13 mm gap, and a standoff long enough to try is not
+a bumper — it is the antitragus leg again, which already failed.
+
+### The geometric truth behind it
+
+The concha offers reaction surfaces **superiorly** (cymba, antihelix) and
+**medially** (the floor, which the jacket already rests on). It offers none
+**inferiorly**. So a preload whose net reaction points inferiorly has nothing to
+push back on, and no passive part placed there will change that.
+
+The fix therefore is not a new contact. It is to stop generating an inferior net
+reaction: the two stacks must be aimed so their reaction sum points **medially,
+into the concha floor**, where the jacket can react it — not inferiorly into the
+notch. The X axis already partly opposes (cymba +0.20, antihelix −0.45, sum
++0.25); it is the Y axis, where both aim +0.85 to +0.98 and nothing opposes, that
+has to change.
+
+### Equilibrium results with bottomed stacks modelled
+
+Re-run at L_c = 4.5 mm, S = 6.0 mm, now treating a bottomed stack as a rigid
+strut rather than a spring. Body shift median **2.84 mm**, max 7.44 mm.
+
+| site | engaged | consumed min | median | p90 | max |
+|---|---|---|---|---|---|
+| cymba | 9/13 | −0.01 | 2.81 | 21.44 | 29.41 |
+| antihelix_undercut | 3/13 | −1.65 | 5.63 | 11.82 | 13.99 |
+
+**Do close ears get relieved, or do they take a rigid strut? Both, depending on
+the ear.** Floating clears most of them — cymba engagement rises 6/13 → 9/13 —
+but two ears bottom out, and one badly:
+
+| ear | site | peak strut force |
+|---|---|---|
+| pp67 | cymba | 0.16 N — trivial, effectively just touching |
+| **pp82** | **antihelix** | **32.98 N** |
+
+33 N through a bottomed magnet stack is not a fit, it is a press. On `pp82` the
+antihelix stack has no room and becomes a solid column between shell and
+cartilage. **That is a hard interference and a comfort/safety failure**, and it is
+the strongest argument yet for shortening the compacted stack rather than adding
+stroke.
+
+### Stability matrix, 4-contact config
+
+With the seat contributing nothing, this is the two-stack config measured across
+the size range:
+
+| μ | small `P0016` 0.5 / 0.2 N | median `P0023` 0.5 / 0.2 N | large `pp49` 0.5 / 0.2 N |
+|---|---|---|---|
+| 0.4 | 0.15× / 0.25× | 0.31× / 0.46× | 0.77× / 0.88× |
+| 0.6 | 0.37× / 0.61× | 0.79× / **1.14×** | **1.17× / 1.55×** |
+| 0.8 | 0.66× / **1.11×** | **1.19× / 1.76×** | **3.47× / 4.48×** |
+| 1.0 | 0.92× / **1.57×** | **5.97× / 11.01×** | **4.14× / 7.64×** |
+
+Margin rises monotonically with ear size at every μ. **The small ear is the
+binding case** — it never passes with the cable hanging free, and needs μ ≥ 0.8
+plus over-ear routing. It is short of contact area and preload, not of room,
+which is the opposite of the usual size-tail concern.
+
+### Seat contact-point spread
+
+Not reportable: with zero contacts there is no spread to measure. If the seat is
+re-sited medially onto the concha floor, that question becomes answerable — and
+worth asking then, because the floor is the one surface every ear presents.
+
 ## Deriving the third plunger aim from data
 
 `plunger_aim_search.py` sweeps candidate aims on a 10° grid and, for each ear,

@@ -45,13 +45,17 @@ import numpy as np
 import trimesh
 from scipy.optimize import least_squares
 
-from earfit import ALIGNED, NOZZLE_AXIS, EarField, iem_points, transform
+from earfit import (ALIGNED, NOZZLE_AXIS, SEAT_COMPRESS, SEAT_T, EarField,
+                    iem_points, transform)
 
 F_PLUNGER = 0.33      # N, mid of the 0.18-0.49 band (flat-force approximation)
 SKIRT_MAX = 0.31      # N total
 K_SKIRT = 0.124       # N/mm per unit penetration, ~0.31 N over a 2.5 mm window
 K_JACKET = 0.50
 K_RIGID = 20.0
+K_SEAT = 0.70         # N/mm; ~0.7 N at full 1 mm compression, enough to catch
+                      # both stacks (2 x 0.33 N) before the bumper goes rigid
+K_SEAT_RIGID = 20.0   # past SEAT_COMPRESS the silicone is bottomed -> hard strut
 
 
 def ear_bits(rec):
@@ -87,12 +91,36 @@ def solve_ear(rec, P, patch, field, sites, L_c, S):
                                                    multiple_hits=False)
         return float(np.linalg.norm(loc[0] - org)) if len(ir) else np.inf
 
+    seat = P.get("_seat")
+    seat_dir = seat_base = None
+    if seat is not None:
+        seat_dir = R @ np.array(seat["aim"], float)
+        seat_dir /= np.linalg.norm(seat_dir)
+        seat_base = transform(np.array(seat["base"], float)[None, :], M)[0]
+
+    def seat_force(t):
+        """Compliant unilateral bumper: soft over SEAT_COMPRESS, then rigid."""
+        if seat_dir is None:
+            return np.zeros(3), np.inf, 0.0
+        D = gap(seat_base + t, seat_dir)
+        if not np.isfinite(D) or D >= SEAT_T:
+            return np.zeros(3), D, 0.0
+        comp = SEAT_T - D
+        f = K_SEAT * min(comp, SEAT_COMPRESS)
+        if comp > SEAT_COMPRESS:
+            f += K_SEAT_RIGID * (comp - SEAT_COMPRESS)
+        return f * (-seat_dir), D, comp
+
     def resid(t):
         F = np.zeros(3)
         for _nm, d, b in bases:
             D = gap(b + t, d)
             if L_c <= D <= L_c + S:
                 F += F_PLUNGER * (-d)
+            elif np.isfinite(D) and D < L_c:
+                # stack bottomed: it is now a rigid strut, not a spring
+                F += K_RIGID * (L_c - D) * (-d)
+        F += seat_force(t)[0]
         for pts, k, cap in ((ring, K_SKIRT, SKIRT_MAX), (jac, K_JACKET, None),
                             (rig, K_RIGID, None)):
             q = pts + t
@@ -116,8 +144,16 @@ def solve_ear(rec, P, patch, field, sites, L_c, S):
     for nm, d, b in bases:
         D = gap(b + t, d)
         eng = L_c <= D <= L_c + S
+        bott = bool(np.isfinite(D) and D < L_c)
         out[nm] = dict(D=D, consumed=(D - L_c) if np.isfinite(D) else np.inf,
-                       engaged=bool(eng))
+                       engaged=bool(eng), bottomed=bott,
+                       strut_N=(K_RIGID * (L_c - D)) if bott else 0.0)
+    sf, sD, scomp = seat_force(t)
+    out["_seat"] = dict(D=sD, compression=scomp, force=float(np.linalg.norm(sf)),
+                        contact=bool(scomp > 0),
+                        bottomed=bool(scomp > SEAT_COMPRESS),
+                        point=(seat_base + t + seat_dir * sD).tolist()
+                        if np.isfinite(sD) else None)
     out["_t"] = t.tolist()
     out["_resid"] = float(np.linalg.norm(r.fun))
     return out
@@ -144,7 +180,9 @@ def main():
 
     per = {nm: [] for nm, _, _ in sites}
     eng = {nm: 0 for nm, _, _ in sites}
+    bot = {nm: [] for nm, _, _ in sites}
     shifts = []
+    seats = []
     print(f"{'ear':<22}{'shift mm':>9} " +
           " ".join(f"{nm[:12]:>14}" for nm, _, _ in sites))
     for p in js:
@@ -159,8 +197,16 @@ def main():
             eng[nm] += int(d["engaged"])
             cells.append(("--" if not np.isfinite(d["D"]) else f"{d['consumed']:+.2f}")
                          + ("*" if d["engaged"] else " "))
+        sd = r["_seat"]
+        seats.append((rec["ear_id"], sd))
+        for nm, _, _ in sites:
+            if r[nm]["bottomed"]:
+                bot[nm].append((rec["ear_id"], r[nm]["strut_N"]))
+        st = ("--" if not np.isfinite(sd["D"]) else
+              (f"{sd['compression']:.2f}mm/{sd['force']:.2f}N"
+               + ("!" if sd["bottomed"] else "") if sd["contact"] else "gap"))
         print(f"{rec['ear_id']:<22}{np.linalg.norm(t):9.2f} " +
-              " ".join(f"{c:>14}" for c in cells))
+              " ".join(f"{c:>14}" for c in cells) + f"  seat {st}")
     print("\n(* = stack engaged at equilibrium; value = stroke consumed from "
           "compacted)\n")
     print(f"body shift at equilibrium: median {np.median(shifts):.2f} mm, "
@@ -174,6 +220,36 @@ def main():
             continue
         print(f"| {nm} | {eng[nm]}/{len(js)} | {v.min():.2f} | "
               f"{np.median(v):.2f} | {np.percentile(v,90):.2f} | {v.max():.2f} |")
+
+    print("\n--- bottomed stacks (rigid strut, not a spring) ---")
+    any_b = False
+    for nm, _, _ in sites:
+        for eid, f in bot[nm]:
+            print(f"  {nm:<20} {eid:<12} peak strut force {f:6.2f} N")
+            any_b = True
+    if not any_b:
+        print("  none -- floating onto the seat cleared every close ear")
+
+    print("\n--- inferior seat ---")
+    ok = [d for _e, d in seats if d["contact"]]
+    print(f"  contact on {len(ok)}/{len(seats)} ears; "
+          f"bottomed on {sum(1 for d in ok if d['bottomed'])}")
+    if ok:
+        c = np.array([d["compression"] for d in ok])
+        print(f"  compression: min {c.min():.2f}  median {np.median(c):.2f}  "
+              f"max {c.max():.2f} mm (usable {SEAT_COMPRESS:.1f})")
+        pts = np.array([d["point"] for _e, d in seats
+                        if d["contact"] and d["point"] is not None])
+        if len(pts) > 1:
+            ctr = pts.mean(axis=0)
+            rad = np.linalg.norm(pts - ctr, axis=1)
+            print(f"  contact-point spread about the mean: median {np.median(rad):.2f}  "
+                  f"max {rad.max():.2f} mm -> a single {2*rad.max():.0f} mm-wide pad "
+                  f"{'covers' if rad.max() <= 4.0 else 'does NOT cover'} every ear")
+    for eid, d in seats:
+        if not d["contact"]:
+            g = "no hit" if not np.isfinite(d["D"]) else f"{d['D']:.2f} mm away"
+            print(f"    no seat contact: {eid} ({g})")
     return 0
 
 

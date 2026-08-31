@@ -41,6 +41,15 @@ EARS = os.path.join(HERE, "ears")
 ALIGNED = os.path.join(EARS, "aligned")
 
 # ---- IEM geometry constants, mirrored from generate.py PARAMS -------------- #
+# ---- PROPOSED inferior soft seat (see iem_points) ------------------------- #
+# Aim is the plungers' co-directional reaction sum, normalised: the direction the
+# stacks push the body, hence where a passive seat has to sit to catch it.
+SEAT_AIM = (0.133, -0.968, 0.202)
+SEAT_T = 2.5             # mm silicone bumper standing off the jacket surface
+SEAT_R = 3.0             # mm pad radius
+SEAT_COMPRESS = 1.0      # mm usable compression before it goes rigid
+
+
 def _nozzle_frame(cant=None):
     """Nozzle-local -> assembly frame, read straight out of generate.py.
 
@@ -372,6 +381,39 @@ def iem_points(stl_dir=None, seed=0, cant=None):
                           for t in np.linspace(0, 2 * np.pi, 10, endpoint=False))
             out["boot"] = np.array(bp)
             out["_boot_tip"] = a1.tolist()
+    except Exception:                                            # noqa: BLE001
+        pass
+
+    # --- PROPOSED inferior soft seat (MODELLED, NOT BUILT) ------------------ #
+    # The two plunger stacks are ~92% co-directional, so nothing opposes their
+    # combined reaction and the body floats out from under them.  The fix under
+    # evaluation is a passive silicone bumper on the jacket's inferior rim,
+    # facing along the plungers' reaction sum -- the plungers press the body onto
+    # it, so it is self-energizing and needs no stroke.  This is a MODEL of a
+    # part the generator has not built; nothing here reads it back from an STL.
+    out["seat"] = np.zeros((0, 3))
+    out["_seat"] = None
+    try:
+        import generate
+        gp = generate.PARAMS if cant is None else dict(generate.PARAMS,
+                                                       nozzle_cant_deg=float(cant))
+        g2 = generate.G(gp)
+        a = np.array(SEAT_AIM, float); a /= np.linalg.norm(a)
+        cc = np.array(g2.core_c, float); crr = np.array(g2.core_r, float)
+        surf = cc + (crr ** 2 * a) / np.linalg.norm(crr * a)
+        base = surf + a * (gp["clearance"] + gp["jacket_thick"])
+        tip = base + a * SEAT_T
+        ref = np.array([0.0, 0.0, 1.0])
+        if abs(ref @ a) > 0.9:
+            ref = np.array([1.0, 0.0, 0.0])
+        su = np.cross(a, ref); su /= np.linalg.norm(su)
+        sv = np.cross(a, su)
+        disc = [tip] + [tip + SEAT_R * (np.cos(t) * su + np.sin(t) * sv)
+                        for t in np.linspace(0, 2 * np.pi, 8, endpoint=False)]
+        out["seat"] = np.array(disc)
+        out["_seat"] = dict(aim=a.tolist(), base=base.tolist(), tip=tip.tolist(),
+                            thickness=SEAT_T, radius=SEAT_R,
+                            compression=SEAT_COMPRESS)
     except Exception:                                            # noqa: BLE001
         pass
 

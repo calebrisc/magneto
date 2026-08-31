@@ -78,14 +78,37 @@ We therefore **multi-start**: five nozzle rakes (0-80 degrees of rotation about
 the design +Y, sweeping the nozzle from "anterior, lying in the concha" round
 to "medial, pointing down the canal") crossed with three rolls about +X, with
 the translation seeded each time so the Ø19 skirt rim centre lands on the
-aperture.  All fifteen are scored, the best two are refined with a bounded
+aperture.  All fifteen are scored, the best four are refined with a bounded
 Powell search (+-10 mm, +-40 degrees), and the winner is kept.  The seating cost
-is a physical one: the rim wants to lie in a +-0.75 mm contact band, the rigid
-Ti parts want no more than 0.3 mm of penetration, the wing tip wants about
-1 mm of press, and the jacket wants to be near the concha floor.  That local
-search is what a wearer does when they wiggle the thing in, and it is what
-makes the numbers mean something in spite of the frame ambiguity.  The winning
-rake is reported per ear as `nozzle_rake_deg`.
+is a physical one, and every term is there because leaving it out produced a
+pose a wearer would never adopt:
+
+    c_rim    the rim wants to lie in a +-0.75 mm contact band
+    c_pen    the rigid Ti parts want no more than 0.3 mm of penetration,
+             graded on the WORST point (a mean lets a corner bury itself)
+    c_wing   the wing tip wants about 1 mm of press into the antihelix
+    c_jac    the jacket wants to be near the concha floor
+    c_soft   the silicone skirt must not be BURIED.  c_rim scores |distance|,
+             so a rim 0.5 mm inside the flesh scores as well as one touching
+             it; with nothing opposing that, the optimiser bought rim coverage
+             by driving the whole Ø19 skirt down the canal -- 13 to 20 mm
+             medial of the tragus plane on the synthetic corners, which is
+             inside the skull.  A Ø19 skirt cannot enter an aperture that is at
+             most 18 x 14 mm; it seals *on* the funnel entrance.
+    c_prot   the other half of the same failure.  The assembly is 32.6 mm long
+             along its nozzle axis, so burying the rim throws the faceplate
+             just as far the other way.  The reported pose has to be one a
+             wearer would accept, not one standing 14 mm proud of the tragus.
+
+That local search is what a wearer does when they wiggle the thing in, and it
+is what makes the numbers mean something in spite of the frame ambiguity.  The
+winning rake is reported per ear as `nozzle_rake_deg`.
+
+STABILITY.  The cost surface is rough -- it is built on a sampled signed-distance
+field -- and Powell finds a local minimum, so the per-ear millimetres move a
+little between runs.  The sampling is seeded (`--field-seed`) so a given run
+reproduces exactly; vary the seed to measure how much any conclusion depends on
+it.  `docs/TRYON_REPORT.md` quotes that spread.
 
 Usage:
     python align_ear.py --dataset sonicom
@@ -308,13 +331,14 @@ def relu(a):
     return np.maximum(a, 0.0)
 
 
-def seating_cost(M, P, field):
+def seating_cost(M, P, field, ctx=None):
     if not np.all(np.isfinite(M)):
         return 1e6
     rim = field.query(transform(P["rim"], M))
     rig = field.query(transform(P["shell"], M))
     tip = field.query(transform(P["wing_tip"], M))
     jac = field.query(transform(P["jacket"], M))
+    sof = field.query(transform(P["soft"], M))
     c_rim = np.mean(relu(np.abs(rim) - 0.75) ** 2)
     # penetration is graded on the WORST point, not the mean: averaging over
     # 800 samples lets the optimiser bury a corner of the shell 4 mm into the
@@ -325,7 +349,28 @@ def seating_cost(M, P, field):
     t = float(np.median(tip))
     c_wing = 0.5 * (relu(t + 0.3) ** 2 + relu(-t - 2.0) ** 2)
     c_jac = 0.15 * np.mean(relu(jac - 2.0) ** 2)
-    c = c_rim + c_pen + c_wing + c_jac
+
+    # SOFT-BODY BURIAL.  c_rim scores |distance|, so a rim sitting 0.5 mm *inside*
+    # the flesh scores as well as one touching it.  With nothing else opposing it
+    # the optimiser buys rim coverage by driving the whole Ø19 skirt down the ear
+    # canal -- on the synthetic corners it put the rim 13-20 mm medial of the
+    # tragus plane, which is inside the skull.  A Ø19 mm skirt cannot enter a
+    # canal whose aperture is at most 18 x 14 mm; the skirt seals *on* the funnel
+    # entrance.  Silicone squashes, so allow ~0.75 mm mean and 1.5 mm worst-point.
+    c_soft = (2.0 * relu(-float(sof.min()) - 1.5) ** 2
+              + 1.0 * np.mean(relu(-sof - 0.75) ** 2))
+
+    # PROTRUSION.  The other half of the same failure: the assembly is 32.6 mm
+    # long along its nozzle axis, so burying the rim throws the faceplate just as
+    # far the other way.  Nobody wears an IEM standing 14 mm proud of the tragus,
+    # so the pose the optimiser reports has to be one a wearer would accept.
+    c_prot = 0.0
+    if ctx is not None and ctx.get("tragus") is not None:
+        fp = transform(P["faceplate"], M)
+        prot = float(np.max(np.einsum("ij,j->i", fp - ctx["tragus"], ctx["normal"])))
+        c_prot = 0.08 * relu(prot - 2.0) ** 2
+
+    c = c_rim + c_pen + c_wing + c_jac + c_soft + c_prot
     return float(c) if np.isfinite(c) else 1e6
 
 
@@ -341,18 +386,18 @@ def start_pose(frame, ap, rake_deg, roll_deg):
     return M
 
 
-def seat(frame, ap, P, field, refine=2):
+def seat(frame, ap, P, field, refine=4, ctx=None):
     starts = []
     for rake in RAKES:
         for roll in ROLLS:
             M = start_pose(frame, ap, rake, roll)
-            starts.append((seating_cost(M, P, field), rake, roll, M))
+            starts.append((seating_cost(M, P, field, ctx), rake, roll, M))
     starts.sort(key=lambda s: s[0])
 
     best = None
     for c0, rake, roll, M0 in starts[:refine]:
         def f(z, M0=M0):
-            return seating_cost(rt_matrix(z[:3], z[3:], M0), P, field)
+            return seating_cost(rt_matrix(z[:3], z[3:], M0), P, field, ctx)
         res = optimize.minimize(f, np.zeros(6), method="Powell",
                                 bounds=[(-10, 10)] * 3 + [(-40, 40)] * 3,
                                 options=dict(maxfev=1400, xtol=0.05, ftol=1e-3))
@@ -404,7 +449,9 @@ def process(path, ds, side, P, want_png, manual):
     tragus = find_tragus(dm, lm["aperture"], win)
     frame = concha_frame(lm["aperture"], n_out, win["lat"])
     field = EarField(patch)
-    cost, rake, roll, M, z, cost0 = seat(frame, lm["aperture"], P, field)
+    ctx = dict(tragus=None if tragus is None else np.asarray(tragus, float),
+               normal=n_out)
+    cost, rake, roll, M, z, cost0 = seat(frame, lm["aperture"], P, field, ctx=ctx)
 
     os.makedirs(ALIGNED, exist_ok=True)
     stem = os.path.join(ALIGNED, f"{ds}_{eid}_{side}")
@@ -433,7 +480,38 @@ def process(path, ds, side, P, want_png, manual):
     return rec
 
 
+def reseat(json_path, P, field_seed=0):
+    """Redo only the seating search for an ear that is already landmarked.
+
+    Landmarking (crop, depth map, escape fractions) is the expensive half and
+    does not change when the seating cost changes, so tuning the cost does not
+    have to re-cut every head mesh.  Reads the cached patch beside the JSON and
+    rewrites the transform and seating diagnostics in place.
+    """
+    rec = json.load(open(json_path))
+    patch = trimesh.load(os.path.join(ALIGNED, rec["patch"]), force="mesh")
+    ap = np.array(rec["aperture"], float)
+    frame = np.array(rec["concha_frame"], float)
+    n_out = np.array(rec["floor_normal"], float)
+    trg = rec.get("tragus")
+    ctx = dict(tragus=None if trg is None else np.array(trg, float), normal=n_out)
+    cost, rake, roll, M, z, cost0 = seat(frame, ap, P,
+                                         EarField(patch, seed=field_seed), ctx=ctx)
+    rec.update(transform=M.tolist(), nozzle_rake_deg=rake, roll_deg=roll,
+               seat_delta=z, seat_cost=cost, seat_cost_start=cost0)
+    with open(json_path, "w") as f:
+        json.dump(rec, f, indent=1)
+    return rec
+
+
 _P = None
+
+
+def _reseat_worker(json_path, field_seed=0):
+    global _P
+    if _P is None:
+        _P = iem_points()
+    return reseat(json_path, _P, field_seed)
 
 
 def _worker(path, ds, side, want_png, manual):
@@ -447,7 +525,14 @@ def _worker(path, ds, side, want_png, manual):
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--dataset", choices=list(DATASETS), required=True)
+    ap.add_argument("--dataset", choices=list(DATASETS), default=None)
+    ap.add_argument("--field-seed", type=int, default=0,
+                    help="seed for the ear-surface point sampling; vary it to "
+                         "measure how much a result depends on the sampling")
+    ap.add_argument("--reseat", action="store_true",
+                    help="re-run only the seating search over ears already in "
+                         "ears/aligned/, reusing their cached patch and "
+                         "landmarks (for tuning the seating cost)")
     ap.add_argument("--side", default="right", choices=("right", "left"))
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--qc-png", action="store_true")
@@ -455,24 +540,53 @@ def main():
                     help='manual overrides: {ear_id: {"aperture": [x,y,z], '
                          '"floor_normal": [x,y,z]}}')
     ap.add_argument("--jobs", type=int, default=max(1, (os.cpu_count() or 2) - 1))
+    ap.add_argument("--skip-existing", action="store_true",
+                    help="leave ears that already have a JSON in ears/aligned/ "
+                         "alone; makes the run resumable after an interrupt")
     a = ap.parse_args()
-
-    root = os.path.join(EARS, a.dataset)
-    files = sorted(glob.glob(os.path.join(root, DATASETS[a.dataset]["glob"])))
-    if a.limit:
-        files = files[:a.limit]
-    if not files:
-        sys.exit(f"no meshes under {root} -- run fetch_ears.py / make_synthetic_ear.py")
-
-    manual = json.load(open(a.landmarks)) if a.landmarks else None
-    ok = bad = 0
-    t0 = time.time()
 
     def report(r):
         print(f"{r['dataset']:>9}/{r['ear_id']:<7} esc {r['basin_escape']:.2f}  "
               f"area {r['basin_area']:6.1f}  run {r['canal_run']:4.1f}  "
               f"rake {r['nozzle_rake_deg']:3.0f}  cost {r['seat_cost_start']:6.2f}"
               f" -> {r['seat_cost']:6.3f}{'  WEAK' if r['weak'] else ''}", flush=True)
+
+    if a.reseat:
+        pat = f"{a.dataset}_*.json" if a.dataset else "*.json"
+        js = sorted(glob.glob(os.path.join(ALIGNED, pat)))
+        if not js:
+            sys.exit(f"nothing to reseat in {ALIGNED}")
+        t0, ok, bad = time.time(), 0, 0
+        with cf.ProcessPoolExecutor(max_workers=a.jobs) as ex:
+            futs = {ex.submit(_reseat_worker, p, a.field_seed): p for p in js}
+            for fut in cf.as_completed(futs):
+                try:
+                    report(fut.result()); ok += 1
+                except Exception as e:                           # noqa: BLE001
+                    bad += 1
+                    print(f"{os.path.basename(futs[fut])}  FAILED: {e}", flush=True)
+        print(f"\n{ok} reseated, {bad} failed, {time.time()-t0:.0f}s")
+        return 0
+
+    if not a.dataset:
+        ap.error("--dataset is required unless --reseat is given")
+    root = os.path.join(EARS, a.dataset)
+    files = sorted(glob.glob(os.path.join(root, DATASETS[a.dataset]["glob"])))
+    if a.skip_existing:
+        idf = DATASETS[a.dataset]["id_from"]
+        files = [p for p in files if not os.path.exists(
+            os.path.join(ALIGNED, f"{a.dataset}_{idf(p)}_{a.side}.json"))]
+    if a.limit:
+        files = files[:a.limit]
+    if not files:
+        if a.skip_existing and glob.glob(os.path.join(root, DATASETS[a.dataset]["glob"])):
+            print(f"{a.dataset}: every mesh already aligned in {ALIGNED}, nothing to do")
+            return 0
+        sys.exit(f"no meshes under {root} -- run fetch_ears.py / make_synthetic_ear.py")
+
+    manual = json.load(open(a.landmarks)) if a.landmarks else None
+    ok = bad = 0
+    t0 = time.time()
 
     if a.jobs > 1:
         with cf.ProcessPoolExecutor(max_workers=a.jobs) as ex:

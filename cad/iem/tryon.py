@@ -28,10 +28,14 @@ between part and flesh), negative = the part is inside the flesh**.
       tragus plane (the plane through the detected tragus apex, normal =
       concha-floor outward normal).  Positive = sticking out of the ear.
 
-  (e) HARD INTERFERENCE -- the most negative signed distance over ~800 points
-      sampled on the parts that cannot deform (Ti core, faceplate, jacket +
-      wing).  Silicone can absorb roughly 2.5 mm of overlap by squashing; past
-      that something has to give, and it will not be the ear.
+  (e) HARD INTERFERENCE -- the most negative signed distance over the points
+      sampled on the parts that cannot deform and are not supposed to press:
+      the Ti core, the faceplate and the jacket body, i.e. `shell` = rigid minus
+      the wing.  Flesh can absorb roughly 2.5 mm of overlap; past that something
+      has to give, and it will not be the ear.  The wing is excluded because it
+      is *designed* to press into the antihelix -- counting it here made the
+      clearance axis contradict the retention axis.  Its worst penetration is
+      still reported, as `wing_min`, and graded on the retention axis.
 
 GRADING -- each ear gets pass / marginal / fail on four axes, and the overall
 grade is the worst of them, with `worst_metric` naming the one that drove it:
@@ -83,9 +87,16 @@ def score(rec, P, field):
     jac = q("jacket")
     jac_mean, jac_max = float(jac.mean()), float(jac.max())
 
-    rigid = q("rigid")
-    hard = float(rigid.min())
-    hard_n = int((rigid < -2.5).sum())
+    # Clearance is graded on `shell` -- the rigid parts MINUS the wing -- to match
+    # what the seating search penalises.  Grading it on `rigid` (wing included)
+    # made the clearance axis contradict the retention axis: the wing is *meant*
+    # to press -0.5 to -2.0 mm into the antihelix, so an on-target wing forced
+    # hard_min <= -2 and could never score better than "marginal" on clearance.
+    # The wing's own penetration is reported as wing_min and graded by retention.
+    shell = q("shell")
+    hard = float(shell.min())
+    hard_n = int((shell < -2.5).sum())
+    wing_min = float(min(q("wing_tip").min(), q("wing_mid").min()))
 
     trg = rec.get("tragus")
     if trg is None:
@@ -93,7 +104,9 @@ def score(rec, P, field):
     else:
         n = np.array(rec["floor_normal"], float)
         fp = transform(P["faceplate"], M)
-        prot = float(np.max((fp - np.array(trg, float)) @ n))
+        # einsum, not `@`: Accelerate's (N,3)@(3,) path raises spurious
+        # divide-by-zero/overflow warnings on macOS for finite inputs.
+        prot = float(np.max(np.einsum("ij,j->i", fp - np.array(trg, float), n)))
 
     g_seal = "pass" if cover >= 0.75 else "marginal" if cover >= 0.50 else "fail"
     g_ret = ("pass" if -2.5 <= tip <= 0.0 else
@@ -113,7 +126,7 @@ def score(rec, P, field):
         rim_cover=cover, rim_gap=gap, rim_press=press,
         wing_tip=tip, wing_mid=mid,
         jacket_mean=jac_mean, jacket_max=jac_max,
-        protrusion=prot, hard_min=hard, hard_n=hard_n,
+        protrusion=prot, hard_min=hard, hard_n=hard_n, wing_min=wing_min,
         rake=rec["nozzle_rake_deg"], seat_cost=rec["seat_cost"],
         weak=rec["weak"], canal_run=rec["canal_run"],
         basin_escape=rec["basin_escape"],
@@ -207,9 +220,15 @@ def main():
         w.writeheader()
         w.writerows(rows)
 
-    # worst = fail before marginal before pass, then hardest to seat first
-    worst = sorted(rows, key=lambda r: (GRADES.index(r["grade"]), r["seat_cost"]),
-                   reverse=True)[:5]
+    # worst = most failing axes first, then hardest to seat.  Ranking on the
+    # overall grade alone cannot separate the bottom of the table once nearly
+    # every ear fails something: the count of failed axes can.
+    def severity(r):
+        nfail = sum(1 for ax in ("seal", "retention", "clearance", "protrusion")
+                    if r["g_" + ax] == "fail")
+        return (nfail, r["seat_cost"])
+
+    worst = sorted(rows, key=severity, reverse=True)[:5]
     md = [summarise(rows), "", "### worst 5 ears", "",
           fmt_table(worst,
                     ["dataset", "ear_id", "grade", "worst_metric", "rim_cover",

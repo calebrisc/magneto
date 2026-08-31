@@ -41,8 +41,8 @@ EARS = os.path.join(HERE, "ears")
 ALIGNED = os.path.join(EARS, "aligned")
 
 # ---- IEM geometry constants, mirrored from generate.py PARAMS -------------- #
-SKIRT_RIM_X = 13.65        # mm, design X of the skirt rim / seal plane
-SKIRT_RIM_R = 9.325        # mm, rim centreline radius (19.0/2 - 0.35/2)
+SKIRT_RIM_X = 13.67        # mm, design X of the skirt rim / seal plane
+SKIRT_RIM_R = 9.375        # mm, rim centreline radius (19.0/2 - skirt_wall_land/2)
 CARRIER_X0 = 4.65          # mm, carrier proximal face
 
 DATASETS = {
@@ -149,8 +149,10 @@ class EarField:
     decision we make has a threshold well outside that band.
     """
 
-    def __init__(self, patch, n=250_000):
-        pts, fid = trimesh.sample.sample_surface(patch, n)
+    def __init__(self, patch, n=250_000, seed=0):
+        # seeded: the report quotes per-ear millimetres, and an unseeded surface
+        # sampling moved them by ~0.1 mm between runs
+        pts, fid = trimesh.sample.sample_surface(patch, n, seed=seed)
         self.pts = np.asarray(pts)
         self.nrm = patch.face_normals[fid]
         self.tree = cKDTree(self.pts)
@@ -216,9 +218,9 @@ def iem_points(stl_dir=None, seed=0):
     body = jv[(jv[:, 1] < 8.0) & (jv[:, 2] < -3.0)]
     out["jacket"] = body[rng.choice(len(body), min(140, len(body)), replace=False)]
 
-    s_core = trimesh.sample.sample_surface(core, 260)[0]
-    s_face = trimesh.sample.sample_surface(face, 140)[0]
-    s_jw = trimesh.sample.sample_surface(jw, 700)[0]
+    s_core = trimesh.sample.sample_surface(core, 260, seed=seed)[0]
+    s_face = trimesh.sample.sample_surface(face, 140, seed=seed)[0]
+    s_jw = trimesh.sample.sample_surface(jw, 700, seed=seed)[0]
     out["rigid"] = np.vstack([s_core, s_face, s_jw])
     # `shell` is `rigid` minus the wing.  The wing is *meant* to press into the
     # antihelix, so counting it as interference would make every seated pose
@@ -231,7 +233,14 @@ def iem_points(stl_dir=None, seed=0):
     out["skirt"] = cv[r > 6.0]
 
     fv = face.vertices
-    out["faceplate"] = fv[fv[:, 2] > fv[:, 2].max() - 1.5]
+    fp = fv[fv[:, 2] > fv[:, 2].max() - 1.5]
+    # decimated: protrusion is a max over the outer band, and 300 well-spread
+    # points land within ~0.05 mm of the max over all ~22 k.  The full set is
+    # transformed thousands of times inside the seating search, where it was
+    # the single most expensive term.
+    if len(fp) > 300:
+        fp = fp[rng.choice(len(fp), 300, replace=False)]
+    out["faceplate"] = fp
 
     out["_bbox"] = np.vstack([core.bounds, face.bounds, jw.bounds, car.bounds])
     return out

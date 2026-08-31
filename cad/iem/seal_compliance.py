@@ -221,11 +221,14 @@ def main():
                          "(captures the intertragic-notch flare); 'circle' uses "
                          "the analytic Ø19 ring, for comparison with older runs")
     ap.add_argument("--stl-dir", default=None)
+    ap.add_argument("--json-dir", default=None,
+                    help="directory of per-ear seating JSONs (default ears/aligned); "
+                         "patches are always read from ears/aligned")
     ap.add_argument("--csv", default=os.path.join(ALIGNED, "seal_compliance.csv"))
     ap.add_argument("--md", default=os.path.join(ALIGNED, "seal_compliance.md"))
     a = ap.parse_args()
 
-    js = sorted(glob.glob(os.path.join(ALIGNED, "*.json")))
+    js = sorted(glob.glob(os.path.join(a.json_dir or ALIGNED, "*.json")))
     if not js:
         sys.exit("nothing in ears/aligned -- run align_ear.py first")
 

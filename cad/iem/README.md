@@ -376,107 +376,87 @@ without a lower preload or a wider flare. Note also FEA §2.8: real pressure pea
 at the leading edge of contact at plausibly 1.5–3× the average, which is what the
 0.20 mm compliance groove is there to blunt.
 
-## 6. The wing: a macro-scale gyroid shell
+## 6. The wing mechanism: three radial mag-plungers
 
-`docs/MECH_VALIDATION.md` (FEA, commit `658bf9d`) refuted the original wing: a
-1.2 mm-cell graded gyroid inside a 4 × 7 mm blade is **43–85 % dense** at printable
-walls and measured **k = 5 134 N/mm** against a target of ~0.3 N/mm — a rigid
-wedge, not a spring. A 1.2 mm cell simply cannot be open at a 0.20 mm minimum
-wall (ρ ≈ 3.09 t/a ≥ 0.51 by construction).
+`docs/MECH_VALIDATION.md` (`8eb6ac1`) retired the Ti spring wing. The compliant
+gyroid sheet passed the force target only by being ~14 mm long, which reinstated
+exactly the overpressure the v4 shortening was added to fix — it traded a force
+problem for a fit problem. The replacement decouples them: a **cam preset absorbs
+per-ear geometry**, and the magnets only regulate force over a small window they
+can comfortably cover. It also removes fatigue from the design entirely.
 
-**The fix is scale, not density.** The wing is now **1–2 gyroid unit cells at a
-12 mm cell** — at that size the gyroid is no longer a lattice, it is a single
-doubly-curved 0.2 mm Ti sheet that flexes like a leaf spring. The jacket's own
-fine 1.2 mm gyroid skin is unchanged; it is structural-rigid by design.
+The plan then moved from one 14 × 6 mm rail to **three independent radial
+plungers**, one per contact site, each with its own aim, cam and stops.
 
-| | value |
-|---|---|
-| unit cell (`gyroid_cell_wing`) | **12.0 mm** |
-| sheet wall (`wing_wall_root` → `wing_wall_tip`) | **0.20 mm constant** |
-| envelope (free span × press direction × depth into concha) | **10.4 × 7.0 × 5.0 mm** |
-| anchored foot (`wing_anchor_w` → `wing_width` over `wing_anchor_len`) | **1.4** → 5.0 mm over 7.0 mm |
-| shortened / splayed (v4) | **−2.75 mm**, **−10°** about the root |
-| relative density, nominal 3.09·t/a | **5.1 %** |
-| relative density, **measured from the SDF** incl. rolled edges | **5.5 %** |
-| solid Ti transition into the jacket rim (`wing_root_solid`) | 1.2 mm |
-| rolled rim on every exposed sheet edge (`wing_edge_wall`) | 0.40 mm over a 0.70 mm band |
+`wing_style="plungers"` (default) builds them; `wing_style="gyroid"` keeps the old
+sheet as a legacy option, unchanged.
 
-### Stiffness — shell-bending estimate
+### Sites (`plunger_aims`, parametric)
 
-The wing is a shell, not a continuum, so a homogenised-modulus beam model is the
-wrong tool (it gives 20–120 N/mm and is meaningless at 1–2 cells: periodic
-homogenisation suppresses exactly the global inextensional modes that make a
-single sheet compliant). The model used instead treats the sheet as a set of
-plate strips:
-
-> **k = 1 / ∫₀^L (L−s)² / EI(s) ds**,  with  **EI(s) = D · ℓ(s) · χ**
-> **D = E t(s)³ / 12(1−ν²)** — plate rigidity of the Ti sheet
-> **ℓ(s) = L_A · A_cut(s)** — sheet chord length in the cut, from the stereological
-> identity L_A = (π/4)·S_V with S_V = 3.09/a for a sheet gyroid
-> **χ = `shell_chi` = 0.40** — mean ⟨cos²θ⟩ orientation factor, because the sheet
-> meets any cut plane at ~45–55°, so only a fraction of each strip resists
-> press-direction bending
-
-E = 110 GPa, ν = 0.31 (Ti-6Al-4V). Integrated per station over the free span:
-
-| | value |
-|---|---|
-| **tip stiffness k** | **0.294 N/mm**  (target 0.15–0.35) |
-| **F at 1.0 mm** | **0.294 N** |
-| **F at 1.5 mm** | **0.441 N** |
-| free span | **10.40 mm** (rise 8.72 mm) |
-
-**v4 retention taxonomy: 44 % of ears are overpressed (median −2.66 mm) and only
-one is short.** So the wing is shortened `wing_shorten` = 2.75 mm and the whole
-blade is rotated `wing_splay_deg` = −10° about its root, which splays the press
-direction by the same angle. `wing_rise` is solved by bisection to hit the
-shortened free span, so the shortening is specified in arc length, not in rise.
-
-Shortening stiffens it — k ∝ 1/L³ took k from 0.251 to 0.480 N/mm — so the foot
-was narrowed from 2.4 to **1.4 mm** and the wall dropped to a constant 0.20 mm,
-bringing k back to **0.294 N/mm**, inside the 0.15–0.35 band. Force at a *given*
-deflection is slightly higher than before; force in a *given ear* is much lower,
-because the shortening removes ~2.75 mm of the interference that was causing the
-overpress in the first place.
-
-Sensitivity: χ is the weak link. χ = 0.30 → k = 0.19 N/mm; χ = 0.50 → k = 0.31.
-The whole band still lands inside the target, which is why these parameters were
-chosen, but **this is an estimate, not a measurement — the sibling FEA agent has
-to confirm it.** The generator prints the number on every run so a parameter
-change cannot silently drift out of band.
-
-The three tuning levers, in order of authority:
-
-1. `wing_anchor_w` — how much of the sheet is anchored at the foot. Necking the
-   foot from 5.0 to 2.4 mm over the first 7 mm is what took k from 0.32 to 0.25.
-2. `gyroid_cell_wing` — bigger cell, less sheet in any cut, softer. 12 mm is the
-   top of the briefed 8–12 mm range and is already used.
-3. `wing_wall_*` — k ∝ t³, so this is the strongest lever, but 0.20 mm is the
-   process floor and there is nowhere left to go.
-
-### Printability, rim-down
-
-| surface | worst | p99 (area-weighted) | area over 45° |
+| site | aim (x, y, z) | boss base | pad tip reach from the core centre |
 |---|---|---|---|
-| **as-built wing sheet (y > rim)** | 89.8° | **82.9°** | **13.8 %** |
-| whole jacket + wing | 90.0° | 83.9° | 17.3 % |
-| wing *solid envelope* (a bounding shape, not the part) | 89.8° | 87.3° | 35.9 % |
-| best of 42 sampled build directions, on the envelope | 76.4° | 45.5° | 0.5 % |
+| cymba | (+0.30, +0.94, −0.15) | (−4.92, +8.14, −0.79) | 20.29 mm |
+| antihelix undercut | (−0.45, +0.85, −0.28) | (−13.80, +7.26, −1.46) | 20.42 mm |
+| antitragus | (+0.20, −0.96, −0.20) | (−6.09, −8.40, −1.06) | 20.17 mm |
 
-**This is the honest cost of going macro-scale.** A fine gyroid is self-supporting
-because every cell wall turns over within ~1 mm; a 12 mm-cell sheet has long,
-shallow runs and its saddle regions are locally horizontal. 13.8 % of the wing's
-area needs support rim-down. Either accept supports on the wing (it is a
-throwaway surface, the ear side is the jacket skin), or tilt the plate — the
-scan's best direction drops the envelope's over-45° area to 0.5 %.
+Each aim is normalised at load. The boss base is found by ray-casting the aim to
+the point where the core's outward normal *is* the aim, then offsetting by
+`clearance + jacket_thick` to the jacket's outer surface. So a new aim
+automatically lands its boss correctly on the shell — no hand-placed coordinates.
 
-Minimum wall is enforced: the generator warns if `wall_face` < `min_wall` or
-`gyroid_cell` < `min_cell`. Every exposed sheet edge is rolled to 0.40 mm, so
-there are no knife edges at the tip or along the deep edge, and the wing
-cross-section is a rounded stadium (`wing_edge_round`) rather than a box.
+### The plunger stack
 
-The core's −Z dome still has a genuine horizontal pole and needs supports or a
-tilted plate; that is normal for an ear shell and is not addressed here.
+Axial stations, measured along the aim from the boss mount face at s = 0:
+
+```
+s = -4.35 .. -1.15   cam preset ring (3.20 mm, 4 detents over 3.0 mm)
+s = -1.00 ..  0.00   FIXED 5x2.5x1 N35 ring, seated on the selected cam step
+s =  0.00 ..  2.75   air gap  <-- rest gap
+s =  2.75 ..  3.75   MOVING 5x2.5x1 N35 ring, in the foot
+s =  3.75 ..  4.55   Ti plate over the moving ring (0.80 mm)
+s =  4.55 ..  5.90   silicone pad, 1.00 mm + 0.35 mm rocker crown
+```
+
+| | |
+|---|---|
+| **depth stack** (fixed ring back → moving ring face) | **4.75 mm** |
+| **dynamic travel** | **±0.75 mm**, hard stops at s = 2.00 and 3.50 |
+| force per pair (from MECH_VALIDATION §5.2) | 0.493 N at −0.75 → 0.284 N at rest → 0.180 N at +0.75, ratio 2.73 |
+| cam preset | 4 detents over 3.0 mm of coarse engagement |
+| guide pin | Ø2.0 through both ring IDs, 0.30 mm polymer sleeve in the jacket bore |
+
+The inward stop is a 0.8 mm-wall skirt on the foot that bottoms on the boss face;
+`--all` measures it on the built mesh and prints
+`stop skirt reaches s = 2.00 mm -> 0.75 mm of inward travel`. The outward stop is
+the pin head catching in the boss bore. The pin runs through the 2.5 mm ring IDs,
+so magnets and guidance are coaxial — that is why the ring geometry was chosen.
+
+### Parts
+
+`plunger_foot`, `plunger_pad`, `plunger_pin`, `plunger_cam` are each **one STL,
+printed three times**; they are bodies of revolution so their standalone STLs are
+axis-aligned about +X and the assembly transforms three copies onto each site.
+The jacket carries the three bosses (Ø9.6, 5.5 mm tall) with the cam bore, the
+sleeved pin bore and four detent notches.
+
+> **Mass warning, printed every run:** jacket + 3 bosses is 1206 mm³ = **5.34 g of
+> Ti**, and the bosses dominate it. `MECH_VALIDATION` budgeted 971 mg/side for the
+> whole mechanism. If mass matters — and on an IEM it does — thin
+> `plunger_boss_od` or lattice the bosses. This is the biggest open item on the
+> mechanism.
+
+Also open: pad tip reach is ~20.2–20.4 mm from the core centre at rest, which is
+generous against a concha depth envelope of 8–18 mm. The 3 mm cam takes up
+per-ear variation, but the aims and `plunger_boss_h` want a try-on pass before
+anyone cuts metal.
+
+## 6b. Cable exit boot
+
+`cable_exit` — `"up_back"` (default), `"back"` or `"none"`. A tapered strain-relief
+stub grown off the 2-pin socket opening so the try-on contract can score cable
+clearance: 6.0 mm long, Ø5.5 → Ø3.5, Ø1.8 cable bore, raked 35° up (+Y) and back
+(−X). It is smooth-unioned into the shell and the bore is cut through into the
+socket pocket.
 
 ## 7. Every parameter
 

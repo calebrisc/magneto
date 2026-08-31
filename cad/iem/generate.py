@@ -193,6 +193,43 @@ PARAMS = dict(
     perf_pitch=1.50,           # mm perforation grid pitch
     solid_root=1.00,           # mm of solid Ti before the lattice starts
 
+    # ---- wing mechanism: THREE RADIAL MAG-PLUNGERS -------------------------
+    # v5 (docs/MECH_VALIDATION.md 8eb6ac1) replaced the Ti spring wing with a
+    # mag-plunger; the plan then moved from one rail to three independent radial
+    # plungers, one per contact site, each with its own aim, cam preset and stops.
+    # "gyroid" keeps the old compliant sheet as a legacy option.
+    wing_style="plungers",     # "plungers" | "gyroid"
+    # site name -> aim unit vector (x, y, z) in design coords; +Y superior,
+    # -Y inferior, -Z ear-facing.  Normalised at load.
+    plunger_aims=(("cymba",              (0.30,  0.94, -0.15)),
+                  ("antihelix_undercut", (-0.45, 0.85, -0.28)),
+                  ("antitragus",         (0.20, -0.96, -0.20))),
+    plunger_mag_od=5.00,       # mm plunger ring OD   (N35, 5 x 2.5 x 1)
+    plunger_mag_id=2.50,       # mm plunger ring ID   -- the guide pin runs through it
+    plunger_mag_t=1.00,        # mm plunger ring thickness
+    plunger_gap=2.75,          # mm rest gap between the plunger faces
+    plunger_travel=0.75,       # mm dynamic travel each way, hard-limited by stops
+    plunger_pin_od=2.00,       # mm guide pin OD
+    plunger_pin_sleeve=0.30,   # mm polymer sleeve wall in the jacket bore
+    plunger_foot_od=9.00,      # mm piston / pad diameter
+    plunger_plate=0.80,        # mm Ti plate over the moving magnet
+    plunger_pad_t=1.00,        # mm soft silicone contact pad
+    plunger_rocker=0.35,       # mm crown on the pad -- the slight rocker
+    plunger_boss_od=9.60,      # mm jacket boss OD
+    plunger_boss_h=5.50,       # mm boss height: cam + fixed magnet + pin sleeve
+    plunger_cam_h=3.20,        # mm cam preset ring height (0.2 base + 3.0 of range)
+    plunger_cam_steps=4,       # detents on the cam preset ring
+    plunger_cam_range=3.0,     # mm of coarse engagement the cam covers
+    plunger_cam_od=7.40,       # mm cam preset ring OD
+
+    # ---- cable exit boot ----------------------------------------------------
+    cable_exit="up_back",      # "up_back" | "back" | "none"
+    cable_boot_len=6.00,       # mm strain-relief stub
+    cable_boot_od0=5.50,       # mm boot OD at the shell
+    cable_boot_od1=3.50,       # mm boot OD at the tip
+    cable_bore=1.80,           # mm cable bore through the boot
+    cable_boot_angle=35.0,     # deg the boot rakes up (+Y) from straight back
+
     # ---- wing: MACRO-scale gyroid shell (a compliant doubly-curved sheet) --
     gyroid_cell_wing=12.00,    # mm wing unit cell -- 1-2 cells across the envelope
     wing_wall_root=0.20,       # mm sheet wall at the root
@@ -212,7 +249,7 @@ PARAMS = dict(
     wing_edge_round=0.85,      # fraction of the half-section used as a corner radius
     wing_taper=1.60,           # mm of tapered depth on the wing's deep edge
     wing_shorten=2.75,         # mm taken off the free span (v4: 44% overpressed)
-    wing_splay_deg=-10.0,      # deg the whole wing rotates about its root in XY,
+    wing_splay_deg=-5.0,       # deg the whole wing rotates about its root in XY,
                                #   which splays the press direction by the same angle
     wing_rise=11.0,            # mm the tip lands above the core rim (pre-shorten)
     wing_back_deg=30.0,        # deg the tip is angled toward -X
@@ -465,6 +502,45 @@ class G:
         self.pocket_z0 = self.z_cut - P["driver_pocket_depth"]
         self.front_wall_x = self.core_cx + self.pocket_r
 
+        # ---- cable exit boot ------------------------------------------------
+        if P["cable_exit"] == "none":
+            self.boot = None
+        else:
+            ang = math.radians(P["cable_boot_angle"]
+                               if P["cable_exit"] == "up_back" else 0.0)
+            bd = np.array([-math.cos(ang), math.sin(ang), 0.0])
+            a0 = np.array([-2.0 * P["core_rx"] + 1.2, 0.0, P["socket_z"]])
+            self.boot = (a0, a0 + bd * P["cable_boot_len"],
+                         0.5 * P["cable_boot_od0"], 0.5 * P["cable_boot_od1"])
+
+        # ---- three radial mag-plungers -------------------------------------
+        self.plungers = []
+        rr_ = np.array(self.core_r)
+        for name, aim in P["plunger_aims"]:
+            a = np.array(aim, dtype=float)
+            a /= np.linalg.norm(a)
+            # point on the core where the outward normal is a, then out to the
+            # jacket's outer surface, then up the boss to the mount face
+            surf = np.array(self.core_c) + (rr_ ** 2 * a) / np.linalg.norm(rr_ * a)
+            base = surf + a * (P["clearance"] + P["jacket_thick"])
+            mount = base + a * P["plunger_boss_h"]
+            ref = np.array([0.0, 0.0, 1.0])
+            if abs(np.dot(ref, a)) > 0.9:
+                ref = np.array([1.0, 0.0, 0.0])
+            u = np.cross(a, ref); u /= np.linalg.norm(u)
+            v = np.cross(a, u)
+            self.plungers.append(dict(name=name, aim=a, base=base, mount=mount,
+                                      u=u, v=v))
+        # canonical axial stations, measured from the mount face along the aim
+        self.pl_mag_fix = -P["plunger_mag_t"]                      # fixed ring back
+        self.pl_mag_mov = P["plunger_gap"]                         # moving ring face
+        self.pl_mag_mov1 = self.pl_mag_mov + P["plunger_mag_t"]
+        self.pl_plate1 = self.pl_mag_mov1 + P["plunger_plate"]
+        self.pl_pad1 = self.pl_plate1 + P["plunger_pad_t"]
+        self.pl_depth_stack = self.pl_mag_mov1 - self.pl_mag_fix   # = 4.75
+        self.pl_stop_in = self.pl_mag_mov - P["plunger_travel"]
+        self.pl_stop_out = self.pl_mag_mov + P["plunger_travel"]
+
         # ---- posterior-inferior corner roll --------------------------------
         # The v2 try-on found the worst-protruding point is a corner, not a face:
         # median (-11.5, -4.1, +3.7), i.e. the -X/-Y/+Z octant of the faceplate,
@@ -711,12 +787,30 @@ class G:
         # negative INSIDE the region to remove, which is what ssub() expects
         return (self.corner_h - c) - (X * cn[0] + Y * cn[1] + Z * cn[2])
 
+    def pl_coords(self, pl, X, Y, Z):
+        """(axial station from the mount face, radial distance from the axis)."""
+        a = pl["aim"]
+        m = pl["mount"]
+        dx, dy, dz = X - m[0], Y - m[1], Z - m[2]
+        sA = dx * a[0] + dy * a[1] + dz * a[2]
+        r2 = (dx * dx + dy * dy + dz * dz) - sA * sA
+        u, v = pl["u"], pl["v"]
+        th = np.arctan2(dx * v[0] + dy * v[1] + dz * v[2],
+                        dx * u[0] + dy * u[1] + dz * u[2])
+        return sA, np.sqrt(np.maximum(r2, 0.0)), th
+
     def nz(self, X, Y, Z):
         """World -> nozzle-local coordinates (the canted frame)."""
         ca, sa = math.cos(self.cant), math.sin(self.cant)
         bx, by, bz = self.nozzle_base
         px, py, pz = X - bx, Y - by, Z - bz
         return px * ca - pz * sa, py, px * sa + pz * ca
+
+    def bone_boss(self, X, Y, Z, grow=0.0):
+        P = self.P
+        return rbox(X, Y, Z, (self.core_cx, -(self.core_ry + 0.55), -1.0),
+                    (0.5 * P["bone_w"] + 1.1 + grow, 1.5 + grow,
+                     0.5 * P["bone_h"] + 1.1 + grow), 0.7)
 
     def core_body(self, X, Y, Z):
         """The core ellipsoid alone -- what the jacket offsets from."""
@@ -918,11 +1012,31 @@ def part_core(g):
                    X - (cx + g.core_rx - 2.0))
         d = S(d, groove)
         d = ssub(d, g.corner_cut(X, Y, Z), P["corner_roll"])
+
+        # ---- cable exit boot: strain relief so the try-on can score clearance
+        if g.boot is not None:
+            a0, a1, r0, r1 = g.boot
+            n = 20
+            boot = None
+            for i in range(n + 1):
+                t = i / n
+                c = a0 + (a1 - a0) * t
+                rr = r0 + (r1 - r0) * t
+                sp = np.sqrt((X - c[0]) ** 2 + (Y - c[1]) ** 2 + (Z - c[2]) ** 2) - rr
+                boot = sp if boot is None else U(boot, sp)
+            d = smin(d, boot, 0.8)
+            d = S(d, capsule(X, Y, Z, a0 - (a1 - a0) * 0.6, a1 + (a1 - a0) * 0.15,
+                             0.5 * P["cable_bore"]))
         return d
 
     tip = g.nozzle_base + g.n_ax * (g.stub_x1 + 0.6)
-    b = ((cx - g.core_rx - 1.6, max(0.0, float(tip[0])) + 4.2),
-         (-g.core_ry - 3.2, g.core_ry + 1.6),
+    bx = cx - g.core_rx - 1.6
+    by = g.core_ry + 1.6
+    if g.boot is not None:
+        bx = min(bx, float(g.boot[1][0]) - 3.4)
+        by = max(by, float(g.boot[1][1]) + 3.4)
+    b = ((bx, max(0.0, float(tip[0])) + 4.2),
+         (-g.core_ry - 3.2, by),
          (min(-g.core_rz, float(tip[2]) - 4.2) - 1.6, g.z_cut + 1.2))
     return fn, b
 
@@ -1056,25 +1170,45 @@ def part_jacket_wing(g):
 
         jacket = U(I(U(lat, solid), shell), skin)
 
-        # ---- wing: MACRO gyroid, 1-2 cells, i.e. a doubly-curved 0.2 mm Ti sheet
-        D2, S_, L_tot = _bezier_dist_and_s(C, pts)
-        env_w = wing_envelope(g, X, Y, Z, D2)
-        env_w = S(env_w, env - clear)
-
-        wall_w = (P["wing_wall_root"]
-                  + (P["wing_wall_tip"] - P["wing_wall_root"])
-                  * np.clip(S_ / max(L_tot, 1e-6), 0.0, 1.0))
-        # roll/thicken every exposed sheet edge so the wing has no knife edges
-        prox = np.clip(1.0 + env_w / P["wing_edge_band"], 0.0, 1.0)
-        wall_w = wall_w + (P["wing_edge_wall"] - wall_w) * prox
-        sheet = gyroid(X, Y, Z, P["gyroid_cell_wing"], wall_w)
-
-        # solid transition into the jacket rim
-        wy = Y - g.y_root
-        root_plug = np.maximum(wy - P["wing_root_solid"], -wy - 0.6)
-
-        wing = I(U(sheet, root_plug), env_w)
-        d = smin(jacket, wing, 0.35)
+        if P["wing_style"] == "gyroid":
+            # ---- legacy: MACRO gyroid sheet wing (see README 6)
+            D2, S_, L_tot = _bezier_dist_and_s(C, pts)
+            env_w = wing_envelope(g, X, Y, Z, D2)
+            env_w = S(env_w, env - clear)
+            wall_w = (P["wing_wall_root"]
+                      + (P["wing_wall_tip"] - P["wing_wall_root"])
+                      * np.clip(S_ / max(L_tot, 1e-6), 0.0, 1.0))
+            prox = np.clip(1.0 + env_w / P["wing_edge_band"], 0.0, 1.0)
+            wall_w = wall_w + (P["wing_edge_wall"] - wall_w) * prox
+            sheet = gyroid(X, Y, Z, P["gyroid_cell_wing"], wall_w)
+            wy = Y - g.y_root
+            root_plug = np.maximum(wy - P["wing_root_solid"], -wy - 0.6)
+            d = smin(jacket, I(U(sheet, root_plug), env_w), 0.35)
+        else:
+            # ---- three radial mag-plunger bosses
+            d = jacket
+            nstep = int(P["plunger_cam_steps"])
+            for pl in g.plungers:
+                A, R, TH = g.pl_coords(pl, X, Y, Z)
+                boss = np.maximum(R - 0.5 * P["plunger_boss_od"],
+                                  slab(A, -P["plunger_boss_h"] - 2.5, 0.0))
+                d = smin(d, boss, 0.8)
+                # cam + fixed-ring bore
+                d = S(d, np.maximum(R - (0.5 * P["plunger_cam_od"] + 0.05),
+                                    slab(A, -(P["plunger_cam_h"]
+                                              + P["plunger_mag_t"] + 0.15), 0.40)))
+                # sleeved guide-pin bore
+                d = S(d, np.maximum(
+                    R - (0.5 * P["plunger_pin_od"] + P["plunger_pin_sleeve"]),
+                    slab(A, -P["plunger_boss_h"] - 3.0, 0.5)))
+                # detent notches for the cam bumps
+                for i in range(nstep):
+                    a_ = -np.pi + (i + 0.5) * (2 * np.pi / nstep)
+                    rn = 0.5 * P["plunger_cam_od"] + 0.05
+                    dd = np.sqrt((R - rn) ** 2 + (rn * _wrap(TH - a_)) ** 2)
+                    d = S(d, np.maximum(dd - 0.42,
+                                        slab(A, -(P["plunger_cam_h"] + 1.15) + 0.25,
+                                             -(P["plunger_cam_h"] + 1.15) + 1.05)))
 
         # ---- matching magnet pockets + locating pins
         for (px_, py_) in g.jacket_mags:
@@ -1087,14 +1221,121 @@ def part_jacket_wing(g):
                            zs - clear - P["pin_depth"] - 1.4, zs + P["pin_depth"] - 0.05))
         d = S(d, env - clear)
         d = S(d, nozzle_clear)
+        d = S(d, g.bone_boss(X, Y, Z, clear))
         return d
 
     ymax = max(p[1] for p in pts) + 3.0
     xmin = min(min(p[0] for p in pts), cx - g.core_rx) - 3.5
-    b = ((xmin, P["jacket_x_clip"] + 1.0),
-         (-g.core_ry - 3.0, ymax),
-         (-g.core_rz - thick - 2.0, 1.0))
+    zmin, zmax = -g.core_rz - thick - 2.0, 1.0
+    if P["wing_style"] != "gyroid":
+        ymax = -1e9
+        for pl in g.plungers:
+            tip = pl["mount"] + pl["aim"] * (g.pl_pad1 + P["plunger_rocker"])
+            pad = 0.5 * P["plunger_boss_od"] + 1.0
+            xmin = min(xmin, float(min(tip[0], pl["base"][0])) - pad)
+            ymax = max(ymax, float(max(tip[1], pl["base"][1])) + pad)
+            zmin = min(zmin, float(min(tip[2], pl["base"][2])) - pad)
+            zmax = max(zmax, float(max(tip[2], pl["base"][2])) + pad)
+        ymin = min(-g.core_ry - 3.0,
+                   min(float(pl["mount"][1] + pl["aim"][1] *
+                             (g.pl_pad1 + P["plunger_rocker"])) for pl in g.plungers)
+                   - 0.5 * P["plunger_boss_od"] - 1.0)
+        xmax = max(P["jacket_x_clip"] + 1.0,
+                   max(float(pl["mount"][0] + pl["aim"][0] *
+                             (g.pl_pad1 + P["plunger_rocker"])) for pl in g.plungers)
+                   + 0.5 * P["plunger_boss_od"] + 1.0)
+    else:
+        ymin, xmax = -g.core_ry - 3.0, P["jacket_x_clip"] + 1.0
+    b = ((xmin, xmax), (ymin, ymax), (zmin, zmax))
     return fn, b
+
+
+# --------------------------------------------------------------------------
+# PART: mag-plungers (three radial sites)
+# --------------------------------------------------------------------------
+
+def _ring(A, R, ri, ro, a0, a1):
+    """Annulus about the +A axis, in (axial, radial) coordinates."""
+    return np.maximum(np.maximum(ri - R, R - ro), slab(A, a0, a1))
+
+
+def part_plunger_foot(g):
+    """Moving piston: magnet pocket, pin bore, and the inward travel stop."""
+    P = g.P
+    ro = 0.5 * P["plunger_foot_od"]
+
+    def fn(X, Y, Z, C):
+        A, R = X, np.sqrt(Y ** 2 + Z ** 2)
+        body = np.maximum(R - ro, slab(A, g.pl_mag_mov, g.pl_plate1))
+        skirt = _ring(A, R, ro - 0.8, ro, g.pl_stop_in, g.pl_mag_mov)
+        d = U(body, skirt)
+        d = S(d, np.maximum(R - (0.5 * P["plunger_mag_od"] + 0.05),
+                            slab(A, g.pl_mag_mov - 0.05, g.pl_mag_mov1 + 0.05)))
+        d = S(d, np.maximum(R - (0.5 * P["plunger_pin_od"] + 0.025),
+                            slab(A, g.pl_stop_in - 0.5, g.pl_plate1 + 0.5)))
+        return d
+
+    return fn, ((g.pl_stop_in - 0.6, g.pl_plate1 + 0.6), (-ro - 0.6, ro + 0.6),
+                (-ro - 0.6, ro + 0.6))
+
+
+def part_plunger_pad(g):
+    """Soft contact pad with the rocker crown."""
+    P = g.P
+    ro = 0.5 * P["plunger_foot_od"]
+
+    def fn(X, Y, Z, C):
+        A, R = X, np.sqrt(Y ** 2 + Z ** 2)
+        crown = g.pl_pad1 + P["plunger_rocker"] * np.clip(1.0 - (R / ro) ** 2, 0.0, 1.0)
+        d = np.maximum(R - ro, np.maximum(g.pl_plate1 - A, A - crown))
+        d = S(d, np.maximum(R - (0.5 * P["plunger_pin_od"] + 0.10),
+                            slab(A, g.pl_plate1 - 0.5, g.pl_pad1 + 1.5)))
+        return d
+
+    return fn, ((g.pl_plate1 - 0.5, g.pl_pad1 + P["plunger_rocker"] + 0.5),
+                (-ro - 0.5, ro + 0.5), (-ro - 0.5, ro + 0.5))
+
+
+def part_plunger_pin(g):
+    """Guide pin: pressed into the foot, sliding in the jacket's sleeved bore."""
+    P = g.P
+    x0 = -(P["plunger_boss_h"] + 1.5)
+
+    def fn(X, Y, Z, C):
+        A, R = X, np.sqrt(Y ** 2 + Z ** 2)
+        shaft = np.maximum(R - 0.5 * P["plunger_pin_od"], slab(A, x0, g.pl_plate1))
+        head = np.maximum(R - 1.7, slab(A, x0, x0 + 0.6))
+        return U(shaft, head)
+
+    return fn, ((x0 - 0.5, g.pl_plate1 + 0.5), (-2.2, 2.2), (-2.2, 2.2))
+
+
+def part_plunger_cam(g):
+    """Cam preset ring: a 4-step staircase top face gives coarse engagement."""
+    P = g.P
+    n = int(P["plunger_cam_steps"])
+    step = P["plunger_cam_range"] / max(n - 1, 1)
+    ro = 0.5 * P["plunger_cam_od"]
+    hmax = 0.2 + P["plunger_cam_range"]
+
+    def fn(X, Y, Z, C):
+        A, R = X, np.sqrt(Y ** 2 + Z ** 2)
+        th = np.arctan2(Z, Y)
+        k = np.floor((th + np.pi) / (2 * np.pi / n))
+        top = 0.2 + step * np.clip(k, 0, n - 1)
+        d = _ring(A, R, 0.5 * P["plunger_mag_id"] + 0.10, ro, 0.0, hmax)
+        d = np.maximum(d, A - top)                        # staircase top face
+        # seat that locates the fixed ring on whichever step is selected
+        d = S(d, np.maximum(R - (0.5 * P["plunger_mag_od"] + 0.05),
+                            A - top + 0.55))
+        # detent bumps on the OD
+        for i in range(n):
+            a_ = -np.pi + (i + 0.5) * (2 * np.pi / n)
+            cy, cz = ro * math.cos(a_), ro * math.sin(a_)
+            d = U(d, np.sqrt((X - 0.6) ** 2 + (Y - cy) ** 2 + (Z - cz) ** 2) - 0.40)
+        return d
+
+    return fn, ((-0.5, hmax + 0.5), (-ro - 0.8, ro + 0.8), (-ro - 0.8, ro + 0.8))
 
 
 # --------------------------------------------------------------------------
@@ -1508,6 +1749,10 @@ PARTS = {
     "carrier_mold_a": (part_mold_a, "solid"),
     "carrier_mold_b": (part_mold_b, "solid"),
     "carrier_mold_core": (part_mold_core, "solid"),
+    "plunger_foot": (part_plunger_foot, "solid"),
+    "plunger_pad": (part_plunger_pad, "solid"),
+    "plunger_pin": (part_plunger_pin, "solid"),
+    "plunger_cam": (part_plunger_cam, "solid"),
     "driver_carrier": (part_driver_carrier, "solid"),
     "damper_jig": (part_damper_jig, "solid"),
 }
@@ -1515,6 +1760,7 @@ PARTS = {
 # parts that live in the assembly frame (moulds and the jig have their own frames)
 ASSEMBLY_PARTS = ["core", "faceplate", "jacket_wing",
                   "nozzle_insert_short", "carrier", "driver_carrier"]
+PLUNGER_PARTS = ["plunger_foot", "plunger_pad", "plunger_pin", "plunger_cam"]
 
 # these are modelled about the nozzle axis, so their STLs are axis-aligned in the
 # nozzle-local frame and get canted into place only for the assembly
@@ -1768,6 +2014,23 @@ def main():
                 mk = mk.copy()
                 mk.apply_transform(g.nozzle_T)
             parts.append(mk)
+        if P["wing_style"] != "gyroid":
+            for pl in g.plungers:
+                T = np.eye(4)
+                T[:3, 0], T[:3, 1], T[:3, 2] = pl["aim"], pl["u"], pl["v"]
+                T[:3, 3] = pl["mount"]
+                for k in PLUNGER_PARTS:
+                    if k not in meshes:
+                        continue
+                    mk = meshes[k].copy()
+                    if k == "plunger_cam":       # cam sits below the fixed ring
+                        Tc = T.copy()
+                        Tc[:3, 3] = pl["mount"] - pl["aim"] * (
+                            P["plunger_cam_h"] + P["plunger_mag_t"] + 0.15)
+                        mk.apply_transform(Tc)
+                    else:
+                        mk.apply_transform(T)
+                    parts.append(mk)
         if parts:
             asm = trimesh.util.concatenate(parts)
             rows.append(report_row("assembly", asm, 0.0, 0.0))
@@ -1777,7 +2040,45 @@ def main():
                 mirror(asm).export(os.path.join(out, "left", "assembly.stl"))
 
     # ---- overhang analysis --------------------------------------------
-    if args.all or "jacket_wing" in meshes:
+    if P["wing_style"] != "gyroid" and ("jacket_wing" in meshes or args.all):
+        print("-" * 100)
+        print(f"wing mechanism = THREE RADIAL MAG-PLUNGERS "
+              f"({P['plunger_mag_od']}x{P['plunger_mag_id']}x{P['plunger_mag_t']} mm "
+              f"N35 pairs, rest gap {P['plunger_gap']} mm)")
+        print(f"  depth stack (fixed ring back -> moving ring face): "
+              f"{g.pl_depth_stack:.2f} mm      dynamic travel: "
+              f"+/-{P['plunger_travel']:.2f} mm "
+              f"(stops at s = {g.pl_stop_in:.2f} and {g.pl_stop_out:.2f} mm, "
+              f"{g.pl_stop_out - g.pl_stop_in:.2f} mm total)")
+        print(f"  cam preset: {P['plunger_cam_steps']} detents over "
+              f"{P['plunger_cam_range']:.1f} mm of coarse engagement; guide pin "
+              f"Ø{P['plunger_pin_od']} in a {P['plunger_pin_sleeve']} mm sleeve")
+        if "plunger_foot" in meshes:
+            fm = meshes["plunger_foot"]
+            sk = float(fm.bounds[0][0])
+            print(f"  MEASURED on plunger_foot.stl: stop skirt reaches s = "
+                  f"{sk:.2f} mm -> {g.pl_mag_mov - sk:.2f} mm of inward travel "
+                  f"before it bottoms on the boss")
+        for pl in g.plungers:
+            tip = pl["mount"] + pl["aim"] * (g.pl_pad1 + P["plunger_rocker"])
+            print(f"    {pl['name']:20s} aim ({pl['aim'][0]:+.2f},"
+                  f"{pl['aim'][1]:+.2f},{pl['aim'][2]:+.2f})  boss base "
+                  f"({pl['base'][0]:+6.2f},{pl['base'][1]:+6.2f},"
+                  f"{pl['base'][2]:+6.2f})  pad tip reach "
+                  f"{float(np.linalg.norm(tip - np.array(g.core_c))):5.2f} mm "
+                  f"from the core centre")
+        if "jacket_wing" in meshes:
+            m_ti = meshes["jacket_wing"].volume * 4.43e-3      # g, Ti-6Al-4V
+            print(f"  jacket + 3 bosses = {meshes['jacket_wing'].volume:.0f} mm3 "
+                  f"= {m_ti:.2f} g Ti.  The bosses dominate it; if mass matters, "
+                  f"thin plunger_boss_od or lattice them.")
+        if g.boot is not None:
+            print(f"  cable exit boot: '{P['cable_exit']}', "
+                  f"{P['cable_boot_len']:.1f} mm, Ø{P['cable_boot_od0']}->"
+                  f"Ø{P['cable_boot_od1']}, Ø{P['cable_bore']} bore, raked "
+                  f"{P['cable_boot_angle'] if P['cable_exit']=='up_back' else 0:.0f} deg up")
+
+    if P["wing_style"] == "gyroid" and (args.all or "jacket_wing" in meshes):
         we = wing_envelope_mesh(g)
         w_rim, f_rim, p_rim = overhang_stats(we, (0, 0, -1))
         d, w_best, f_best, p_best = best_build_dir(we)

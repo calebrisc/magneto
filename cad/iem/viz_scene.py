@@ -109,24 +109,37 @@ def main():
     rows = list(csv.DictReader(open(os.path.join(ALIGNED, "tryon.csv"))))
     seal = list(csv.DictReader(open(os.path.join(ALIGNED, "seal_compliance.csv"))))
     row = pick_ear(rows, seal, a.ear)
-    ds, eid = row["dataset"], row["ear_id"]
-    rec = json.load(open(os.path.join(ALIGNED, f"{ds}_{eid}_right.json")))
+    export_ear(row["dataset"], row["ear_id"], a.ear_faces, a.part_faces,
+               row=row, seal=seal)
+    return 0
+
+
+def export_ear(ds, eid, ear_faces=60000, part_faces=18000, row=None, seal=None,
+               json_dir=None):
+    """Write viz/seated_scene.glb + meta for one ear at its current seating."""
+    jd = json_dir or ALIGNED
+    rec = json.load(open(os.path.join(jd, f"{ds}_{eid}_right.json")))
+    if row is None:
+        row = {}
+    if seal is None:
+        seal = []
     M = np.array(rec["transform"], float)
-    print(f"ear {ds}/{eid}: protrusion {float(row['protrusion']):.2f} mm, "
-          f"grade {row['grade']}")
+    if row:
+        print(f"ear {ds}/{eid}: protrusion {float(row['protrusion']):.2f} mm, "
+              f"grade {row['grade']}")
 
     os.makedirs(VIZ, exist_ok=True)
     scene = trimesh.Scene()
 
     ear = trimesh.load(os.path.join(ALIGNED, rec["patch"]), force="mesh")
-    ear = cluster_decimate(ear, a.ear_faces)
+    ear = cluster_decimate(ear, ear_faces)
     ear.visual.face_colors = COLORS["ear"]
     scene.add_geometry(ear, node_name="ear", geom_name="ear")
 
     sdir = os.path.join(HERE, "stl", "right")
     for name in ("core", "faceplate", "jacket_wing", "carrier", "nozzle_insert_short"):
         m = trimesh.load(os.path.join(sdir, f"{name}.stl"), force="mesh")
-        m = cluster_decimate(m, a.part_faces)
+        m = cluster_decimate(m, part_faces)
         if name in NOZZLE_FRAME_PARTS:          # written in the nozzle-local frame
             m.apply_transform(NOZZLE_T)
         m.apply_transform(M)                    # into the ear's scan frame
@@ -149,7 +162,7 @@ def main():
         scores={k: row[k] for k in (
             "grade", "worst_metric", "rim_cover", "rim_gap", "rim_press",
             "wing_tip", "wing_mid", "jacket_mean", "protrusion", "hard_min",
-            "g_seal", "g_retention", "g_clearance", "g_protrusion")},
+            "g_seal", "g_retention", "g_clearance", "g_protrusion") if k in row},
         seal_compliance={r["b2.5_pass_"]: None for r in [] } or {},
         seating_transform=np.array(rec["transform"], float).tolist(),
         nozzle_local_to_assembly=NOZZLE_T.tolist(),
@@ -165,7 +178,7 @@ def main():
     with open(mp, "w") as f:
         json.dump(meta, f, indent=1)
     print(mp)
-    return 0
+    return glb
 
 
 if __name__ == "__main__":

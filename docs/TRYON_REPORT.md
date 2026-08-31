@@ -176,6 +176,54 @@ useful (shorten, do not lengthen) but not quantitatively predictive.
 
 ---
 
+## The contact contract
+
+The graded axes say how *well* the fit scores. The contract says whether each
+part is doing **the job it was designed for** — a different question, and the one
+that catches a part touching flesh it should never touch. Each rule is an
+explicit design intent, not a derived metric, and `tryon.py` prints the table on
+every run (automatically for a single ear, or with `--contract`).
+
+| part | intent | rule |
+|---|---|---|
+| skirt land | **MUST TOUCH** | continuous contact band that **encloses** the canal aperture; enclosure is hard |
+| wing / rail pad | **MUST TOUCH** | antihelix, tip within the spring's working range, −1.5 to 0 mm |
+| jacket ear-face | **MUST REST** | in contact with the concha floor, never more than 2.5 mm into flesh |
+| nozzle + insert | **MUST NOT TOUCH** | recessed inside the skirt; any contact loads the canal wall directly |
+| core / faceplate | **MUST NOT TOUCH** | load reaches the ear only through the jacket and wing |
+| cable exit | **MUST CLEAR** | the ear |
+
+### P0023 on `dbc3b7b` — 5 pass, 0 fail, 1 not evaluable
+
+| part | intent | value | | detail |
+|---|---|---|---|---|
+| skirt land | MUST TOUCH | 100 % / 0° | **PASS** | band fully closed; aperture 4.3 mm off centre against a 9.4 mm rim, so the loop encloses the canal |
+| wing / rail pad | MUST TOUCH | −1.22 mm | **PASS** | inside the spring band |
+| jacket ear-face | MUST REST | −0.31 mm | **PASS** | resting, well within 2.5 mm |
+| nozzle + insert | MUST NOT TOUCH | +1.05 mm | **PASS** | recessed, clear of flesh |
+| core / faceplate | MUST NOT TOUCH | +1.22 mm | **PASS** | no direct flesh load |
+| cable exit | MUST CLEAR | n/a | **n/a** | **not modelled** |
+
+Every load path behaves as designed on this ear: the skirt seals a closed loop
+around the canal, the wing presses within its spring range, the jacket beds on
+the floor, and nothing rigid touches flesh. Note the contract can pass while the
+graded axes do not — P0023 is *marginal* overall (protrusion 13.40 mm, seal
+coverage 0.60 by the rigid metric). The contract asks "is each part doing its
+job", not "is the fit good".
+
+**The cable-exit row cannot be evaluated and is deliberately not scored as a
+pass.** There is no cable, boot or strain-relief geometry in the build; the only
+connector feature is the 2-pin socket, an internal pocket in the core. Model the
+boot and this row becomes checkable.
+
+### Auto-export
+
+Every single-ear run rewrites `viz/seated_scene.glb` and its metadata for that
+ear, so each iteration can be eyeballed. `--viz-ear dataset/ear_id` forces a
+specific ear on a multi-ear run.
+
+---
+
 ## Protrusion threshold calibration
 
 The original ≤2 mm pass / ≤5 mm marginal pair was aspirational rather than

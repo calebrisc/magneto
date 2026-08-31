@@ -288,6 +288,19 @@ def iem_points(stl_dir=None, seed=0, cant=None):
         fp = fp[rng.choice(len(fp), 300, replace=False)]
     out["faceplate"] = fp
 
+    # --- separate sets for the contact contract (tryon.py) ---------------- #
+    # the contract judges parts individually, so it needs core and faceplate
+    # apart from `shell`, and the nozzle insert, which nothing else samples.
+    out["core_s"] = s_core
+    out["face_s"] = s_face
+    try:
+        ins = trimesh.load(os.path.join(sdir, "nozzle_insert_short.stl"),
+                           force="mesh")
+        ins.apply_transform(nT)          # nozzle-local, like the carrier
+        out["nozzle"] = trimesh.sample.sample_surface(ins, 400, seed=seed)[0]
+    except Exception:                                            # noqa: BLE001
+        out["nozzle"] = np.zeros((0, 3))
+
     out["_bbox"] = np.vstack([core.bounds, face.bounds, jw.bounds, car.bounds])
     return out
 

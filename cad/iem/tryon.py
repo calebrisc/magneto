@@ -63,7 +63,7 @@ import sys
 import numpy as np
 import trimesh
 
-from earfit import ALIGNED, EarField, iem_points, transform
+from earfit import ALIGNED, NOZZLE_AXIS, EarField, iem_points, transform
 
 GRADES = ("pass", "marginal", "fail")
 
@@ -162,6 +162,138 @@ def score(rec, P, field):
     )
 
 
+# --------------------------------------------------------------------------- #
+# CONTACT CONTRACT
+# --------------------------------------------------------------------------- #
+# The graded axes say how WELL the fit scores.  The contract says whether each
+# part is doing the job it was designed for -- which is a different question, and
+# the one that catches a part touching flesh it should never touch.  Every rule
+# below is an explicit design intent, not a derived metric.
+#
+#   skirt land        MUST TOUCH   a continuous contact band that ENCLOSES the
+#                                  canal aperture.  Enclosure is hard: a loop
+#                                  that does not surround the canal seals nothing
+#                                  (see seal_enclosure_audit.py).
+#   wing / rail pad   MUST TOUCH   the antihelix, within the spring's working
+#                                  range -- 0 to 1.5 mm of interference, which a
+#                                  0.294 N/mm leaf spring absorbs as press.
+#   jacket ear-face   MUST REST    on the concha floor: in contact, and never
+#                                  more than 2.5 mm into flesh.
+#   nozzle + insert   MUST NOT     touch anything.  It is recessed inside the
+#                                  skirt; any contact means it is loading the
+#                                  canal wall directly.
+#   core / faceplate  MUST NOT     touch flesh at all.  Load reaches the ear only
+#                                  through the jacket and the wing.
+#   cable exit        MUST CLEAR   the ear.
+#
+# Sign convention as everywhere else: positive = clearance, negative = inside
+# the flesh.
+CONTRACT_JACKET_MAX_INTERFERENCE = -2.5
+CONTRACT_JACKET_CONTACT = 0.5      # mm; above this the jacket is not resting
+CONTRACT_WING_BAND = (-1.5, 0.0)   # spring working range
+CONTRACT_SEAL_BUDGET = 2.5         # conservative skirt deformation budget
+
+
+def contract_check(rec, patch, P, field):
+    """Evaluate the contact contract for one ear.  Returns a list of rows."""
+    import seal_compliance as sc
+
+    M = np.array(rec["transform"], float)
+    q = lambda k: field.query(transform(P[k], M))          # noqa: E731
+    rows = []
+
+    def row(part, intent, detail, value, ok):
+        rows.append(dict(part=part, intent=intent, detail=detail,
+                         value=value, ok=None if ok is None else bool(ok)))
+
+    # --- skirt land: continuous band enclosing the aperture ---------------- #
+    nax = M[:3, :3] @ NOZZLE_AXIS
+    nax = nax / np.linalg.norm(nax)
+    rim = transform(P["rim"], M)
+    cen = rim.mean(axis=0)
+    R = float(np.median(np.linalg.norm(rim - cen, axis=1)))
+    ap = np.array(rec["aperture"], float)
+    d = ap - cen
+    lateral = float(np.linalg.norm(d - (d @ nax) * nax))
+    inside = lateral < R
+
+    rim_fine = transform(sc.rim_from_mesh(n=sc.N_RIM), M)
+    best = None
+    for t in np.linspace(0.0, sc.TRAVEL_MM, sc.TRAVEL_STEPS):
+        sealed = field.query(rim_fine + t * nax) <= CONTRACT_SEAL_BUDGET
+        glen, _ = sc.longest_false_run(sealed)
+        gap = 360.0 * glen / len(sealed)
+        key = (float(sealed.mean()), -gap)
+        if best is None or key > best[0]:
+            best = (key, float(sealed.mean()), gap)
+    _, cover, gap = best
+    continuous = (cover >= sc.COVER_MIN) and (gap <= sc.GAP_MAX_DEG)
+    row("skirt land", "MUST TOUCH",
+        f"band {100*cover:.0f}% closed, worst gap {gap:.0f}deg; "
+        f"aperture {lateral:.1f} mm off centre vs {R:.1f} mm rim"
+        + ("" if inside else "  << canal OUTSIDE the ring"),
+        f"{100*cover:.0f}% / {gap:.0f}deg", continuous and inside)
+
+    # --- wing / rail pad --------------------------------------------------- #
+    tip = float(np.median(q("wing_tip")))
+    lo, hi = CONTRACT_WING_BAND
+    row("wing / rail pad", "MUST TOUCH",
+        f"tip median {tip:+.2f} mm; spring band [{lo:+.1f}, {hi:+.1f}]",
+        f"{tip:+.2f} mm", lo <= tip <= hi)
+
+    # --- jacket ear-face --------------------------------------------------- #
+    jac = q("jacket")
+    jmin = float(jac.min())
+    resting = jmin <= CONTRACT_JACKET_CONTACT
+    not_buried = jmin >= CONTRACT_JACKET_MAX_INTERFERENCE
+    row("jacket ear-face", "MUST REST",
+        f"closest {jmin:+.2f} mm ("
+        + ("resting" if resting else "NOT in contact")
+        + (", within 2.5 mm" if not_buried else ", OVER-BURIED") + ")",
+        f"{jmin:+.2f} mm", resting and not_buried)
+
+    # --- nozzle + insert: recessed, touches nothing ------------------------ #
+    if len(P["nozzle"]):
+        nmin = float(q("nozzle").min())
+        row("nozzle + insert", "MUST NOT TOUCH",
+            f"closest {nmin:+.2f} mm (recessed inside the skirt)",
+            f"{nmin:+.2f} mm", nmin > 0.0)
+    else:
+        row("nozzle + insert", "MUST NOT TOUCH", "insert STL not found", "n/a", None)
+
+    # --- core / faceplate: no flesh contact -------------------------------- #
+    cmin = float(min(q("core_s").min(), q("face_s").min()))
+    row("core / faceplate", "MUST NOT TOUCH",
+        f"closest {cmin:+.2f} mm (load must reach the ear via the jacket only)",
+        f"{cmin:+.2f} mm", cmin > 0.0)
+
+    # --- cable exit -------------------------------------------------------- #
+    # There is no cable, boot or strain-relief geometry in the build; the only
+    # connector feature is the 2-pin socket, an internal pocket in the core.  So
+    # this row cannot be evaluated -- reporting it as a pass would be fiction.
+    row("cable exit", "MUST CLEAR",
+        "NOT MODELLED - no cable/boot geometry in the build; the 2-pin socket is "
+        "an internal pocket. Model the boot to make this checkable.",
+        "n/a", None)
+    return rows
+
+
+def print_contract(rec, rows):
+    mark = {True: "PASS", False: "FAIL", None: "n/a "}
+    print(f"\n=== CONTACT CONTRACT - {rec['dataset']}/{rec['ear_id']} ===")
+    print(f"{'part':<17}{'intent':<15}{'value':>12}  {'':<4} detail")
+    print("-" * 118)
+    for r in rows:
+        print(f"{r['part']:<17}{r['intent']:<15}{r['value']:>12}  "
+              f"{mark[r['ok']]:<4} {r['detail']}")
+    ok = sum(1 for r in rows if r["ok"] is True)
+    bad = sum(1 for r in rows if r["ok"] is False)
+    na = sum(1 for r in rows if r["ok"] is None)
+    print("-" * 118)
+    print(f"{ok} pass, {bad} fail, {na} not evaluable")
+    return bad
+
+
 def fmt_table(rows, cols, headers):
     out = ["| " + " | ".join(headers) + " |",
            "|" + "|".join("---" for _ in headers) + "|"]
@@ -222,6 +354,12 @@ def main():
                     help="override nozzle_cant_deg when reading the STLs")
     ap.add_argument("--stl-dir", default=None,
                     help="directory of right-ear STLs (default stl/right)")
+    ap.add_argument("--contract", action="store_true",
+                    help="print the contact contract table per ear (automatic "
+                         "when a single ear is scored)")
+    ap.add_argument("--viz-ear", default=None,
+                    help="dataset/ear_id to export to viz/seated_scene.glb after "
+                         "scoring (automatic when a single ear is scored)")
     ap.add_argument("--json-dir", default=None,
                     help="directory of per-ear seating JSONs (default ears/aligned); "
                          "patches are always read from ears/aligned")
@@ -237,10 +375,15 @@ def main():
 
     P = iem_points(stl_dir=a.stl_dir, cant=a.cant)
     rows = []
+    contract_fails = 0
+    single = len(js) == 1
     for p in js:
         rec = json.load(open(p))
         patch = trimesh.load(os.path.join(ALIGNED, rec["patch"]), force="mesh")
-        rows.append(score(rec, P, EarField(patch)))
+        field = EarField(patch)
+        rows.append(score(rec, P, field))
+        if a.contract or single:
+            contract_fails += print_contract(rec, contract_check(rec, patch, P, field))
         r = rows[-1]
         print(f"{r['dataset']:>9}/{r['ear_id']:<7} cover {r['rim_cover']:.2f}  "
               f"gap {r['rim_gap']:5.2f}  tip {r['wing_tip']:6.2f}  "
@@ -273,6 +416,18 @@ def main():
         f.write("\n".join(md) + "\n")
     print("\n" + "\n".join(md))
     print(f"\n{len(rows)} ears -> {a.csv}, {a.md}")
+
+    want_viz = a.viz_ear or (f"{rows[0]['dataset']}/{rows[0]['ear_id']}" if single
+                             else None)
+    if want_viz:
+        try:
+            import viz_scene
+            ds, eid = want_viz.split("/")
+            vrow = next((r for r in rows
+                         if r["dataset"] == ds and r["ear_id"] == eid), None)
+            viz_scene.export_ear(ds, eid, row=vrow, json_dir=a.json_dir)
+        except Exception as e:                                   # noqa: BLE001
+            print(f"viz export failed: {type(e).__name__}: {e}")
     return 0
 
 

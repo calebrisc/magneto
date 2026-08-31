@@ -115,6 +115,12 @@ PARAMS = dict(
     driver_pocket_depth=3.0,   # mm, from the faceplate parting plane, -Z
 
     # ---- nozzle -------------------------------------------------------
+    nozzle_cant_deg=45.0,      # deg: nozzle axis rotated about +Y relative to the
+                               #      core/faceplate/jacket, so the body lies in the
+                               #      concha plane instead of down the canal axis
+    bore_arc_r=9.00,           # mm centreline radius of the curved sound bore
+    bore_arc_end=1.20,         # mm behind the nozzle base where the arc ends
+    bore_run_in=2.50,          # mm of straight bore into the front volume
     nozzle_bore=4.00,          # mm acoustic bore
     stub_od=5.00,              # mm core nozzle stub OD
     stub_len=3.00,             # mm core nozzle stub length (+X from origin)
@@ -296,7 +302,7 @@ def capsule(X, Y, Z, a, b, r):
     ax, ay, az = a
     bx, by, bz = b
     dx, dy, dz = bx - ax, by - ay, bz - az
-    dd = dx * dx + dy * dy + dz * dz
+    dd = max(dx * dx + dy * dy + dz * dz, 1e-12)
     px, py, pz = X - ax, Y - ay, Z - az
     h = np.clip((px * dx + py * dy + pz * dz) / dd, 0.0, 1.0)
     return np.sqrt((px - dx * h) ** 2 + (py - dy * h) ** 2 + (pz - dz * h) ** 2) - r
@@ -374,6 +380,26 @@ class G:
         self.pocket_z0 = self.z_cut - P["driver_pocket_depth"]
         self.front_wall_x = self.core_cx + self.pocket_r
 
+        # ---- canted nozzle frame ------------------------------------------
+        # The nozzle axis is rotated about +Y by nozzle_cant_deg, so +X -> -Z.
+        # The core, faceplate, jacket and wing do NOT move: only the nozzle,
+        # insert, carrier and skirt follow this axis.  At cant = 0 the frame is
+        # the identity and the geometry is exactly the old collinear design.
+        self.cant = math.radians(P["nozzle_cant_deg"])
+        ca, sa = math.cos(self.cant), math.sin(self.cant)
+        self.n_ax = np.array([ca, 0.0, -sa])       # nozzle axis, into the ear
+        self.n_ay = np.array([0.0, 1.0, 0.0])
+        self.n_az = np.array([sa, 0.0, ca])
+        # the axis passes through the core centre, so the nozzle root is buried
+        # the full ellipsoid support distance -- that is what carries the side load
+        self.nozzle_t_exit = 1.0 / math.sqrt((ca / P["core_rx"]) ** 2
+                                             + (sa / P["core_rz"]) ** 2)
+        self.nozzle_base = np.array(self.core_c) + self.nozzle_t_exit * self.n_ax
+        T = np.eye(4)
+        T[:3, 0], T[:3, 1], T[:3, 2] = self.n_ax, self.n_ay, self.n_az
+        T[:3, 3] = self.nozzle_base
+        self.nozzle_T = T                          # nozzle-local -> world
+
         # ---- nozzle / insert stack: BOTH magnets live here, none in the core
         self.stub_x1 = P["stub_len"]
         self.socket_x0 = -0.20
@@ -443,8 +469,8 @@ class G:
 
         # jacket magnets (3) + locating pins (2) on the -Z hemisphere, as (x, y)
         cx = self.core_cx
-        self.jacket_mags = [(cx + 5.6, 0.0), (cx - 5.6, 0.0), (cx, 4.4)]
-        self.jacket_pins = [(cx + 2.6, -4.0), (cx - 2.6, -4.0)]
+        self.jacket_mags = [(cx - 6.0, 0.0), (cx + 0.5, 4.8), (cx + 0.5, -4.8)]
+        self.jacket_pins = [(cx - 3.0, 4.0), (cx - 3.0, -4.0)]
 
         # ---- wing centreline (quadratic Bezier in XY)
         y_root = P["core_ry"] + P["clearance"]
@@ -454,6 +480,29 @@ class G:
         self.wing_p2 = (cx + P["wing_root_dx"] - P["wing_rise"] * math.tan(back),
                         y_root + P["wing_rise"])
         self.y_root = y_root
+
+        # ---- curved sound bore ---------------------------------------------
+        # Straight along the nozzle axis through the stub, then one circular arc
+        # of radius bore_arc_r turning through the cant angle back into the body
+        # plane, then straight into the front volume under the driver.  Constant
+        # Ø nozzle_bore: the solid is a swept sphere along this polyline.
+        ax = self.n_ax
+        pts = [self.nozzle_base + ax * (P["stub_len"] + 1.5)]
+        arc_end = self.nozzle_base - ax * P["bore_arc_end"]
+        pts.append(arc_end)
+        R, N = P["bore_arc_r"], 24
+        for i in range(N + 1):
+            phi = self.cant * (1.0 - i / N)
+            pts.append(arc_end - R * np.array([math.sin(self.cant) - math.sin(phi),
+                                               0.0,
+                                               math.cos(self.cant) - math.cos(phi)]))
+        pts.append(pts[-1] + np.array([-P["bore_run_in"], 0.0, 0.0]))
+        # drop repeated points -- at cant = 0 the whole arc collapses to one point
+        keep = [pts[0]]
+        for q in pts[1:]:
+            if np.linalg.norm(q - keep[-1]) > 1e-6:
+                keep.append(q)
+        self.bore_path = np.array(keep)
 
         # a Ti part gets no magnet in the core for the float; jacket magnets only
         self.warnings = []
@@ -487,12 +536,27 @@ class G:
                 f"{self.carrier_x1:.2f}; raise carrier_len to "
                 f"{need + 0.2 - self.carrier_x0:.2f} mm")
 
+    def nz(self, X, Y, Z):
+        """World -> nozzle-local coordinates (the canted frame)."""
+        ca, sa = math.cos(self.cant), math.sin(self.cant)
+        bx, by, bz = self.nozzle_base
+        px, py, pz = X - bx, Y - by, Z - bz
+        return px * ca - pz * sa, py, px * sa + pz * ca
+
+    def core_body(self, X, Y, Z):
+        """The core ellipsoid alone -- what the jacket offsets from."""
+        return ellipsoid(X, Y, Z, self.core_c, self.core_r)
+
+    def nose_cone(self, X, Y, Z, grow=0.0):
+        P = self.P
+        Xn, Yn, Zn = self.nz(X, Y, Z)
+        return cone_x(Xn, Yn, Zn, P["nose_cone_x0"], P["nose_cone_r0"] + grow,
+                      0.0, P["nose_cone_r1"] + grow)
+
     def core_outer(self, X, Y, Z, C):
         """The bare outer surface of the core (no pockets) -- the jacket offsets from this."""
         P = self.P
-        e = ellipsoid(X, Y, Z, self.core_c, self.core_r)
-        nose = cone_x(X, Y, Z, P["nose_cone_x0"], P["nose_cone_r0"], 0.0, P["nose_cone_r1"])
-        return smin(e, nose, 1.2)
+        return smin(self.core_body(X, Y, Z), self.nose_cone(X, Y, Z), 1.2)
 
 
 # --------------------------------------------------------------------------
@@ -595,12 +659,13 @@ def part_core(g):
         outer = g.core_outer(X, Y, Z, C)
         d = np.maximum(outer, Z - g.z_cut)                       # cut at the faceplate plane
 
-        # nozzle stub with two external bayonet lugs
-        stub = cyl_x(X, Y, Z, 0, 0, 0.5 * P["stub_od"], -1.0, g.stub_x1)
+        # nozzle stub with two external bayonet lugs, on the CANTED axis
+        Xn, Yn, Zn = g.nz(X, Y, Z)
+        stub = cyl_x(Xn, Yn, Zn, 0, 0, 0.5 * P["stub_od"], -3.0, g.stub_x1)
         lug_x0 = 1.0
         lug_x1 = lug_x0 + P["lug_w"]
         for th in (0.0, np.pi):
-            stub = U(stub, arc_slot_x(X, Y, Z, 0.0,
+            stub = U(stub, arc_slot_x(Xn, Yn, Zn, 0.0,
                                       0.5 * P["stub_od"] + P["lug_h"],
                                       lug_x0, lug_x1, th - 0.42, th + 0.42))
         d = U(d, np.maximum(stub, Z - g.z_cut))
@@ -623,14 +688,16 @@ def part_core(g):
         cavity = np.maximum(
             ellipsoid(X, Y, Z, g.core_c, g.inner_r), Z - P["cavity_cap_z"])
         pocket = cyl_z(X, Y, Z, cx, 0.0, g.pocket_r, g.pocket_z0, g.pocket_z1 + 1.0)
-        bore = cyl_x(X, Y, Z, 0, 0, bore_r, cx - 1.0, g.stub_x1 + 1.0)
+        bore = None
+        for i in range(len(g.bore_path) - 1):
+            c_ = capsule(X, Y, Z, g.bore_path[i], g.bore_path[i + 1], bore_r)
+            bore = c_ if bore is None else U(bore, c_)
         void = U(cavity, pocket, bore)
 
         # vents
-        void = U(void, capsule(X, Y, Z,
-                               (g.front_wall_x + 0.6, 0.0, 0.0),
-                               (g.front_wall_x + 0.6, -P["core_ry"] - 3.0,
-                                -P["core_rz"] - 3.0),
+        fv = g.bore_path[len(g.bore_path) // 2]
+        void = U(void, capsule(X, Y, Z, fv,
+                               (fv[0], -P["core_ry"] - 3.0, -P["core_rz"] - 3.0),
                                0.5 * P["vent_dia"]))
         void = U(void, capsule(X, Y, Z,
                                (cx - 3.0, 0.0, -1.0),
@@ -678,9 +745,10 @@ def part_core(g):
         d = S(d, groove)
         return d
 
-    b = ((cx - P["core_rx"] - 1.6, g.stub_x1 + 1.2),
+    tip = g.nozzle_base + g.n_ax * (g.stub_x1 + 0.6)
+    b = ((cx - P["core_rx"] - 1.6, max(0.0, float(tip[0])) + 4.2),
          (-P["core_ry"] - 3.2, P["core_ry"] + 1.6),
-         (-P["core_rz"] - 1.6, g.z_cut + 1.2))
+         (min(-P["core_rz"], float(tip[2]) - 4.2) - 1.6, g.z_cut + 1.2))
     return fn, b
 
 
@@ -785,11 +853,17 @@ def part_jacket_wing(g):
     thick = P["jacket_thick"]
 
     def fn(X, Y, Z, C):
-        env = g.core_outer(X, Y, Z, C)
+        env = g.core_body(X, Y, Z)                 # ellipsoid only
 
         # ---- jacket skin: fine gyroid in an offset shell over the -Z hemisphere
         shell = np.maximum(clear - env, env - clear - thick)
         shell = I(shell, Z, X - P["jacket_x_clip"])
+        # clear the canted nozzle root where it passes through the shell
+        Xn, Yn, Zn = g.nz(X, Y, Z)
+        nozzle_clear = U(g.nose_cone(X, Y, Z, clear),
+                         cyl_x(Xn, Yn, Zn, 0, 0,
+                               0.5 * P["socket_od"] + clear + 0.30, -0.5, 60.0))
+        shell = S(shell, nozzle_clear)
 
         dz = np.maximum(0.0, -Z)
         dy = np.maximum(0.0, Y - g.y_root)
@@ -837,6 +911,7 @@ def part_jacket_wing(g):
             d = U(d, cyl_z(X, Y, Z, px_, py_, 0.5 * P["pin_dia"] - 0.06,
                            zs - clear - P["pin_depth"] - 1.4, zs + P["pin_depth"] - 0.05))
         d = S(d, env - clear)
+        d = S(d, nozzle_clear)
         return d
 
     ymax = max(p[1] for p in pts) + 3.0
@@ -1252,6 +1327,11 @@ PARTS = {
 ASSEMBLY_PARTS = ["core", "faceplate", "jacket_wing",
                   "nozzle_insert_short", "carrier", "driver_carrier"]
 
+# these are modelled about the nozzle axis, so their STLs are axis-aligned in the
+# nozzle-local frame and get canted into place only for the assembly
+NOZZLE_FRAME_PARTS = {"nozzle_insert_short", "nozzle_insert_med",
+                      "nozzle_insert_long", "carrier"}
+
 
 def build(name, g, voxel=None):
     fn, bounds = PARTS[name][0](g)
@@ -1305,6 +1385,8 @@ def main():
     ap.add_argument("--voxel", type=float, default=None, help="override voxel size (mm)")
     ap.add_argument("--magnet-preset", default=PARAMS["magnet_preset"],
                     choices=sorted(MAGNET_PRESETS))
+    ap.add_argument("--cant", type=float, default=None,
+                    help="nozzle cant in degrees about +Y (default 45)")
     ap.add_argument("--no-assembly", action="store_true")
     args = ap.parse_args()
 
@@ -1317,6 +1399,8 @@ def main():
     P["magnet_preset"] = args.magnet_preset
     if args.voxel:
         P["voxel"] = args.voxel
+    if args.cant is not None:
+        P["nozzle_cant_deg"] = args.cant
     g = G(P)
 
     here = os.path.dirname(os.path.abspath(__file__))
@@ -1372,7 +1456,15 @@ def main():
 
     # ---- assembly ------------------------------------------------------
     if args.all and not args.no_assembly:
-        parts = [meshes[k] for k in ASSEMBLY_PARTS if k in meshes]
+        parts = []
+        for k in ASSEMBLY_PARTS:
+            if k not in meshes:
+                continue
+            mk = meshes[k]
+            if k in NOZZLE_FRAME_PARTS:            # built in the nozzle-local frame
+                mk = mk.copy()
+                mk.apply_transform(g.nozzle_T)
+            parts.append(mk)
         if parts:
             asm = trimesh.util.concatenate(parts)
             rows.append(report_row("assembly", asm, 0.0, 0.0))
@@ -1413,6 +1505,20 @@ def main():
                   f"p99 {p3:.1f} deg, {100*f3:.1f}% of area over 45 deg")
             print(f"whole jacket+wing, rim-down: worst {w2:.1f} deg, "
                   f"p99 {p2:.1f} deg, {100*f2:.1f}% of area over 45 deg")
+
+    # ---- protrusion stack along the nozzle axis (docs/TRYON_REPORT.md rec 1)
+    rigid = [meshes[k] for k in ("core", "faceplate", "jacket_wing") if k in meshes]
+    if rigid:
+        lo = min(float(((mm.vertices - g.nozzle_base) @ g.n_ax).min()) for mm in rigid)
+        print("-" * 100)
+        print(f"nozzle cant {P['nozzle_cant_deg']:.0f} deg about +Y   "
+              f"axis {tuple(round(float(v), 3) for v in g.n_ax)}   "
+              f"nozzle base {tuple(round(float(v), 2) for v in g.nozzle_base)}")
+        print(f"  rigid body along the nozzle axis: {lo:.2f} .. {g.carrier_x0:.2f} mm "
+              f"= {g.carrier_x0 - lo:.2f} mm stack   "
+              f"(uncanted baseline 23.40 mm, TRYON_REPORT.md rec 1)")
+        print(f"  seal plane at {g.carrier_x1:.2f} mm; everything behind it spans "
+              f"{g.carrier_x1 - lo:.2f} mm along the axis")
 
     # ---- skirt contact land + pressure budget (docs/MECH_VALIDATION.md JOB 2)
     if args.all or "carrier" in meshes:

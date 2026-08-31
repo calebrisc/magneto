@@ -36,13 +36,10 @@ Units are mm throughout. The **right** ear is the master; the left is produced b
 mirroring across the sagittal plane, implemented as `scale(-1, 1, 1)` on X with
 face reversal.
 
-> Caveat worth stating plainly: in a real ear the canal axis and the outward
-> (lateral) face normal are roughly 120–150° apart, not 90°. This build treats
-> +X and +Z as **orthogonal design axes**, which is a simplification. It costs
-> nothing for v0 — the wing and skirt are compliant and the nozzle joint is
-> meant to have a few degrees of give — but a v1 that fits scanned ears should
-> add a `nozzle_tilt_deg` parameter that rotates the nozzle/carrier stack about
-> Y relative to the shell.
+The **nozzle axis is canted** relative to the body: `nozzle_cant_deg` (default
+**45°**) rotates it about +Y, so +X → −Z. See §2b.
+
+---
 
 ---
 
@@ -55,6 +52,101 @@ face reversal.
   faceplate→core (2 magnets), tip carrier→nozzle (mag-float pair + bayonet).
 * Minimum printable wall 0.20 mm, minimum gyroid cell 1.00 mm — enforced, with
   a printed warning when a parameter set violates either.
+
+---
+
+## 2b. The nozzle cant
+
+`docs/TRYON_REPORT.md` (107 ears, commit `fe609b7`) failed **104 / 107 on
+protrusion**. The mechanism was arithmetic, and the report nailed it to 0.02 mm:
+
+> the rigid body behind the seal plane ran x = +4.65 → −18.75, i.e. **23.4 mm
+> along the nozzle axis**; the seated nozzle sits a median 55° off the concha
+> normal, so 23.4 × cos 55° = **13.6 mm** of faceplate protrusion — against a
+> measured median of 13.58 mm.
+
+The cause was the design frame's own assumption, already flagged in v0: it
+treated the nozzle axis and the faceplate normal as **orthogonal**, when in a real
+ear the canal axis and the concha-floor normal are **30–60° apart**. The body
+therefore stacked straight down the canal instead of lying in the concha bowl.
+
+**Fix: cant the nozzle, keep the body.** `nozzle_cant_deg` rotates the nozzle axis
+about the design +Y, taking +X toward −Z:
+
+```
+axis  â = (cos c, 0, −sin c)     c = nozzle_cant_deg, default 45°
+```
+
+−Z is chosen (not +Z) because it keeps the jacket's ear-facing −Z surface pointed
+into the concha floor: −Ẑ · â = +sin c.
+
+**What follows the canted axis:** the core's nozzle stub and its bayonet lugs, the
+nose cone, the sound bore, the nozzle inserts, the carrier, the skirt and the seal
+plane. The magnet stack and the bayonet are unchanged — they are all measured
+along that axis, so their arithmetic is identical.
+
+**What does not move:** the core ellipsoid, the faceplate, the jacket and the
+wing keep their orientation to the concha exactly as before.
+
+The axis passes through the **core centre**, so the nozzle root is buried the full
+ellipsoid support distance (6.09 mm at 45°) and the base lands where the axis
+exits the shell:
+
+| cant | nozzle base (x, z) | root buried | rigid stack along the axis |
+|---|---|---|---|
+| 0° | (0.00, 0.00) | 8.50 mm | **23.40 mm** — reproduces the report exactly |
+| 30° | (−2.43, −3.50) | 7.00 mm | 21.1 mm |
+| **45°** (default) | **(−4.19, −4.31)** | **6.09 mm** | **17.96 mm** |
+| 60° | (−5.77, −4.73) | 5.47 mm | ~16 mm |
+
+`--cant 0` reproduces the old collinear geometry bit-for-bit, and the generator
+measures the stack off the actual meshes on every run — at cant 0 it prints
+`−18.75 .. 4.65 = 23.40 mm`, which is the report's number to the centimetre of a
+millimetre. That agreement is the cross-check that the two models describe the
+same part.
+
+**The axial number understates the benefit.** Canting removes 5.4 mm from the
+stack measured *along the nozzle axis*, but the protrusion that failed 104 ears is
+measured along the *concha normal*, and the cant's real work is letting the
+optimiser lay the 17 × 14 mm body flat in the bowl instead of down the canal. The
+report's estimate for that is 23.4 × (cos 55° − cos 85°) ≈ 11.4 mm. **Only a
+try-on re-run can settle it** — the generator has no ear.
+
+### The sound bore now curves
+
+A canted nozzle cannot share a straight bore with a driver that stays in the body
+plane, so the bore is built as a **swept sphere along a polyline**: straight along
+â out through the stub, one circular arc of radius `bore_arc_r` (9 mm) turning
+through the cant angle, then straight into the front volume under the driver.
+Diameter is a constant Ø`nozzle_bore` by construction, the turn is exactly the
+cant (≤ 45° at the default), and the arc bulges *away* from the shell's lower
+surface rather than toward it. The driver pocket and the driver itself do not
+move — they stay in the body plane, firing −Z into the front volume, and the arc
+picks the sound up directly beneath them.
+
+### Knock-on changes
+
+* **Jacket magnet and pin stations moved.** The old station at (cx + 5.6, 0) sat
+  1.4 mm from the canted nozzle root — inside the nose boss. They are now
+  magnets at (cx − 6.0, 0) and (cx + 0.5, ±4.8), pins at (cx − 3.0, ±4.0), all
+  ≥ 6 mm from the nozzle exit in XY.
+* **The jacket now offsets from the ellipsoid alone** (`core_body`) rather than
+  from ellipsoid ∪ nose, with an explicit clearance hole cut where the canted
+  nozzle passes through the shell. Otherwise the jacket wrapped the nozzle root.
+* **The faceplate got smaller** (331 → 304 mm³): the canted nose no longer
+  reaches the +Z cap, so the cap is now a clean ellipsoid section.
+* **The front vent is anchored to the bore path** rather than to a fixed x, so it
+  always opens into the front volume whatever the cant.
+* **Nozzle inserts, carrier and moulds keep their own axis-aligned frame.** Their
+  STLs are unchanged by the cant — they are bodies of revolution about â — and
+  the assembly applies the cant transform when it places them.
+
+### Still open
+
+The report also asked for body shortening on top of the cant ("the remainder has
+to come from body length"). That is **not** done here: the core is still
+17 × 14 × 10 mm, set by the 12 mm driver carrier. Doing it means a smaller driver
+or a two-piece shell.
 
 ---
 
@@ -329,6 +421,10 @@ increases are forced by the 12 mm driver carrier, not stylistic.
 
 | param | default | why |
 |---|---|---|
+| `nozzle_cant_deg` | **45.0°** | rotation of the nozzle axis about +Y relative to core/faceplate/jacket, so the body lies in the concha plane. See §2b. `--cant 0` restores the old collinear geometry |
+| `bore_arc_r` | 9.00 mm | centreline radius of the curved sound bore. Larger = gentler turn but the arc reaches further back into the shell |
+| `bore_arc_end` | 1.20 mm | how far behind the nozzle base the arc ends, i.e. how much straight bore the stub gets |
+| `bore_run_in` | 2.50 mm | straight bore from the end of the arc into the front volume |
 | `nozzle_bore` | 4.00 mm | per `EAR_ANTHROPOMETRY.md`: 4 mm clears the 4.5 mm small-aperture tail with the skirt around it. Industry-standard 5.5–6.5 mm nozzles are why small-canal users get hurt |
 | `stub_od` | 5.00 mm | 0.5 mm of wall on the bore |
 | `stub_len` | 3.00 mm | enough bayonet engagement to take the skirt's side load |
@@ -512,8 +608,8 @@ transform the tool runs but says so, loudly.
 3. **Moving-ring ID is not encapsulated** — 9 × 5.4 over a Ø5.2 bore leaves
    0.1 mm, so the ring's bore face is exposed and located by the mould core post.
    Watch it for delamination on the first cast.
-4. **Nozzle tilt** — add `nozzle_tilt_deg` so the nozzle/carrier stack can rake
-   relative to the shell; the aperture azimuth range is 0–55°.
+4. **Body shortening** — the try-on report wants it on top of the 45° cant. The
+   core is still 17 × 14 × 10 mm, set by the 12 mm driver carrier.
 5. **Two-shot carrier mould** — the current mould is single-shot; production
    wants a Shore A 10–15 skirt over a Shore A 40–50 body.
 6. **13.65 mm protrusion** is at the upper end of what a shallow concha will

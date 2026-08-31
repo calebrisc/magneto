@@ -130,7 +130,7 @@ import numpy as np
 import trimesh
 from scipy import ndimage, optimize
 
-from earfit import (ALIGNED, DATASETS, EARS, EarField, crop,
+from earfit import (ALIGNED, DATASETS, EARS, NOZZLE_AXIS, EarField, crop,
                     depth_map, ear_window, iem_points, load_head, rt_matrix,
                     transform)
 
@@ -380,13 +380,31 @@ def seating_cost(M, P, field, ctx=None):
         th = np.degrees(np.arccos(np.clip(float(fz @ ctx["outward"]), -1.0, 1.0)))
         c_face = 0.004 * relu(th - 45.0) ** 2
 
+    # BORE OVER THE CANAL.  Nothing else in this cost cares WHERE the sealed ring
+    # sits, only that it touches flesh.  A rim laid flat on the concha floor 10 mm
+    # from the aperture scores a perfect continuous seal while sealing nothing --
+    # the canal entrance is outside the loop.  Human review of the seated GLB
+    # caught this; the audit then found the aperture outside the rim ring on more
+    # than half the ears, with a median lateral offset (10.2 mm) larger than the
+    # rim radius itself.  The concha frame seeds the rim centre exactly on the
+    # aperture and the Powell search was free to walk it away, so it did.
+    # 3 mm of slack is free -- real anatomy offsets the bore from the bowl centre.
+    c_aim = 0.0
+    if ctx is not None and ctx.get("aperture") is not None and "rim_centre" in ctx:
+        nax = M[:3, :3] @ NOZZLE_AXIS
+        nax = nax / max(np.linalg.norm(nax), 1e-9)
+        cen = M[:3, :3] @ ctx["rim_centre"] + M[:3, 3]
+        dv = ctx["aperture"] - cen
+        lat = float(np.linalg.norm(dv - (dv @ nax) * nax))
+        c_aim = 0.40 * relu(lat - 3.0) ** 2
+
     c_prot = 0.0
     if ctx is not None and ctx.get("tragus") is not None:
         fp = transform(P["faceplate"], M)
         prot = float(np.max(np.einsum("ij,j->i", fp - ctx["tragus"], ctx["normal"])))
         c_prot = 0.08 * relu(prot - 2.0) ** 2
 
-    c = c_rim + c_pen + c_wing + c_jac + c_soft + c_prot + c_face
+    c = c_rim + c_pen + c_wing + c_jac + c_soft + c_prot + c_face + c_aim
     return float(c) if np.isfinite(c) else 1e6
 
 
@@ -466,7 +484,9 @@ def process(path, ds, side, P, want_png, manual):
     frame = concha_frame(lm["aperture"], n_out, win["lat"], P["_rim_centre"])
     field = EarField(patch)
     ctx = dict(tragus=None if tragus is None else np.asarray(tragus, float),
-               normal=n_out, outward=outward)
+               normal=n_out, outward=outward,
+               aperture=np.asarray(lm["aperture"], float),
+               rim_centre=P["_rim_centre"])
     cost, rake, roll, M, z, cost0 = seat(frame, lm["aperture"], P, field, ctx=ctx)
 
     os.makedirs(ALIGNED, exist_ok=True)
@@ -496,7 +516,7 @@ def process(path, ds, side, P, want_png, manual):
     return rec
 
 
-def reseat(json_path, P, field_seed=0):
+def reseat(json_path, P, field_seed=0, aim=True):
     """Redo only the seating search for an ear that is already landmarked.
 
     Landmarking (crop, depth map, escape fractions) is the expensive half and
@@ -511,7 +531,8 @@ def reseat(json_path, P, field_seed=0):
     n_out = np.array(rec["floor_normal"], float)
     trg = rec.get("tragus")
     ctx = dict(tragus=None if trg is None else np.array(trg, float), normal=n_out,
-               outward=np.array(rec["outward"], float))
+               outward=np.array(rec["outward"], float),
+               aperture=ap if aim else None, rim_centre=P["_rim_centre"])
     # the cached concha_frame was seeded off the OLD rim centre; re-seed it so a
     # reseat after a cant change starts from the right place
     frame = frame.copy()
@@ -528,11 +549,11 @@ def reseat(json_path, P, field_seed=0):
 _P = None
 
 
-def _reseat_worker(json_path, field_seed=0, cant=None, stl_dir=None):
+def _reseat_worker(json_path, field_seed=0, cant=None, stl_dir=None, aim=True):
     global _P
     if _P is None:
         _P = iem_points(stl_dir=stl_dir, cant=cant)
-    return reseat(json_path, _P, field_seed)
+    return reseat(json_path, _P, field_seed, aim)
 
 
 def _worker(path, ds, side, want_png, manual, cant=None, stl_dir=None):
@@ -555,6 +576,12 @@ def main():
     ap.add_argument("--field-seed", type=int, default=0,
                     help="seed for the ear-surface point sampling; vary it to "
                          "measure how much a result depends on the sampling")
+    ap.add_argument("--json-dir", default=None,
+                    help="with --reseat: reseat the JSONs in this directory "
+                         "in place (a subset), reading patches from ears/aligned")
+    ap.add_argument("--no-aim", action="store_true",
+                    help="drop the bore-over-canal term from the seating cost "
+                         "(for measuring what that constraint is worth)")
     ap.add_argument("--reseat", action="store_true",
                     help="re-run only the seating search over ears already in "
                          "ears/aligned/, reusing their cached patch and "
@@ -579,13 +606,14 @@ def main():
 
     if a.reseat:
         pat = f"{a.dataset}_*.json" if a.dataset else "*.json"
-        js = sorted(glob.glob(os.path.join(ALIGNED, pat)))
+        # --json-dir lets a subset be reseated in place without touching the rest
+        js = sorted(glob.glob(os.path.join(a.json_dir or ALIGNED, pat)))
         if not js:
             sys.exit(f"nothing to reseat in {ALIGNED}")
         t0, ok, bad = time.time(), 0, 0
         with cf.ProcessPoolExecutor(max_workers=a.jobs) as ex:
-            futs = {ex.submit(_reseat_worker, p, a.field_seed, a.cant, a.stl_dir): p
-                    for p in js}
+            futs = {ex.submit(_reseat_worker, p, a.field_seed, a.cant, a.stl_dir,
+                              not a.no_aim): p for p in js}
             for fut in cf.as_completed(futs):
                 try:
                     report(fut.result()); ok += 1

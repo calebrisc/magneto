@@ -222,11 +222,14 @@ def main():
                     help="override nozzle_cant_deg when reading the STLs")
     ap.add_argument("--stl-dir", default=None,
                     help="directory of right-ear STLs (default stl/right)")
+    ap.add_argument("--json-dir", default=None,
+                    help="directory of per-ear seating JSONs (default ears/aligned); "
+                         "patches are always read from ears/aligned")
     ap.add_argument("--csv", default=os.path.join(ALIGNED, "tryon.csv"))
     ap.add_argument("--md", default=os.path.join(ALIGNED, "tryon_summary.md"))
     a = ap.parse_args()
 
-    js = sorted(glob.glob(os.path.join(ALIGNED, "*.json")))
+    js = sorted(glob.glob(os.path.join(a.json_dir or ALIGNED, "*.json")))
     if a.dataset:
         js = [p for p in js if os.path.basename(p).startswith(a.dataset + "_")]
     if not js:

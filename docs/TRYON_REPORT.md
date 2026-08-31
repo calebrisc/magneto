@@ -1,232 +1,178 @@
-# Magneto IEM — virtual fit validation ("try-on") · v4
+# Magneto IEM — virtual fit validation ("try-on") · v5 (short-list) + enclosure audit
 
-Seats the generated IEM assembly in 107 real and synthetic ears and scores the
-fit. **v4** scores `cad/iem/generate.py` at commit **`ff5b52a`** — notch sector
-deepened to a measured 3.25 mm, core restored to full size (protrusion accepted,
-no trim) — with fresh 6-DOF seating optimisations on all 107 ears at two sampling
-seeds, against v3 (`1ae768a`).
+**Two things in this revision, and the first one matters more than the second.**
 
-Scoring: protrusion **≤10 mm pass / ≤14 mm marginal**
-([calibration](#protrusion-threshold-calibration)) and the **compliance-aware
-seal** ([method](#compliance-aware-seal-scoring)).
+1. **A scoring hole was found by human review and is now closed.** The seal metric
+   never checked that the sealed contact loop *surrounds the canal entrance*. On
+   the v4 seatings the canal aperture sat **outside** the rim ring on more than
+   half of the audited ears — a rim laid flat on the concha floor scored a perfect
+   continuous seal while sealing nothing. A bore-over-canal constraint is now part
+   of the seating cost. **Seal figures in v1–v4 are inflated and should not be
+   quoted.**
+2. **v5 geometry** (`dbc3b7b`: notch reverted to a plain Ø19 rim with a
+   compliance-only sector, wing shortened to a 10.40 mm free span with −10° splay,
+   k = 0.294 N/mm) was scored on a **13-ear short list**, not the full 107.
+
+> ### Scope: this is a SHORT-LIST run (n = 13)
+> Per instruction, v5 was not run on all 107 ears. The list is
+> **sonicom/P0023** (the human-reviewed ear), the **4 synthetic envelope
+> corners**, 2 median-protrusion ears (pp66, pp82), 2 median-seal-behaviour ears
+> (pp67, P0003), 2 small-aperture-tail ears (pp69, P0016) and 2 large-aperture-tail
+> ears (pp49, pp9). Population medians on the full 107 are protrusion 11.26 mm and
+> basin-inscribed radius 7.3 mm; the list brackets both.
+>
+> **What n = 13 can support:** the enclosure audit (a geometric property, and the
+> effect is large — 38 % → 85 %), the direction and rough size of the seal change,
+> and the qualitative retention finding. **What it cannot support:** any P/M/F
+> count as a population estimate, or a 1–2 ear difference anywhere. Differences of
+> 3 ears out of 13 are inside the seed noise this suite already shows.
 
 ## Verdict
 
-**v4 regressed, and the cause is a recommendation this report got wrong. The
-3.25 mm notch flare makes the seal worse, not better — it breaks more ears than
-it fixes, on both seeds. Revert it. Separately, the retention diagnosis is the
-opposite of what was assumed: the wing is too LONG, not too short.**
+**Do not freeze for the variant-B comparison yet.** Three reasons, in order:
 
-| | v3 (`1ae768a`) | v4 (`ff5b52a`) |
-|---|---|---|
-| overall P / M / F — seed 0 | 21 / 59 / 27 | **7 / 64 / 36** |
-| overall P / M / F — seed 7 | 13 / 68 / 26 | 17 / 62 / 28 |
-| seal pass @ 2.5 / 4.0 mm | 76 / 103 | **67 / 98** |
-| protrusion median | 10.52 mm | 11.26 mm |
-| protrusion fails | 17 | 24 |
+1. **The seal baseline just moved.** With enclosure enforced, seal at the
+   conservative budget goes from 6/13 to **11/13** on identical geometry — but
+   that is a *different measurement*, not an improvement in the part. Every prior
+   seal number was computed without checking that the loop contained the canal.
+   The design's real seal performance is currently unknown at population scale.
+2. **The predicted retention gain did not materialise.** The v5 wing was expected
+   to take overpressed 47 → ~28 and retained 31 → ~50 (full-107 terms). On the
+   short list overpressed did fall, but retention did **not** rise: the shortening
+   overshot, converting over-press into *no contact*. `wing_tip` median moved
+   −1.09 → −0.20 mm and the count of ears where the wing does not touch at all
+   rose 3 → 5 (seed 0) and → 7 (seed 7).
+3. **Protrusion regressed under the new constraint**, median 11.26 → 13.40 mm on
+   the list, because holding the bore over the canal pushes the body out. That
+   trade is real and was previously hidden.
 
-The protrusion regression is expected and was accepted: the core went back to
-full size. The seal regression was not.
-
-### The notch flare is harmful — and that is my error
-
-v3 measured, per ear, the **additional deformation budget** needed to seal:
-median 2.0 mm, p90 3.4 mm. It then recommended delivering that as "3.0–3.5 mm of
-realised **radial reach**". **Those are not the same quantity, and the difference
-is the whole problem.** A deformation budget is direction-free — it asks how far
-the silicone must stretch toward *wherever the nearest flesh is*. A radial
-extension commits the lip to one direction. At the intertragic notch that
-direction points into the notch, and **the notch is an opening in the cartilage**:
-there is no flesh there to seal against. The lip now juts into free air.
-
-The evidence is a fully controlled, same-pose comparison — the identical v4
-seatings scored with the as-built flared rim versus a plain Ø19 circle:
-
-| budget | seed 0: circle → flared | seed 7: circle → flared |
-|---|---|---|
-| 1.5 mm | 41 → 39 (broke 7, fixed 5) | 45 → 38 (broke 10, fixed 3) |
-| **2.5 mm** | **75 → 67 (broke 12, fixed 4)** | **81 → 79 (broke 8, fixed 6)** |
-| 4.0 mm | 102 → 98 (broke 5, fixed 1) | 102 → 101 (broke 3, fixed 2) |
-
-Net negative at every budget on both seeds. And the ears it breaks were not
-marginal — many had a **perfect** seal before:
-
-| ear | gap arc, circle → flared | coverage |
-|---|---|---|
-| hutubs pp31 | 0° → **56°** | 1.00 → 0.84 |
-| sonicom P0025 | 0° → 51° | 1.00 → 0.86 |
-| hutubs pp95 | 6° → 64° | 0.98 → 0.81 |
-| sonicom P0053 | 0° → 40° | 1.00 → 0.89 |
-| synthetic xl_shallow | 6° → 37° | 0.98 → 0.88 |
-
-10 of the 12 ears broken at the 2.5 mm budget have their new gap **at the notch
-sector itself** — the flare drills its own hole in the seal it was added to
-close. Measured across the flared samples, the flare improves the *median* gap
-in that sector by 0.70 mm but worsens the p90 (+3.05 → +3.45 mm); since the seal
-criterion is continuity, the tail is what decides, and the tail got worse.
-
-**Recommendation: revert the notch sector to a plain Ø19 rim** (or at most the
-~1 mm of v3, which was net-neutral). Then pursue notch sealing as **compliance,
-not geometry** — thinner wall, longer free length, or lower durometer over that
-90° so the lip can *drape toward* the cartilage on either side of the notch
-instead of reaching into the void between them. The budget sweep that motivated
-this remains valid as a *compliance* target; it was never a geometry target.
-
-### Retention: the wing is too long, not too short
-
-The wing was assumed to need more reach. It does not.
-
-| outcome (spring band, tip ∈ [−1.5, 0] mm) | ears | share |
-|---|---|---|
-| retained | 31 | 29 % |
-| **overpressed** (tip < −1.5 mm) | **47** | **44 %** |
-| misdirected (gap, aim ≥ 60° off) | 18 | 17 % |
-| blocked (already overlapping ≥1.5 mm elsewhere) | 10 | 9 % |
-| short (gap, aiming correctly) | **1** | 1 % |
-
-**Exactly one ear in 107 is short.** The dominant mode is *overpressed* — median
-tip overlap −2.66 mm, well past the 1.5 mm the 0.25 N/mm spring can absorb, so
-the wing is bottoming and levering the shell out. Full analysis and the wing
-change that fixes the most ears: [retention](#retention-analysis).
+A full-107 run with the enclosure constraint is the minimum before freezing.
 
 ---
 
-## v3 → v4, side by side
+## The enclosure audit
 
-### Overall (compliance seal + recalibrated protrusion)
+Human review of `viz/seated_scene.glb` reported the nozzle looked like it was
+sealing against flesh *near* the aperture rather than *around* it. That is
+exactly the failure `seal_compliance.py` could not see: it asks only whether the
+rim forms a continuous contact loop against flesh, never *where*. The concha
+frame seeds the rim centre on the aperture and the Powell search was then free to
+walk it away — and nothing in the cost objected, so it did.
 
-| | seed 0 P/M/F | seed 7 P/M/F |
-|---|---|---|
-| v3 (`1ae768a`) | 21 / 59 / 27 | 13 / 68 / 26 |
-| **v4 (`ff5b52a`)** | **7 / 64 / 36** | **17 / 62 / 28** |
-| v4 with a plain circle rim | 9 / 66 / 32 | — |
+`seal_enclosure_audit.py` adds three per-ear checks:
 
-The seed spread at v4 is wide (27 → 36 fails between seeds is smaller than the
-7 → 17 swing in passes), so **do not over-read the headline pair**. The robust
-statements are the paired, same-pose ones: the flare is net-negative on both
-seeds, and protrusion worsened as expected with the core restored.
+- **(a) aim** — angle between the nozzle axis and the rim-centre→aperture
+  direction (0° = bore points straight at the canal), plus the angle to the
+  inward concha normal for context;
+- **(b) offset** — in-plane distance from the rim centre to the aperture,
+  comparable against the rim radius;
+- **(c) enclosure** — the aperture must project *inside* the rim ring **and** the
+  contact loop must be continuous around it.
 
-### Per axis (seed 0)
+### Result (13 ears, 2.5 mm budget)
 
-| axis | v3 | v4 | note |
+| | v4 seatings | v5, no constraint | **v5 + constraint** |
 |---|---|---|---|
-| protrusion (≤10 / ≤14 mm) | 46 / 44 / 17 | 39 / 44 / 24 | expected — core untrimmed |
-| seal (compliance 2.5 / 4.0) | 76 / 27 / 4 | **67 / 31 / 9** | **regression, from the flare** |
-| clearance | 105 / 2 / 0 | 105 / 2 / 0 | unchanged, fully clear |
-| retention | 55 / 44 / 8 | 50 / 50 / 7 | flat |
+| (a) aim, median | 76.8° | 71.5° | **52.9°** |
+| (b) lateral offset, median | 10.2 mm | 5.7 mm | **4.6 mm** |
+| (b) lateral offset, max | 16.6 mm | 12.8 mm | **7.3 mm** |
+| aperture inside the rim ring | 6/13 (46 %) | 9/13 (69 %) | **13/13 (100 %)** |
+| contact loop continuous | 7/13 | 6/13 | 11/13 |
+| **(c) loop actually surrounds the canal** | **6/13 (46 %)** | **5/13 (38 %)** | **11/13 (85 %)** |
+| sealed but NOT enclosing (false pass) | 1/13 | 1/13 | **0/13** |
 
-### Metric medians (seed 0)
+On v4 the median lateral offset (10.2 mm) was **larger than the rim radius
+itself** (9.88 mm) — the sealed ring was typically centred a full radius away
+from the canal it was supposed to surround. This is a genuine scoring hole, and
+it inflated every seal number this report has published.
 
-| metric | v3 | v4 |
-|---|---|---|
-| faceplate past tragus | 10.52 mm | 11.26 mm |
-| skirt rim contact coverage (rigid) | 0.61 | 0.56 |
-| skirt rim max gap (rigid) | 2.96 mm | 3.03 mm |
-| wing tip signed distance | −0.73 mm | −1.03 mm |
-| jacket mean clearance | 4.27 mm | 4.63 mm |
-| worst rigid interference | +0.26 mm | +0.30 mm |
+### Was P0023 specifically mis-aimed?
 
-The jacket keeps drifting off the concha floor (3.01 → 3.94 → 4.27 → 4.63 mm
-across v2/v3/v4). It still costs no grades, but it is the surface the wing reacts
-against, and it is a plausible contributor to the retention picture below.
+**Partly — the reviewer's instinct was right, though not in the way the audit
+first framed it.** On the v4 seating that produced the GLB, P0023's aperture does
+lie inside the rim ring (lateral offset 4.55 mm against a 9.88 mm radius), so the
+loop *does* enclose the canal and it is not a false pass. But the bore is 4.5 mm
+off-axis and the aperture sits **1.44 mm behind the rim plane** (`axial` −1.44) —
+the rim has been pushed slightly past the canal mouth into the surrounding flesh,
+with the nozzle pointing across the aperture rather than down it (aim 107.6°).
+So: sealing *around* the canal, but not aimed *into* it. Under the constraint,
+P0023's aim improves to 94.7° and axial goes positive.
 
-### Notch attribution (v4, as built)
+### The constraint
 
-| budget | failing ears | gap at the notch | elsewhere | notch share |
-|---|---|---|---|---|
-| 1.5 mm | 68 | 50 | 18 | 74 % |
-| 2.5 mm | 40 | 34 | 6 | **85 %** |
-| 4.0 mm | 9 | 7 | 2 | 78 % |
-
-Unchanged in character from v2 and v3: the notch is a quarter of the perimeter
-and takes three-quarters to five-sixths of the failures. Deepening the flare did
-not move this — it moved failures *into* the sector.
-
----
-
-## Retention analysis
-
-`retention_analysis.py`, at each ear's frozen seated pose. The wing is a
-compliant leaf spring at ~0.25 N/mm, so the physically meaningful target is a
-light interference fit — tip signed distance in **[−1.5, 0] mm**, the spring's
-working range. That is stricter than `tryon.py`'s grading band, which asks only
-for a passing grade.
-
-### Why each graded failure fails
-
-Only 7 ears fail the graded retention axis, and **none of them is a simple reach
-problem** except one:
-
-| ear | tip | worst overlap | aim angle | diagnosis |
-|---|---|---|---|---|
-| synthetic xs_deep | +1.05 | −2.41 | 117° | blocked |
-| hutubs pp47 | +1.09 | +0.42 | 59° | short |
-| synthetic xs_shallow | +1.24 | −2.47 | 80° | blocked |
-| hutubs pp41 | +1.32 | −1.25 | 156° | misdirected |
-| hutubs pp29 | +1.33 | +0.62 | 83° | misdirected |
-| sonicom P0028 | +1.33 | −2.12 | 164° | blocked |
-| sonicom P0045 | +1.40 | +0.79 | 95° | misdirected |
-
-"Aim angle" is between the wing's growth direction and pressing straight into the
-local ear surface. **Above 90° the wing is growing away from the surface it is
-supposed to press.** Three of the seven are *blocked* — the tip shows a gap while
-the wing is already overlapping 2.1–2.5 mm further down its span, so it bottoms
-out before the tip can land. For those, a longer wing is strictly worse.
-
-### What wing change fixes the most ears
-
-Ears retained (tip in the spring band) after extending the wing by *L* along its
-growth axis and splaying it by *θ* about the root:
-
-| ext \ splay | −15° | −10° | −5° | 0° | +5° | +10° | +15° |
-|---|---|---|---|---|---|---|---|
-| **−3.0 mm** | 47 | **50** | 49 | 47 | 41 | 36 | 34 |
-| **−2.5 mm** | 49 | 46 | 44 | 46 | 44 | 41 | 37 |
-| **−2.0 mm** | 42 | 49 | 46 | 47 | 50 | 43 | 36 |
-| −1.5 mm | 35 | 40 | 44 | 41 | 38 | 42 | 37 |
-| −1.0 mm | 31 | 42 | 42 | 38 | 39 | 33 | 34 |
-| −0.5 mm | 22 | 37 | 36 | 32 | 34 | 28 | 34 |
-| **0 (as built)** | 17 | 30 | 27 | **31** | 30 | 33 | 33 |
-| +1.0 mm | 19 | 26 | 22 | 16 | 22 | 29 | 27 |
-| +1.5 mm | 16 | 18 | 20 | 17 | 18 | 22 | 20 |
-
-**Shorten the wing by 2.5–3.0 mm and splay it −10°.** That takes retention from
-31/107 to **50/107** — a 61 % improvement — and the whole upper half of the table
-confirms that *every* amount of lengthening makes it worse. The surface is broad
-and flat around the optimum (46–50 ears across a ±1 mm, ±10° neighbourhood), so
-the change is not knife-edged.
-
-Two caveats. The pose is frozen, so a shorter wing would also re-seat — this is a
-lower bound. And retention is the noisiest axis in the suite (61/107 seed
-agreement), so treat 31 → 50 as a direction and a magnitude, not a precise count.
+Added to `seating_cost` as `c_aim`: 3 mm of lateral slack is free (real anatomy
+offsets the bore from the bowl centre), quadratic beyond, weight 0.40. Toggle it
+off with `align_ear.py --no-aim` to reproduce the unconstrained numbers.
 
 ---
 
-## Visual verification
+## v5 short-list results (n = 13)
 
-`viz_scene.py` exports one seated ear for eyeball checking, because every number
-in this report comes from a signed-distance field and a pose matrix, and both of
-this project's worst bugs — the nozzle-frame error and the faceplate-into-the-
-skull roll — were invisible in the metrics until someone reasoned about the
-geometry.
+### Overall and seal
 
-`cad/iem/viz/seated_scene.glb` (2.76 MB, 141 k triangles) holds **sonicom/P0023**
-— protrusion 11.15 mm against a population median of 11.26, seal passing at the
-2.5 mm budget, overall grade *marginal* — with the ear in tan, core and faceplate
-in silver, jacket and wing in blue, skirt/carrier in orange and the nozzle insert
-in grey. Parts carry exactly the transforms the try-on scores them with,
-including the nozzle-local → assembly cant, so a wrong-looking render means wrong
-numbers. `seated_scene_meta.json` carries the ear id, its full metric row, the
-seal-compliance row, the landmarks and the 4×4 seating transform.
+| run | overall P/M/F | seal @1.5 / 2.5 / 4.0 | protrusion median |
+|---|---|---|---|
+| v4, same 13 ears | 2 / 6 / 5 | 5 / 7 / 11 | 11.26 mm |
+| v5 no constraint, seed 0 | 0 / 6 / 7 | 6 / 6 / 11 | 12.70 mm |
+| v5 no constraint, seed 7 | 1 / 8 / 4 | 6 / 8 / 11 | 11.59 mm |
+| **v5 + constraint, seed 0** | **2 / 4 / 7** | **9 / 11 / 12** | **13.40 mm** |
+| **v5 + constraint, seed 7** | **1 / 6 / 6** | **8 / 9 / 12** | **12.57 mm** |
 
-Sanity check on the export, which is also a check on the pipeline: distance from
-each part to the ear surface comes out as skirt 0.04 mm (it is the sealing part),
-jacket/wing 0.03 mm (it presses), core 1.53 mm and faceplate 2.47 mm (rigid, and
-standing clear of flesh). That is precisely what the metrics claim.
+Seal at the conservative budget nearly doubles under the constraint (6 → 11 at
+seed 0, 8 → 9 at seed 7) — because a bore held over the canal puts the rim in the
+concha bowl, which has a continuous wall to seal against, instead of skidding
+onto the floor. Protrusion pays for it (+0.7 to +2.2 mm of median). Overall P/M/F
+is flat-to-worse, and at n = 13 with this suite's seed noise **none of the
+overall counts is a meaningful difference.**
 
-No PNG renders: neither `pyglet` nor `pyrender` is installed, so headless
-rasterisation was not trivially available and was skipped as instructed. The GLB
-opens in any glTF viewer.
+### Notch compliance sector — sensitivity line (clearly labelled)
+
+The compliance-only sector cannot be scored kinematically as extra reach; its
+benefit appears as a **larger achievable budget over the inferior 90°**. Scored
+three ways on the constrained v5 seatings:
+
+| budget model | ears sealed (of 13) |
+|---|---|
+| uniform 2.5 mm (conservative) | 11 |
+| **2.5 mm base + 4.0 mm in the notch sector** | **12** |
+| uniform 4.0 mm (optimistic, sensitivity bound) | 12 |
+
+The sector captures the **entire** benefit of a uniform 4.0 mm budget while only
+relaxing the inferior 90°, which is the right shape for the design. Note its
+value depends on the base: with the unconstrained seatings the same three rows
+read 6 / 10 / 11, so the sector is worth far more when the underlying seal is
+poor. Treat the 4.0 mm column as a sensitivity bound, not a prediction.
+
+### Retention — the shortening overshot
+
+Same-pose paired comparison (identical v4 seatings, only the wing swapped), plus
+v5 at its own seatings:
+
+| | retained | short | misdirected | blocked | overpressed |
+|---|---|---|---|---|---|
+| v4 poses + v4 wing | **5** | 0 | 0 | 3 | **5** |
+| v4 poses + v5 wing (paired) | 2 | 2 | 2 | 1 | 6 |
+| v5 poses + v5 wing | 4 | 0 | 3 | 2 | **4** |
+
+`wing_tip` median and contact state:
+
+| run | wing_tip median | in band [−1.5, 0] | over-pressed < −1.5 | **not touching > 0** |
+|---|---|---|---|---|
+| v4, same 13 | −1.09 mm | 5 | 5 | 3 |
+| v5 + constraint, seed 0 | −0.20 mm | 4 | 4 | 5 |
+| v5 + constraint, seed 7 | +0.57 mm | 4 | 2 | **7** |
+
+**Over-press did improve — but into the wrong place.** The wing went from
+pressing too hard to not reaching at all; ears in the retaining band did not
+increase. The v4 prediction (retained 31 → ~50 on 107) is not supported.
+
+That prediction came from a crude proxy and I should flag why it misled: the v4
+sweep *translated the wing-tip sample points* along the growth axis and rotated
+them about the root. A real redesign changes the blade's shape, where its distal
+surface lands, and which vertices are "the tip" — so the sweep was directionally
+useful (shorten, do not lengthen) but not quantitatively predictive.
+**Recommendation: split the difference — restore roughly 1–1.5 mm of the
+2.4 mm that was removed**, and re-measure on the full 107 rather than a sweep.
 
 ---
 
@@ -288,6 +234,13 @@ faceplate pointing into the skull until `c_face` was added.
 ---
 
 ## Compliance-aware seal scoring
+
+> **Caveat added in v5.** Everything in this section scores whether the rim forms
+> a continuous contact loop — it does **not** check that the loop surrounds the
+> canal. On the v4 seatings that was false on more than half the audited ears, so
+> **the v4 seal counts below are inflated.** See
+> [the enclosure audit](#the-enclosure-audit). They are kept as the record of what
+> the v4 run produced, not as a statement of the design's seal performance.
 
 `tryon.py`'s seal axis is **wrong about the physics in two ways**, and both make
 it pessimistic. It treats the skirt as a rigid ring — scoring the fraction of the
@@ -385,50 +338,36 @@ That corner needs a smaller rim, not more compliance.
 
 ---
 
-## Priorities after v4
+## Priorities after v5
 
-Overall (seed 0): **7 pass / 64 marginal / 36 fail**; the remaining failures are
-driven by protrusion (24), seal (9) and retention (7).
+1. **Re-run the full 107 with the enclosure constraint.** Every population figure
+   in this report predates it, and the seal numbers in particular are not
+   trustworthy without it. This is the gate on freezing for variant B.
+2. **Give back 1–1.5 mm of wing.** The 2.4 mm shortening overshot: over-press
+   fell but the wing now misses entirely on 5–7 of 13 ears. Also revisit the −10°
+   splay — 3 of 13 are now *misdirected* (aim ≥ 60° off the surface normal),
+   which was 0 before.
+3. **Keep the compliance-only notch sector.** It captures the full benefit of a
+   uniform 4.0 mm budget while relaxing only the inferior 90°, and it does not
+   carry the geometric harm the v4 flare did.
+4. **Expect a protrusion/seal trade and decide it deliberately.** Holding the
+   bore over the canal costs 0.7–2.2 mm of median protrusion. That trade was
+   previously hidden by an unconstrained seal metric; it now has to be made on
+   purpose.
+5. **Watch the jacket.** Mean clearance has risen monotonically across every
+   revision (3.01 → 3.94 → 4.27 → 4.63 mm).
 
-1. **Revert the 3.25 mm notch flare** to a plain Ø19 rim. It is net-negative at
-   every budget on both seeds, and it breaks ears that previously sealed
-   perfectly. This is a regression to undo, not a parameter to tune. Expected
-   recovery: ~8 seal passes at the conservative budget.
-2. **Shorten the wing 2.5–3.0 mm and splay it −10°.** Retention 31 → 50 ears in
-   the spring band. Every amount of *lengthening* makes it worse; only one ear in
-   107 is genuinely short. This is the largest single available gain.
-3. **Pursue notch sealing as compliance, not geometry** — thinner wall, longer
-   free length, or lower durometer over the inferior 90°, so the lip drapes
-   toward the cartilage flanking the notch rather than reaching into the gap
-   between. The deformation-budget sweep remains the right target; it was always
-   a compliance target and was mis-translated into geometry at v3.
-4. **Protrusion: the corner roll approach, not the body.** v3 established the
-   corner roll buys several times more per mm than trimming the body, and the
-   frozen-pose shrink estimate says a further 2 mm of body is worth only 0.46 mm.
-   With the core now restored, protrusion sits at 11.26 mm median / 24 fails; if
-   that is not acceptable, extend the roll.
-5. **Watch the jacket.** Mean clearance 3.01 → 3.94 → 4.27 → 4.63 mm over three
-   revisions. It costs no grades yet, but it is the surface the wing reacts
-   against and it is drifting monotonically the wrong way.
+## Pipeline changes in v5
 
-## Pipeline changes in v4
+- **`seal_enclosure_audit.py`** (new): the aim / offset / enclosure checks above.
+- **`c_aim` in `seating_cost`**: the bore-over-canal constraint. 3 mm of lateral
+  slack free, quadratic beyond, weight 0.40. `--no-aim` disables it.
+- **`--json-dir`** on `align_ear.py --reseat`, `tryon.py` and
+  `seal_compliance.py`, so a subset of ears can be reseated and scored in place
+  without touching the other 94 — which is what made a 13-ear run practical.
 
-- **`retention_analysis.py`** (new): buckets each ear as retained / short /
-  misdirected / blocked / overpressed against the spring's working range, reports
-  the aim angle between the wing's growth direction and the local surface normal,
-  and sweeps wing extension × splay to find the change that retains the most
-  ears. Takes `--tryon-csv` to separate the graded failures from the wider
-  population.
-- **`viz_scene.py`** (new): exports one seated ear + IEM as a coloured GLB plus a
-  metadata JSON, for human verification of the poses the metrics are computed
-  from. Includes a dependency-free vertex-clustering decimator, since the raw
-  parts are ~1.25 M triangles and no quadric simplifier is installed.
-- **`seal_compliance.py`**: gained `--json-dir`, so a scoring pass can be pointed
-  at a saved copy of the seatings instead of racing a concurrent `--reseat`.
-
-Carried forward: the as-built rim sampling (`--rim mesh`, essential now that the
-rim is non-circular), the nozzle-frame fix, `c_face`, `c_soft`, `c_prot`,
-clearance graded on `shell`, seeded sampling, Powell over the best 4 starts.
+Carried forward: as-built rim sampling, the nozzle-frame fix, `c_face`, `c_soft`,
+`c_prot`, clearance graded on `shell`, seeded sampling, Powell over 4 starts.
 
 ---
 
@@ -513,6 +452,11 @@ validate anything that enters the canal, including the three nozzle inserts.
 
 ## Known limitations
 
+- **v5 is a 13-ear short-list run.** Its P/M/F counts are not population
+  estimates; see the scope box at the top. The full-107 figures elsewhere in this
+  report are from v4 and predate the enclosure constraint.
+- **Seal figures from v1–v4 are inflated** — they did not require the sealed loop
+  to contain the canal entrance.
 - **Right ears only** (`--side left` is supported but was not run).
 - **Static geometry only** — no skin deformation, no silicone FEA, no insertion
   path, no jaw movement. Soft compliance is fixed millimetre allowances, not
@@ -546,7 +490,13 @@ done
 .venv/bin/python seal_compliance.py --rim circle       # same, plain ring: flare delta
 .venv/bin/python retention_analysis.py --tryon-csv ears/aligned/tryon.csv
 .venv/bin/python shrink_estimate.py --case 0,0 --case 2,2
+.venv/bin/python seal_enclosure_audit.py               # aim / offset / enclosure
 .venv/bin/python viz_scene.py                          # viz/seated_scene.glb
+
+# short-list workflow (reseat + score a subset in place)
+.venv/bin/python align_ear.py --reseat --json-dir DIR --jobs 7   # add --no-aim to
+.venv/bin/python tryon.py            --json-dir DIR              # drop the bore-
+.venv/bin/python seal_compliance.py  --json-dir DIR              # over-canal term
 ```
 
 Run reseats **one at a time** — concurrent reseats interleave their poses in

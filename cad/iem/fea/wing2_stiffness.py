@@ -56,22 +56,48 @@ def wing_sdf(g, P):
         env_w = gen.S(gen.wing_envelope(g, X, Y, Z, D2), env - P["clearance"])
         wall = (P["wing_wall_root"] + (P["wing_wall_tip"] - P["wing_wall_root"])
                 * np.clip(S_ / max(L_tot, 1e-6), 0.0, 1.0))
-        prox = np.clip(1.0 + env_w / P["wing_edge_band"], 0.0, 1.0)
+
+        # ---- OPTIONAL relief slits (prototype; not in generate.py) ---------
+        # Cuts at constant Z running the whole span, so the doubly-curved sheet
+        # becomes Z-stacked ribbons.  This does not reduce simple plate bending
+        # (n ribbons of width b/n have the same total I), but it breaks the
+        # CROSS-SECTIONAL continuity that lets the curved section act as a beam
+        # -- and that offset second moment is most of this wing's stiffness
+        # (section 3.2: rigid-section bound 21 N/mm vs 1.06 N/mm actual).
+        nsl, wsl = int(P.get("wing_slit_n", 0)), P.get("wing_slit_w", 0.35)
+        slit = None
+        if nsl > 0:
+            z_c = P["wing_z_top"] - 0.5 * P["wing_width"]
+            for i in range(nsl):
+                zc = z_c + P["wing_width"] * ((i + 1) / (nsl + 1) - 0.5)
+                # keep the slit clear of the solid root plug
+                sl = np.maximum(np.abs(Z - zc) - 0.5 * wsl,
+                                (g.y_root + P["wing_root_solid"] + 0.4) - Y)
+                slit = sl if slit is None else np.minimum(slit, sl)
+
+        # roll every exposed edge -- envelope boundary AND any slit boundary
+        d_edge = env_w if slit is None else np.maximum(env_w, -slit)
+        prox = np.clip(1.0 + d_edge / P["wing_edge_band"], 0.0, 1.0)
         wall = wall + (P["wing_edge_wall"] - wall) * prox
         sheet = gen.gyroid(X, Y, Z, P["gyroid_cell_wing"], wall)
         wy = Y - g.y_root
         root_plug = np.maximum(wy - P["wing_root_solid"], -wy - 0.6)
-        return gen.I(gen.U(sheet, root_plug), env_w, g.y_root - Y)
+        d = gen.I(gen.U(sheet, root_plug), env_w, g.y_root - Y)
+        return d if slit is None else gen.S(d, slit)
 
-    ymax = max(p[1] for p in pts) + 2.0
-    xmin = min(p[0] for p in pts) - 5.0
-    xmax = max(p[0] for p in pts) + 5.0
-    b = ((xmin, xmax), (g.y_root, ymax), (-P["wing_width"] - 2.0, 0.5))
+    pad = 0.5 * P["wing_thick"] + 0.8
+    ymax = max(p[1] for p in pts) + pad
+    xmin = min(p[0] for p in pts) - pad
+    xmax = max(p[0] for p in pts) + pad
+    b = ((xmin, xmax), (g.y_root, ymax),
+         (P["wing_z_top"] - P["wing_width"] - 0.8, P["wing_z_top"] + 0.8))
     return fn, b, pts
 
 
-def build(h):
-    g, P = K.geom()
+def build(h, over=None):
+    """Mesh the free-standing wing.  `over` overrides generate.PARAMS, so a design
+    sweep changes the SAME parameters the generator reads -- no shadow model."""
+    g, P = K.geom(**(over or {}))
     fn, b, pts = wing_sdf(g, P)
     # snap the root plane onto a node plane so the encastre face is exact
     (x0, x1), (y0, y1), (z0, z1) = b
@@ -98,7 +124,8 @@ def build(h):
     mr = K.rotate_mesh(m, R)
     return dict(g=g, P=P, m=mr, m_global=m, p_global=xy0, cent=cent, h=h,
                 nhat=nhat, fixed=fixed, p_rot=mr.p, s0=float(mr.p[2].max()),
-                span=float(np.linalg.norm(chord)), R=R, pts=pts)
+                span=float(np.linalg.norm(chord)), R=R, pts=pts,
+                L_free=float(g.wing_L_free), vol=float(mr.t.shape[1] * h ** 3))
 
 
 # ---------------------------------------------------------------------------
@@ -663,3 +690,84 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# ---------------------------------------------------------------------------
+# design screen
+# ---------------------------------------------------------------------------
+
+def screen(over=None, h=0.12, d_probe=0.10, verbose=True, tag=""):
+    """One linear solve -> tip stiffness, plus stress extrapolated to 1.5 mm.
+
+    Linear elasticity is exact in the small-deflection limit and stress is linear
+    in delta, so vM(1.5 mm) = vM(d_probe) * 1.5/d_probe.  Against the full
+    nonlinear sweep on the 8db64d7 baseline that extrapolation is good to ~1%
+    (nonlinear p99.9 at 1.5 mm was 601.5 vs 597.6 linear), which is far inside
+    what a design screen needs.  Costs ~1 solve instead of ~40.
+    """
+    t0 = time.time()
+    mdl = build(h, over)
+    r = tip_press(mdl, [d_probe], nonlinear=False, verbose=False)[0]
+    f = 1.5 / d_probe
+    out = dict(tag=tag, over=dict(over or {}), h=h, k=r["k_secant"],
+               L_free=mdl["L_free"], vol=mdl["vol"], nelem=int(mdl["m"].t.shape[1]),
+               vm_max_1p5=r["vm_max"] * f, vm_p999_1p5=r["vm_p999"] * f,
+               F_1p0=r["k_secant"] * 1.0, secs=time.time() - t0)
+    out["pass_k"] = 0.15 <= out["k"] <= 0.35
+    out["pass_stress"] = out["vm_p999_1p5"] < 450.0
+    if verbose:
+        print(f"  {tag:26s} L={out['L_free']:5.2f} vol={out['vol']:5.2f}mm3 "
+              f"n={out['nelem']:6d}  k={out['k']:7.4f} N/mm "
+              f"{'PASS' if out['pass_k'] else 'fail'}   "
+              f"vM@1.5mm p99.9={out['vm_p999_1p5']:7.1f} max={out['vm_max_1p5']:7.1f} "
+              f"{'PASS' if out['pass_stress'] else 'fail'}  ({out['secs']:.0f}s)")
+    return out
+
+
+CANDIDATES = {
+    # v5 candidates found by the sweep in section 4.  Both hold the macro cell at
+    # 12.0 mm (larger cells disconnect the sheet) and the wall at the 0.20 mm
+    # print floor; they buy compliance from span and from a tighter edge-roll band.
+    "A": dict(wing_shorten=0.0, wing_rise=11.7, wing_edge_band=0.25,
+              wing_root_solid=0.6),
+    "B": dict(wing_shorten=0.0, wing_rise=11.7, wing_edge_band=0.20,
+              wing_root_solid=0.6),
+    "C": dict(wing_shorten=0.0, wing_edge_band=0.20, wing_root_solid=0.6),
+}
+
+
+def verify(over, tag, meshes=(0.12, 0.10, 0.08), h_nl=0.10):
+    """Full verification of one candidate: linear mesh convergence, then the
+    geometrically nonlinear 0.25 -> 2.0 mm sweep with Cauchy von Mises."""
+    print("=" * 84)
+    print(f"VERIFY {tag}   {over}")
+    print("=" * 84)
+    conv = []
+    for h in meshes:
+        mdl = build(h, over)
+        r = tip_press(mdl, [0.10], nonlinear=False, verbose=False)[0]
+        conv.append(dict(h=h, nelem=int(mdl["m"].t.shape[1]), vol=mdl["vol"],
+                         L_free=mdl["L_free"], k=r["k_secant"]))
+        print(f"  h={h:.3f} ({0.20/h:.1f} elem/wall)  {conv[-1]['nelem']:6d} hexes  "
+              f"vol {conv[-1]['vol']:5.2f} mm^3  L={conv[-1]['L_free']:.2f}  "
+              f"k = {r['k_secant']:.4f} N/mm")
+    ks = np.array([c["k"] for c in conv])
+    print(f"  -> k = {ks.mean():.4f} +/- {ks.std():.4f} N/mm "
+          f"(spread {100*np.ptp(ks)/ks.mean():.1f}%)")
+    mdl = build(h_nl, over)
+    print(f"  nonlinear sweep at h={h_nl}:")
+    sweep = tip_press(mdl, [0.25 * i for i in range(1, 9)], nonlinear=True)
+    return dict(tag=tag, over=over, convergence=conv, k_mean=float(ks.mean()),
+                k_std=float(ks.std()), nonlinear_sweep=sweep,
+                L_free=conv[0]["L_free"])
+
+
+def run_verify():
+    sys.stdout.reconfigure(line_buffering=True)
+    out = {}
+    for name in ("B", "A"):
+        out[name] = verify(CANDIDATES[name], f"candidate {name}")
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                               "wing2_candidates.json"), "w") as fh:
+            json.dump(out, fh, indent=2)
+    return out

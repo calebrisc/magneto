@@ -10,7 +10,12 @@ Section 3 re-verifies the **redesigned** wing at commit `8db64d7` and was run 20
    for all-day wear?** Answer: **only if the contact band is at least ~4 mm wide on the
    funnel.** The current design does not specify a band width, and if the ear lands on the
    cone as a line contact the pressure is 4–8× over the ischaemia flag.
-3. **Does the redesigned macro-gyroid wing hit 0.15–0.35 N/mm?** Answer: **not yet — it is
+3. **Which wing concept ships?** **The mag-plunger** (§5): 5×2.5×1 mm N35 rings, two
+   pairs, 2.75 mm rest gap, 0.49→0.18 N over ±0.75 mm in 4.75 mm of depth, no fatigue
+   risk. The Ti sheet was *also* made to pass (§4: k = 0.281 N/mm, 376 MPa at 1.5 mm) but
+   only at a 13.99 mm span, which gives back the entire v4 shortening that fixed
+   overpressure — it trades a force problem for a fit problem.
+4. **Does the redesigned macro-gyroid wing hit 0.15–0.35 N/mm?** Answer: **not yet — it is
    3–7× too stiff at k = 1.06 N/mm**, and the generator's own estimate (0.251 N/mm) is
    optimistic by 4.2× for a structural reason. But the response is a smooth, stable,
    near-linear spring with no snap-through, and it is ~1250–4800× softer than the old block, so
@@ -819,6 +824,190 @@ commit `8db64d7` and was not re-run, because `generate.py` no longer builds it.
 - **h = 0.08 mesh point** comes from a standalone run; the default `main()` sweeps
   h = 0.12 and 0.10 and needs `--fine` for the third.
 
+
+---
+
+# Ti-sheet wing: parameters that pass (superseded, kept for the record)
+
+Run 2026-08-31. Script `cad/iem/fea/wing2_stiffness.py` (`screen()` / `run_verify()`),
+raw output `fea/wing2_candidates.json`, `fea/sweep_*.json`.
+
+**The user has since chosen the mag-plunger wing (§5), so this route is not being built.
+It is recorded because it did reach the target and the knob calibration is reusable.**
+
+## 4.1 Baseline confirmed on `dbc3b7b`
+
+FEA on the current geometry gives **k = 1.4008 N/mm** (L_free = 10.40 mm), against the
+1.24 N/mm projected in the §3 box — the scale-up was the right direction but 13% low.
+vM p99.9 at 1.5 mm = 822 MPa. Fails both criteria.
+
+## 4.2 Knob calibration (FEA-measured, not assumed)
+
+| knob | effect | verdict |
+|---|---|---|
+| **free span L** | k ∝ L⁻²·⁹⁵, σ ∝ L⁻¹·⁶² (fitted over L = 10.40–14.35 mm) | **the only strong knob, and it helps both** |
+| **`wing_edge_band`** 0.70 → 0.25 mm | k × 0.60, σ × 0.81 at fixed span | **second real knob** — shrinks the stiff 0.40 mm rolled-edge zone without thinning the edge itself |
+| `wing_root_solid` 1.2 → 0.6 mm | k × 0.89, σ × 0.91 | mild, free |
+| `gyroid_cell_wing` 12 → 15 mm | k × 1.06 (*stiffer*); ≥18 mm **disconnects the sheet** (voxel volume halves) | **unusable** — cell must stay 12.0 |
+| `wing_thick` 7 → 5.5 mm | k × 0.80 but σ × 1.10; 4.5 mm degenerates | bad trade |
+| `wing_anchor_w` 1.4 → 0.7 mm | k × 0.85, σ flat | weak |
+| **relief slits** (prototyped in the FEA script, not in `generate.py`) | n = 1: k × 0.85 but σ **up** 4%. n ≥ 2: the ribbons disconnect — 39–55% of voxels dropped | **rejected** |
+
+Slits fail because slitting a plate into side-by-side ribbons does not reduce bending
+stiffness about the same axis (n ribbons of width b/n still sum to bt³/12); the only gain
+is losing the plate factor and the anticlastic constraint, and that is swamped by the
+stress concentration at each new edge.
+
+## 4.3 The passing parameter sets
+
+Both hold `gyroid_cell_wing` = 12.0 and the wall at the 0.20 mm print floor.
+
+| | **candidate B (recommended)** | candidate A (gentler edge ramp) |
+|---|---|---|
+| `wing_shorten` | 0.0 | 0.0 |
+| `wing_rise` | 11.7 | 11.7 |
+| `wing_edge_band` | **0.20** | **0.25** |
+| `wing_root_solid` | 0.6 | 0.6 |
+| resulting L_free | 13.99 mm | 13.99 mm |
+| **k (3-mesh converged)** | **0.2809 ± 0.0081 N/mm** | **0.3040 ± 0.0111 N/mm** |
+| F at 1.0 mm | 0.2689 N | 0.2878 N |
+| F at 1.5 mm | 0.4045 N | 0.4331 N |
+| **vM p99.9 at 1.5 mm** | **375.9 MPa** | **387.1 MPa** |
+| vM max at 1.5 mm (staircase) | 806.5 MPa | 849.4 MPa |
+| **verdict** | **PASS** k and stress | **PASS** k and stress |
+
+Mesh convergence for B: k = 0.2848 / 0.2696 / 0.2881 N/mm at h = 0.12 / 0.10 / 0.08 mm
+(1.7 / 2.0 / 2.5 elements through the 0.20 mm wall), spread 6.6%. Response is smooth and
+near-linear — k_tangent drifts only 0.2686 → 0.2776 N/mm over the full 2 mm, no
+snap-through.
+
+**The cost:** the span has to go back to 13.99 mm, i.e. the v4 shortening (`wing_shorten`
+= 2.75 mm, added because 44% of ears were overpressed) has to be given back in full. That
+is the constraint that binds this route — a compliant Ti sheet needs length, and the ear
+does not have it to give. It is also why the plunger won.
+
+---
+
+# Mag-plunger wing (the chosen design)
+
+User-proposed replacement for the Ti spring: a rigid contact rail (~14 × 6 mm, soft pad on
+top) riding on guide pins from the jacket, pushed toward the antihelix by repelling
+bonded/sintered NdFeB pairs. A cam preset takes up coarse per-ear engagement, so the
+magnets only cover dynamic travel about a rest point.
+
+Script `cad/iem/fea/mag_plunger.py`, results `fea/mag_plunger_results.json`.
+Method is identical to `docs/MAGFLOAT_MAGNETS.md` (magpylib 5.0.1 + magpylib-force 0.3.1,
+Maxwell-stress/meshed-dipole direct force solve, 200-cell meshing, rings as
+`CylinderSegment` φ = 0–360, discs as `Cylinder`, like poles facing).
+
+**Method check:** reproduces the published 7×3×1.5 mm N52 row of `MAGFLOAT_MAGNETS.md` to
+within **0.04%** at every gap (5.625 / 3.328 / 1.490 / 0.821 N at 0.5 / 1.0 / 2.0 / 3.0 mm).
+*(magpylib 5 is SI — lengths in metres. Feeding it millimetres scales every force by 1e6;
+this check is what caught that.)*
+
+## 5.1 The ±1.5 mm requirement does not fit in 5 mm of depth
+
+The force band 0.15–0.5 N permits a max/min **ratio of only 3.33**. Over ±1.5 mm the face
+gap swings from (rest − 1.5) to (rest + 1.5), so flatness needs rest ≫ 1.5 mm. But the
+stack depth is 2t + rest, and the budget is 5 mm.
+
+None of the four listed pucks fits. Closest miss, 2 pairs, at the deepest in-budget rest
+gap (2.95 mm):
+
+| puck | material | ratio achieved | F near → far |
+|---|---|---|---|
+| 3×1 | bonded / N35 | 11.15 | 0.151 → 0.014 N |
+| 4×1 | bonded / N35 | 8.12 | 0.279 → 0.034 N |
+| 4×2×1 | bonded / N35 | 8.25 | 0.141 → 0.017 N |
+| **5×2.5×1** | bonded / N35 | **7.54** | 0.242 → 0.032 N |
+
+Bigger magnets flatten the curve (their field decays over a longer length scale) but cost
+depth. Ratio over ±1.5 mm, N35 (needs ≤ 3.33):
+
+| puck | r=2 | r=3 | r=4 | r=5 | r=6 | r=7 | max in-budget rest gap |
+|---|---|---|---|---|---|---|---|
+| 5×2.5×1 | 16.49 | 7.34 | 5.04 | 4.15 | 3.65 | 3.29 | 3.0 mm |
+| 8×4×1.5 | 9.60 | 5.56 | 3.94 | 3.19 | 2.81 | 2.58 | 2.0 mm |
+| 10×5×2 | 7.84 | 4.92 | 3.62 | 2.95 | 2.57 | 2.35 | 1.0 mm |
+| 14×7×3 | 5.29 | 3.88 | 3.12 | 2.64 | 2.33 | 2.12 | — |
+
+**The binding constraint is depth, not magnet strength.** The minimum-depth design that
+does hold the band over ±1.5 mm is **8×4×1.5 mm N35, one pair, rest 4.95 mm** —
+0.499 → 0.262 → 0.155 N, ratio 3.22, 848 mg — but it needs **7.95 mm of stack depth,
+1.6× the budget.**
+
+## 5.2 Recommended spec (fits the 5 mm budget, at ±0.75 mm travel)
+
+> ### **5 × 2.5 × 1 mm N35 sintered NdFeB rings — TWO pairs — rest gap 2.75 mm**
+
+| | |
+|---|---|
+| Travel covered | **±0.75 mm** dynamic (1.5 mm total), not ±1.5 mm |
+| Force, both pairs summed | **0.493 N** at −0.75 mm → **0.284 N** at rest → **0.180 N** at +0.75 mm |
+| Ratio over travel | **2.73** (band allows 3.33) |
+| Axial stiffness at rest | 0.186 N/mm |
+| **Stack depth** | **4.75 mm** (2 × 1.0 mm pucks + 2.75 mm gap) — fits the 5.0 mm budget |
+| Guide pins | 2.0 mm OD × 5.0 mm engaged → **L/D = 2.5** (≥ 2 satisfied) |
+| Rocking restoring stiffness | **4.66 N·mm/rad** = 0.081 N·mm/deg, two plungers 10 mm apart |
+| Magnet mass | 442 mg (4 pucks) |
+| Total added mass | **971 mg/side** — magnets 442 + Ti rail 14×6×0.8 298 + 2 pins 139 + pad 92 |
+| Stray field at the bone sensor, 8 mm | **3.94 mT** |
+
+Single-pair alternative if depth or mass is tighter: **4×1 mm N35, one pair, rest 2.15 mm**
+— 0.497 → 0.156 N, ratio 3.18, 4.15 mm deep, 188 mg. It has **no** restoring torque about
+the rail axis, so the guide pins carry all the rocking moment; the two-pair layout is worth
+the 254 mg.
+
+**Two pairs vs one.** Two plungers at the rail ends self-level the rail: rock it by θ and
+the compressed plunger pushes harder while the extended one pushes less, giving a
+torsional restoring stiffness of ½·k·s² = 4.66 N·mm/rad. One pair gives none, and the pins
+take the whole moment as friction — which is exactly the stiction that would ruin the
+force window.
+
+**Stray field.** 3.94 mT at 8 mm is the single-puck on-axis bound and is conservative: the
+two pucks of a pair are anti-parallel, so at 8 mm they behave as a quadrupole and cancel
+faster than this. For scale, `MAGFLOAT_MAGNETS.md` accepted 3.30 mT at 10 mm for the
+nozzle float. Worth a bench check against the bone sensor, not a blocker.
+
+## 5.3 Plunger vs Ti sheet
+
+| | **mag-plunger (5×2.5×1 N35, 2 pairs)** | Ti sheet candidate B |
+|---|---|---|
+| Force window | 0.493 → 0.180 N over ±0.75 mm | 0.067 → 0.543 N over 0.25–2.0 mm |
+| Usable dynamic travel | ±0.75 mm (cam takes the rest) | 2.0 mm continuous |
+| Travel tolerance | **cam preset absorbs per-ear variation** — the magnets never see it | none: the ear's position *is* the deflection |
+| Force at the far end of travel | 0.180 N, still in band | 0.543 N at 2 mm, over band |
+| Fatigue / yield risk | **none — no strained part** | 450 MPa flag at 1.79 mm; yield ~2.4 mm |
+| Span demanded of the concha | rail sits in the 5 mm depth, no reach needed | **13.99 mm** — gives back the entire v4 shortening |
+| Part count | rail + pad + 2 pins + 4 magnets = **8** | 1 (printed with the jacket) |
+| Added mass | 971 mg/side | ~110 mg (25 mm³ Ti) |
+| Stray field at 8 mm | 3.94 mT | none |
+| Print risk | none (all parts are simple) | 0.20 mm wall at the LPBF floor, 0.20 mm edge-roll ramp |
+
+**Why the plunger wins on the thing that matters.** The Ti sheet passes the force target
+only by being 14 mm long, which reinstates the overpressure that the v4 shortening was
+added to fix — it trades a force problem for a fit problem. The plunger decouples the two:
+the cam absorbs per-ear geometry, and the magnets only regulate force over a small window
+they can comfortably cover. It also removes fatigue from the design entirely.
+
+**What it costs:** 8 parts instead of 1, ~860 mg more mass per side, a stray field near the
+bone sensor, and a hard constraint that dynamic travel stay within ±0.75 mm — the cam has
+to be good. If ±1.5 mm turns out to be genuinely needed, the depth budget must rise to
+~8 mm (8×4×1.5 N35, one pair, rest 4.95 mm).
+
+## 5.4 Limitations
+
+- **No tissue or friction model.** Guide-pin friction and pad hysteresis are not in these
+  numbers, and stiction is the most likely way the force window degrades in practice.
+  L/D = 2.5 is a rule of thumb for no-cock, not a computed result.
+- **Rail and pin masses are estimates** from nominal dimensions (0.8 mm Ti rail, 2.0 mm
+  pins, 1 mm silicone pad), not from a CAD solid.
+- **Stray field is the on-axis single-puck value.** The pair cancellation and the sensor's
+  actual off-axis position are not modelled; treat 3.94 mT as an upper bound.
+- **The cam is unmodelled.** Its preset resolution sets how much of the ±0.75 mm window is
+  left for dynamic travel, and nothing here checks that budget.
+- Magnet grades assume Br = 1.20 T (N35) at room temperature; no thermal derating.
+
 ---
 
 # Files
@@ -831,6 +1020,8 @@ commit `8db64d7` and was not re-run, because `generate.py` no longer builds it.
 | `cad/iem/fea/magnet_pressure.py` | JOB 2 — pressure budget, §2.2–2.6 |
 | `cad/iem/fea/wing2_stiffness.py` | §3 — redesigned macro-gyroid wing: St Venant-Kirchhoff nonlinear solid, scalar displacement control, section bounds |
 | `cad/iem/fea/wing2_run.log` | §3 — raw solver log for the 2026-08-31 run |
+| `cad/iem/fea/mag_plunger.py` | §5 — mag-plunger sizing (magpylib), the chosen design |
+| `cad/iem/fea/mag_plunger_results.json` | §5 — sweep, closest-miss and recommended spec |
 | `cad/iem/fea/*.json` | raw solver output for every table above |
 
 Reproduce: `cd cad/iem && .venv/bin/python fea/rve_homogenise.py && .venv/bin/python fea/wing_stiffness.py && .venv/bin/python fea/magnet_pressure.py && .venv/bin/python fea/wing2_stiffness.py`

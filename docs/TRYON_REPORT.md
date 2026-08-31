@@ -468,6 +468,92 @@ different site.
 Caveat: 2 of 13 ears (cymba) and 5 of 13 (antihelix) return no ray hit at all, so
 these ranges describe the ears the site reaches, not the whole population.
 
+## Floating-body equilibrium: what stroke is actually consumed
+
+The stroke spec above measured gaps at a **rigid seat** — body pinned, distance
+from boss to flesh. That is the wrong physics for a self-filling plunger: the
+body **floats**, and each stack pushes until the skirt, jacket and the other
+stack balance it. `float_equilibrium.py` solves that coupled equilibrium
+(3-DOF translation; flat 0.33 N per stack, skirt and jacket as capped penalty
+springs, rigid parts stiff) on the 13 ears re-seated on `e2df120`.
+
+**Floating is not a small correction: the body shifts a median 2.4–2.5 mm**, up
+to 6.7 mm. The rigid numbers were genuinely misleading.
+
+Stroke consumed from compacted, at two stack sizings:
+
+| sizing | site | engaged | min | median | p90 | max |
+|---|---|---|---|---|---|---|
+| L_c 4.5, S 6.0 (4 gaps) | cymba | 6/13 | −3.48 | 1.81 | 5.80 | 24.71 |
+| | antihelix | 3/13 | 2.84 | 5.63 | 9.82 | 10.68 |
+| L_c 3.0, S 7.5 (5 gaps) | cymba | 7/13 | −1.98 | 3.84 | 8.51 | 26.21 |
+| | antihelix | 2/13 | −0.03 | 7.13 | 11.32 | 12.18 |
+
+### The cymba 23.7 mm tail does not survive
+
+Checked at the seated pose, the outlier is **`xl_deep`, hit at 79° incidence** —
+the ray grazes out of the concha pocket and lands somewhere far away. It is not
+a pad seat. With it excluded, cymba's surface distance from the jacket face spans
+a perfectly ordinary **1.02–8.06 mm** across the other twelve ears. **The tail was
+a measurement artifact, not anatomy.**
+
+### But a feasible stack still does not cover the population
+
+Even floating, a stack inside the brief's envelope (≤4–5 gaps, compacted
+≤4.5 mm) engages **6–7 of 13** at cymba and only **2–3 of 13** at antihelix. The
+failure is now **two-sided**: five ears sit *closer* than the compacted stack
+(negative consumption — nothing fits), while others sit beyond full extension.
+
+### Why more stroke made antihelix worse — the topology is the real problem
+
+Going from 4 to 5 gaps *reduced* antihelix engagement, 3 → 2. That is not noise,
+it is the coupling. Both aims point superiorly, so **both reactions push the body
+the same way**:
+
+```
+cymba      aim (+0.20, +0.98, −0.10)   reaction (−0.20, −0.98, +0.10)
+antihelix  aim (−0.45, +0.85, −0.28)   reaction (+0.45, −0.85, +0.28)
+sum of reactions = (+0.25, −1.82, +0.38),  |1.88| of a possible 2.00
+```
+
+The two stacks are **92 % co-directional**. Nothing opposes them, so a stronger
+or longer cymba stack simply shoves the body inferiorly until the antihelix pad
+falls out of reach. **The two-leg tripod-minus-one is not statically determinate
+against its own preload** — this is precisely the job the deleted antitragus leg
+was doing, and no amount of stroke substitutes for a missing opposing contact.
+
+### Fallback config — cymba dome + antihelix stack + skirt
+
+Stability matrix on the two ends of the size range:
+
+| μ | **small ear** (P0016) 0.5 N / 0.2 N | **large ear** (pp49) 0.5 N / 0.2 N |
+|---|---|---|
+| 0.4 | 0.15× / 0.25× fail | 0.77× / 0.88× fail |
+| 0.6 | 0.37× / 0.61× fail | **1.17× / 1.55× PASS** |
+| 0.8 | 0.66× fail / **1.11× PASS** | **3.47× / 4.48× PASS** |
+| 1.0 | 0.92× fail / **1.57× PASS** | **4.14× / 7.64× PASS** |
+
+**The fallback works on large ears and does not on small ones.** The large ear
+passes from μ = 0.6 upward; the small ear needs μ ≥ 0.8 *and* over-ear routing,
+and never passes with the cable hanging. That is the opposite of the usual
+size-tail worry and worth noting: the small ear is short of contact area and
+preload, not of room.
+
+### Recommendation
+
+Stroke is not the blocker and neither is the magnet stack. Two things are:
+
+1. **A missing opposing contact.** Add a posterior or inferior reaction — even a
+   passive bumper — so the two superior stacks have something to push against.
+   Without it the body floats out from under them.
+2. **The compacted length against close ears.** Five of thirteen ears leave less
+   than a 4.5 mm compacted stack; that is a boss/stack-height problem, already
+   flagged, and unchanged by floating.
+
+Caveats: translation-only equilibrium (no rotation), flat-force approximation,
+and the seatings were optimised without plunger contacts in the cost, so the
+poses are not the ones a plunger-aware optimiser would choose.
+
 ## Deriving the third plunger aim from data
 
 `plunger_aim_search.py` sweeps candidate aims on a 10° grid and, for each ear,

@@ -2,3 +2,9 @@ numpy>=1.24
 scikit-image>=0.21
 trimesh>=4.0
 rtree>=1.0
+
+# mechanical validation (cad/iem/fea/, see docs/MECH_VALIDATION.md)
+scikit-fem>=11.0
+pyamg>=5.3
+meshio>=5.3
+gmsh>=4.13

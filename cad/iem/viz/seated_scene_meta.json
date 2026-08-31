@@ -6,40 +6,40 @@
  "source": "sonicom/P0023_preprocessed.stl",
  "note": "Seated pose exactly as scored in docs/TRYON_REPORT.md. Carrier and nozzle insert are modelled in the nozzle-local frame and carry NOZZLE_T before the seating transform. Meshes are decimated by vertex clustering for viewing only -- do not measure them.",
  "scores": {
-  "grade": "marginal",
-  "worst_metric": "protrusion+seal",
-  "rim_cover": 0.5972222222222222,
-  "rim_gap": 1.800268324492427,
-  "rim_press": -2.4904212410931525,
-  "wing_tip": -1.2172372059266006,
-  "wing_mid": -0.2505595040201615,
-  "jacket_mean": 2.754097249331411,
-  "protrusion": 13.404186602877704,
-  "hard_min": -0.5817782888686651,
+  "grade": "fail",
+  "worst_metric": "protrusion",
+  "rim_cover": 0.7222222222222222,
+  "rim_gap": 3.624519754924521,
+  "rim_press": -2.0209956714767885,
+  "wing_tip": -0.5769622343467433,
+  "wing_mid": 1.6787682209695147,
+  "jacket_mean": 4.2649401539654,
+  "protrusion": 15.867280842350038,
+  "hard_min": -0.8892721484220281,
   "g_seal": "marginal",
   "g_retention": "pass",
   "g_clearance": "pass",
-  "g_protrusion": "marginal"
+  "g_protrusion": "fail"
  },
  "seal_compliance": {},
  "seating_transform": [
   [
-   0.6695863683595148,
-   -0.06265809143131074,
-   0.7400865212157979,
-   -1.7509660821387938
+   0.6860268404420959,
+   -0.331111146092117,
+   0.6478677203925194,
+   -4.770665795630599
   ],
   [
-   0.7247425975306273,
-   0.27310874539406316,
-   -0.6325818370091254,
-   -86.42400692254856
+   0.7179809292419558,
+   0.4522224616894518,
+   -0.5291485900844771,
+   -92.0568355816612
   ],
   [
-   -0.16248773071119899,
-   0.9599404027164739,
-   0.2282808809358739,
-   -4.372048330848255
+   -0.11777333924913962,
+   0.8281668032933321,
+   0.5479682349233483,
+   -1.2212020451121686
   ],
   [
    0.0,

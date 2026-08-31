@@ -267,6 +267,28 @@ def contract_check(rec, patch, P, field):
         f"closest {cmin:+.2f} mm (load must reach the ear via the jacket only)",
         f"{cmin:+.2f} mm", cmin > 0.0)
 
+    # --- STABILITY: retention under load ----------------------------------- #
+    # Contact says each part touches what it should.  This asks whether the
+    # assembly STAYS PUT when something pulls on it -- a different failure, and
+    # the one a wearer notices.  Rigid-body force/moment balance with Coulomb
+    # friction cones; see stability.py for the model and its assumptions.
+    import stability as stab
+    st = stab.stability_check(
+        rec, P, field, transform,
+        cable_point=transform(P["_cable_exit"][None, :], M)[0],
+        com=transform(P["_com"][None, :], M)[0])
+    mg = st["margin"]
+    row("STABILITY", "MUST RESIST",
+        f"margin {mg:.2f}x. pull-out capacity {st['pullout_capacity']:.2f} N vs "
+        f"demand {st['demand']:.2f} N (skirt {stab.SKIRT_PRELOAD:.2f} always-on + "
+        f"cable {stab.CABLE_TUG:.2f} + {stab.G_LOAD:.0f}g {st['f_inert']:.2f}); "
+        f"friction budget {st['friction_budget']:.2f} N (mu={st['mu']}, wing "
+        f"{st['f_wing']:.2f} N); interlocking contacts {st['interlock']}/"
+        f"{st['n_contacts']}"
+        + ("" if mg >= 1.0 else
+           f"  << worst dir cable {np.round(st['cable_dir'], 2)}"),
+        f"{mg:.2f}x", mg >= 1.0)
+
     # --- cable exit -------------------------------------------------------- #
     # There is no cable, boot or strain-relief geometry in the build; the only
     # connector feature is the 2-pin socket, an internal pocket in the core.  So

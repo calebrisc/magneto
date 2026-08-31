@@ -301,6 +301,30 @@ def iem_points(stl_dir=None, seed=0, cant=None):
     except Exception:                                            # noqa: BLE001
         out["nozzle"] = np.zeros((0, 3))
 
+    # volume-weighted centroid of the worn assembly, for inertial moments in
+    # stability.py.  Ti and silicone differ in density, but the silicone carrier
+    # is a small fraction of the mass and this is a 3 g load check, not a modal
+    # analysis -- volume weighting is close enough and is stated as such.
+    try:
+        vols = np.array([abs(m.volume) for m in (core, face, jw, car)], float)
+        cens = np.array([m.centroid for m in (core, face, jw, car)], float)
+        out["_com"] = (vols[:, None] * cens).sum(axis=0) / max(vols.sum(), 1e-9)
+    except Exception:                                            # noqa: BLE001
+        out["_com"] = np.vstack([core.vertices, face.vertices]).mean(axis=0)
+
+    # cable-exit proxy: centre of the 2-pin socket pocket.  There is no cable,
+    # boot or strain relief in the build, so a tug has to be applied somewhere
+    # defensible -- this is the connector, and every use of it is flagged.
+    try:
+        import generate
+        g = generate.G(generate.PARAMS if cant is None
+                       else dict(generate.PARAMS, nozzle_cant_deg=float(cant)))
+        loc = np.array([0.5 * (g.socket_x0 + g.socket_x1), 0.0,
+                        generate.PARAMS["socket_z"]])
+        out["_cable_exit"] = nT[:3, :3] @ loc + nT[:3, 3]
+    except Exception:                                            # noqa: BLE001
+        out["_cable_exit"] = out["_com"]
+
     out["_bbox"] = np.vstack([core.bounds, face.bounds, jw.bounds, car.bounds])
     return out
 

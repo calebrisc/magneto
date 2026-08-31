@@ -192,29 +192,77 @@ every run (automatically for a single ear, or with `--contract`).
 | nozzle + insert | **MUST NOT TOUCH** | recessed inside the skirt; any contact loads the canal wall directly |
 | core / faceplate | **MUST NOT TOUCH** | load reaches the ear only through the jacket and wing |
 | cable exit | **MUST CLEAR** | the ear |
+| **STABILITY** | **MUST RESIST** | quasi-static force/moment balance against the spec loads — retention *under load*, not just contact |
 
-### P0023 on `dbc3b7b` — 5 pass, 0 fail, 1 not evaluable
+### The stability row
+
+Contact says each part touches what it should. It says nothing about whether the
+assembly **stays put when something pulls on it**, which is a different failure
+and the one a wearer notices. `stability.py` is a rigid-body force/moment balance
+— screw theory with Coulomb friction cones, one LP per sampled load direction —
+not FEA.
+
+**Loads to resist**
+
+| | load | direction |
+|---|---|---|
+| (a) skirt preload reaction | 0.31 N | outward along the nozzle axis, **always on**, never scaled |
+| (b) cable tug | 0.50 N | worst direction in a 45° downward-backward cone |
+| (c) inertial | 3 g × 8 g = 0.24 N | worst direction over the sphere |
+
+**Resistance.** Each contact pushes along the ear's outward surface normal (flesh
+pushes, never pulls) with N ≥ 0 and friction |t| ≤ μN, μ = 0.40. The cone is
+linearised to an 8-sided inscribed pyramid (conservative). Normal budgets are
+**caps**, set by what presses each contact: skirt ≤ 0.31 N (its compression),
+wing ≤ k × interference with k = 0.294 N/mm, jacket a free reaction, plungers
+0.18–0.49 N each *when the build has any*. Geometric interlock needs no special
+term — it falls out of contact normals opposing the escape direction. The score
+is the largest load scale s\* that stays feasible; s\* ≥ 1 resists the spec.
+
+Two modelling notes worth arguing with. **μ = 0.40** for silicone/Ti on skin is a
+deliberately dry, conservative pick — published skin-on-elastomer values span
+~0.3–1.0, and raising it makes everything easier. And a first pass wrote the
+preloads as *equalities* rather than caps, which over-constrains the balance and
+returned margin 0.00 on every pose; caps are correct, because a preload bounds
+how hard a contact *can* push, it does not force it to be loaded.
+
+### P0023 on `8eb6ac1` — 4 pass, 2 fail, 1 not evaluable
+
+> The geometry moved under this task: the generator committed `8eb6ac1`
+> (mag-plunger wing sizing) and regenerated `stl/` mid-run, so this table is the
+> **plunger-era build**, freshly re-seated, not the `dbc3b7b` geometry the earlier
+> contract table in this session reported.
 
 | part | intent | value | | detail |
 |---|---|---|---|---|
-| skirt land | MUST TOUCH | 100 % / 0° | **PASS** | band fully closed; aperture 4.3 mm off centre against a 9.4 mm rim, so the loop encloses the canal |
-| wing / rail pad | MUST TOUCH | −1.22 mm | **PASS** | inside the spring band |
-| jacket ear-face | MUST REST | −0.31 mm | **PASS** | resting, well within 2.5 mm |
-| nozzle + insert | MUST NOT TOUCH | +1.05 mm | **PASS** | recessed, clear of flesh |
-| core / faceplate | MUST NOT TOUCH | +1.22 mm | **PASS** | no direct flesh load |
-| cable exit | MUST CLEAR | n/a | **n/a** | **not modelled** |
+| skirt land | MUST TOUCH | 92 % / 17° | **FAIL** | band only 92 % closed (needs 95 %); worst gap 17° is inside tolerance. Aperture 3.1 mm off centre vs a 9.4 mm rim, so the loop *does* enclose the canal |
+| wing / rail pad | MUST TOUCH | −0.58 mm | **PASS** | inside the spring band |
+| jacket ear-face | MUST REST | −1.22 mm | **PASS** | resting, within 2.5 mm |
+| nozzle + insert | MUST NOT TOUCH | +0.29 mm | **PASS** | recessed, clear |
+| core / faceplate | MUST NOT TOUCH | +0.63 mm | **PASS** | no direct flesh load |
+| **STABILITY** | MUST RESIST | **0.00×** | **FAIL** | pull-out capacity **0.20 N** vs demand **1.05 N**; friction budget 0.19 N; only **6 of 36** contacts interlock |
+| cable exit | MUST CLEAR | n/a | **n/a** | not modelled |
 
-Every load path behaves as designed on this ear: the skirt seals a closed loop
-around the canal, the wing presses within its spring range, the jacket beds on
-the floor, and nothing rigid touches flesh. Note the contract can pass while the
-graded axes do not — P0023 is *marginal* overall (protrusion 13.40 mm, seal
-coverage 0.60 by the rigid metric). The contract asks "is each part doing its
-job", not "is the fit good".
+**The stability failure is not marginal — it is a factor of five.** Pull-out
+capacity is 0.20 N against 1.05 N of demand, and the shell cannot even hold
+against its own always-on 0.31 N skirt reaction: the entire friction budget is
+0.19 N. Only 6 of 36 contacts oppose the escape direction at all.
 
-**The cable-exit row cannot be evaluated and is deliberately not scored as a
-pass.** There is no cable, boot or strain-relief geometry in the build; the only
-connector feature is the 2-pin socket, an internal pocket in the core. Model the
-boot and this row becomes checkable.
+Measured on the previous (`dbc3b7b`) wing the picture was starker still: **all 22
+wing contacts had normals pushing the shell *out*** — the wing was pressing on a
+surface that ejects it rather than hooking under anything. Retention was coming
+from friction alone, and there was not enough of it.
+
+**This is what the mag-plunger design is for, and the check cannot see it yet.**
+`plunger_pad`, `plunger_pin`, `plunger_foot` and `plunger_cam` exist as parts, and
+one of the three aims is literally `antihelix_undercut` (0.85 superior, −0.28
+medial) — direct geometric interlock, which is the missing ingredient. But the
+plungers are **not in `ASSEMBLY_PARTS`**, so they are not placed in the seated
+assembly and contribute no contacts. `stability.py` already carries the plunger
+force band and a plunger contact group; add the pads to the assembly and the row
+becomes meaningful. Order-of-magnitude: three pads at 0.18–0.49 N add
+0.54–1.47 N of normal force, which roughly triples-to-quadruples the friction
+budget *before* counting the undercut interlock.
 
 ### Auto-export
 

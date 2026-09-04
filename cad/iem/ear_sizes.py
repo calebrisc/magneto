@@ -21,8 +21,9 @@ from viz_marked import aperture_ring
 import generate
 
 LIP_MARGIN = 1.0
-TUBE = generate.PARAMS["bell_lip_tube_d"]
 BELL = generate.PARAMS["bell_sizes"]           # outer H x W
+SIZES = list(generate.BELL_SIZES)              # smallest first
+TUBE = {k: generate.PARAMS.get("bell_tube_by_size", {}).get(k, generate.PARAMS["bell_lip_tube_d"]) for k in BELL}
 CRUS_CACHE = os.path.join(ALIGNED, "crus_bands.json")
 OUT_MD = os.path.join(HERE, "..", "..", "docs", "EAR_SIZE_MATRIX.md")
 OUT_CSV = os.path.join(ALIGNED, "ear_sizes.csv")
@@ -42,8 +43,8 @@ def aperture_dims(rec, patch):
 
 def bell_size(H, W):
     if H is None: return "?"
-    for k in "SML":
-        h, w = BELL[k]; hc, wc = h - TUBE, w - TUBE
+    for k in SIZES:
+        h, w = BELL[k]; hc, wc = h - TUBE[k], w - TUBE[k]
         if hc >= H + 2 * LIP_MARGIN and wc >= W + 2 * LIP_MARGIN:
             return k
     return "L+"
@@ -76,14 +77,15 @@ def main():
     # summary
     def count(key): 
         d = {}; [d.__setitem__(r[key], d.get(r[key], 0) + 1) for r in rows]; return d
-    sized = [r for r in rows if r["bell"] in "SML" and r["cymba"] in "SML"]
+    sized = [r for r in rows if r["bell"] in SIZES and r["cymba"] in "SML"]
     same = sum(r["bell"] == r["cymba"] for r in sized)
-    three = [r for r in rows if r["bell"] in "SML" and r["cymba"] in "SML" and r["crus"] in "SML"]
+    three = [r for r in rows if r["bell"] in SIZES and r["cymba"] in "SML" and r["crus"] in "SML"]
     same3 = sum(r["bell"] == r["cymba"] == r["crus"] for r in three)
     L = ["# Ear size matrix — which S/M/L each ear takes on each sized part (2026-09-04)\n",
          f"{len(rows)} real ears. Sizes are picked per PART, independently; an ear can be S on the lip and L on the pad. "
          "Script: `cad/iem/ear_sizes.py`; CSV at `cad/iem/ears/aligned/ear_sizes.csv`.\n",
-         f"- bell lip: {count('bell')}  (rule: lip centreline clears aperture by {LIP_MARGIN} mm; L+ = aperture too big for the L lip)",
+         f"- bell lip: {count('bell')}  (rule: smallest lip whose centreline (outer minus tube) clears the aperture by {LIP_MARGIN} mm; "
+         f"sizes {', '.join(f'{k} {BELL[k][0]:.0f}x{BELL[k][1]:.0f} O{TUBE[k]:.0f} tube' for k in SIZES)}; L+ = aperture too big for the L lip)",
          f"- cymba pad (reach band): {count('cymba')}",
          f"- crus pad (travel band, ears with a detected crus): {count('crus')}",
          f"- bell size == cymba pad size on {same}/{len(sized)} ears ({100*same/max(len(sized),1):.0f}%); all three agree on {same3}/{len(three)} "

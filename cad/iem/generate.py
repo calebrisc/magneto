@@ -181,6 +181,54 @@ PARAMS = dict(
                                #   length the lip rotates over
     notch_sector_wall=0.22,    # mm land wall inside the sector (vs skirt_wall_land)
 
+    # ---- bell tip (2026-09-01 decision, artifact "Aperture Tip") -------------
+    # The mag-float carrier + drape skirt above is CANCELLED (8/31 reset).  It is
+    # kept behind tip_style="carrier" so the record stays reproducible; the
+    # shipped tip is the bell: one nose cone for every size, a hollow rolled lip
+    # on an oval footprint in S/M/L, and a thin web between them.
+    tip_style="bell",          # "bell" (default) | "carrier" (legacy mag-float)
+    bell_asm_size="M",         # which lip size the assembly shows
+    bell_nozzle_od=4.00,       # mm Ti nozzle tube the tip seats on (insert 'bell')
+    bell_bore=2.60,            # mm sound bore through insert and tip
+    bell_nose_tip_d=5.00,      # mm nose cone tip
+    bell_nose_base_d=12.00,    # mm nose cone base -- the rim stop
+    bell_nose_len=2.40,        # mm axial cone length -> 55.6 deg half-angle
+    bell_base_land=0.40,       # mm cylindrical O12 land behind the cone; the web fuses here
+    bell_sleeve_wall=0.50,     # mm silicone over the Ti tube behind the cone
+    bell_noz_recess=1.00,      # mm the Ti tube stops short of the tip face
+    bell_groove_w=1.00,        # mm retaining groove in the Ti tube (ridge in the tip)
+    bell_groove_d=0.25,        # mm groove depth
+    bell_ridge_interf=0.05,    # mm the silicone ridge is undersize on the groove floor
+    bell_lip_tube_d=3.00,      # mm rolled-lip tube diameter
+    bell_lip_wall=0.40,        # mm rolled-lip wall (Shore 00-30)
+    bell_lip_hollow=True,      # True: C-section rolled edge; False: solid 00-30 bead
+    bell_lip_slit_deg=90.0,    # deg of the tube opened toward the axis so the core ring pulls
+    bell_sizes=dict(XS=(11.5, 9.5), S=(14.0, 12.0), M=(17.0, 14.0), L=(21.0, 16.0)),  # outer H x W, mm
+    # ladder re-spaced 9/4 against 102 scanned apertures (was S 14x11 / M 17x13 / L 20x15):
+    # XS 50 / S 18 / M 21 / L 9 / too-big 4.  S and M keep their heights, +1 mm width
+    # buys the rocking room the O3 tube needs over the O5 sleeve.
+    # XS added 2026-09-04: 63/102 scanned apertures took S under a 1 mm clearance rule
+    # (median aperture 7.3 x 4.1 mm).  A O3 lip tube cannot get under W=11 without
+    # the lip inner edge hitting the O5 sleeve, so XS runs a O2 tube.
+    bell_tube_by_size=dict(XS=2.0),   # mm per-size lip tube override (default bell_lip_tube_d)
+    bell_lip_x=2.70,           # mm from the tip's proximal face to the lip centre plane
+    bell_web_t=0.50,           # mm web between nose and lip
+    bell_web_ax=1.20,          # mm axial run of the web's S-curve
+    bell_web_stub=0.30,        # mm straight stub where the web leaves the lip tube
+    bell_fillet=0.40,          # mm web-to-nose fillet
+    bell_ant_center_deg=90.0,  # deg from +Y toward +Z: +Z_local is anterior (tragus)
+    bell_ant_deg=90.0,         # deg of lip treated as the anterior sector
+    bell_ant_wall=0.30,        # mm lip wall in the anterior sector
+    bell_ant_free=1.00,        # mm extra web free length (lip moved proximally) there
+    bell_inf_center_deg=180.0, # deg: -Y_local is inferior (intertragic notch)
+    bell_inf_deg=90.0,
+    bell_inf_ext=1.50,         # mm radial lip extension over the notch
+    bell_sector_trans_deg=20.0,
+    bell_vent_dia=0.80,        # mm vent channel at the tip/nozzle interface
+    bell_vent_az_deg=180.0,    # deg: the vent runs down the inferior side, exits under the lip
+    bell_disc_t=2.00,          # mm mould-core base disc behind the tip's proximal face
+    budget_fine=8.0e6,         # voxels for the bell tip and its moulds (0.3-0.4 mm walls)
+
     # ---- jacket skin (fine gyroid, structural-rigid by design) ----------
     jacket_thick=1.60,         # mm total jacket thickness (lattice + skin)
     jacket_x_clip=-2.00,       # mm, jacket stops here so it never fouls the nozzle
@@ -696,8 +744,51 @@ class G:
         self.skirt_land_x0 = self.skirt_root_x + s_l0 * self.skirt_u[0]
         self.skirt_land_d0 = 2.0 * (self.skirt_root_r + s_l0 * self.skirt_u[1])
 
-        self.tip_protrusion = self.carrier_x1                 # from the core face
-        self.tip_protrusion_max = self.carrier_x1 + P["carrier_travel"]
+        # ---- bell tip: axial stations in the nozzle-local frame ----------------
+        Rt = 0.5 * P["bell_lip_tube_d"]
+        self.bell_Rt = Rt                       # shared tube (nose/web stations)
+        self.bell_Rt_by = {k: 0.5 * P.get("bell_tube_by_size", {}).get(k, P["bell_lip_tube_d"])
+                           for k in P["bell_sizes"]}   # per-size lip tube
+        self.bell_x0 = self.socket_x1              # proximal face seats on the socket face
+        self.bell_seat_r = 0.5 * P["bell_nozzle_od"]
+        self.bell_sleeve_r = self.bell_seat_r + P["bell_sleeve_wall"]
+        # the vent groove (O0.8, centred 0.15 mm outside the seat) needs a full
+        # wall over it, carried by a local rib on the sleeve at the vent azimuth
+        self.bell_rib_r = (self.bell_seat_r + 0.15 + 0.5 * P["bell_vent_dia"]
+                           + P["bell_sleeve_wall"])
+        self.bell_lip_x = self.bell_x0 + P["bell_lip_x"]
+        self.bell_wl_x = self.bell_lip_x + Rt + P["bell_web_stub"]
+        self.bell_cb_x = self.bell_wl_x + P["bell_web_ax"]          # cone base = rim stop
+        self.bell_land_x0 = self.bell_cb_x - P["bell_base_land"]
+        self.bell_web_x1 = self.bell_cb_x - 0.5 * P["bell_base_land"]
+        self.bell_base_r = 0.5 * P["bell_nose_base_d"]
+        self.bell_nose_r = 0.5 * P["bell_nose_tip_d"]
+        self.bell_web_r1 = self.bell_base_r - 0.35   # web centreline enters the land here
+        self.bell_tip_x = self.bell_cb_x + P["bell_nose_len"]
+        self.bell_noz_end = self.bell_tip_x - P["bell_noz_recess"]
+        self.bell_groove_x0 = self.bell_cb_x - 0.2
+        self.bell_groove_x1 = self.bell_groove_x0 + P["bell_groove_w"]
+        self.bell_ridge_r = self.bell_seat_r - P["bell_groove_d"] - P["bell_ridge_interf"]
+        self.bell_half_angle = math.degrees(math.atan2(
+            self.bell_base_r - self.bell_nose_r, P["bell_nose_len"]))
+        # lip centreline semi-axes (a along Y = superior-inferior, b along Z)
+        self.bell_lip_axes = {k: (0.5 * h - self.bell_Rt_by[k], 0.5 * w - self.bell_Rt_by[k])
+                              for k, (h, w) in P["bell_sizes"].items()}
+        self.bell_lip_rmax = {k: a + self.bell_Rt_by[k] + P["bell_inf_ext"]
+                              for k, (a, b) in self.bell_lip_axes.items()}
+        self.bell_disc_r = {k: a + P["bell_inf_ext"] + 0.5
+                            for k, (a, b) in self.bell_lip_axes.items()}
+
+        if P["tip_style"] == "bell":
+            self.tip_x0, self.tip_x1 = self.bell_x0, self.bell_tip_x
+            self.seal_x = self.bell_lip_x + Rt           # lip's distal face
+            self.tip_protrusion = self.bell_tip_x
+            self.tip_protrusion_max = self.bell_tip_x
+        else:
+            self.tip_x0, self.tip_x1 = self.carrier_x0, self.carrier_x1
+            self.seal_x = self.carrier_x1
+            self.tip_protrusion = self.carrier_x1             # from the core face
+            self.tip_protrusion_max = self.carrier_x1 + P["carrier_travel"]
 
         # ---- faceplate / jacket magnet stations
         outer_half_x = self.core_rx * math.sqrt(max(1e-9, 1 - (self.z_cut / self.core_rz) ** 2))
@@ -803,11 +894,28 @@ class G:
                 f"carrier counterbore is only {self.cbore_depth:.2f} mm deep -- the rest "
                 f"gap {m['gap']} mm is too small for {P['magnet_encap']} mm encapsulation")
         need = self.insert_lug_x1 + 0.35 + P["carrier_travel"]
-        if need > self.carrier_x1 - 0.2:
+        if P["tip_style"] == "carrier" and need > self.carrier_x1 - 0.2:
             self.warnings.append(
                 f"L-slot needs the carrier to reach x={need + 0.2:.2f} mm but it ends at "
                 f"{self.carrier_x1:.2f}; raise carrier_len to "
                 f"{need + 0.2 - self.carrier_x0:.2f} mm")
+        if P["tip_style"] == "bell":
+            if self.bell_groove_x1 > self.bell_noz_end - 0.4:
+                self.warnings.append(
+                    f"bell retaining groove ends at {self.bell_groove_x1:.2f} mm, only "
+                    f"{self.bell_noz_end - self.bell_groove_x1:.2f} mm of Ti tube past it")
+            if P["bell_bore"] < P["nozzle_bore"] - 1e-9:
+                self.warnings.append(
+                    f"bell bore O{P['bell_bore']} necks the core's O{P['nozzle_bore']} bore "
+                    f"at the insert socket (spec: O4 Ti nozzle, O2.6 bore)")
+            for k, (a, b) in self.bell_lip_axes.items():
+                Rt = self.bell_Rt_by[k]
+                gap = b - Rt - self.bell_sleeve_r
+                if gap < 0.3:
+                    self.warnings.append(
+                        f"bell {k}: lip inner edge is {gap:+.2f} mm from the sleeve on the "
+                        f"minor axis (W {P['bell_sizes'][k][1]:.0f} = 2 x {Rt:.1f} tube + "
+                        f"O{2 * self.bell_sleeve_r:.0f} sleeve) -- no rocking room there")
 
     def corner_cut(self, X, Y, Z):
         """Half-space to remove at the posterior-inferior corner.
@@ -1321,10 +1429,23 @@ def nozzle_stack_profile(g):
     (point on the canted axis, radius) samples along it."""
     P = g.P
     nb, ax = np.array(g.nozzle_base), np.array(g.n_ax)
+    out = []
+    if P["tip_style"] == "bell":
+        # socket, then the bell tip's lip envelope (conservative: the largest
+        # radius of the assembly size), then the nose cone
+        rl = g.bell_lip_rmax[P["bell_asm_size"]]
+        spans = [(g.socket_x0, g.socket_x1, 0.5 * P["socket_od"]),
+                 (g.bell_x0, g.bell_cb_x, rl)]
+        for x0, x1, r in spans:
+            for t in np.linspace(x0, x1, 12):
+                out.append((nb + ax * t, r))
+        for t in np.linspace(g.bell_cb_x, g.bell_tip_x, 8):
+            f = (t - g.bell_cb_x) / max(g.bell_tip_x - g.bell_cb_x, 1e-9)
+            out.append((nb + ax * t, g.bell_base_r + f * (g.bell_nose_r - g.bell_base_r)))
+        return out
     spans = [(g.socket_x0, g.flange_x1, 0.5 * P["socket_od"]),
              (g.flange_x1, g.carrier_x0, 0.5 * P["insert_od"]),
              (g.carrier_x0, g.carrier_x1, 0.5 * P["carrier_od"])]
-    out = []
     for x0, x1, r in spans:
         for t in np.linspace(x0, x1, 12):
             out.append((nb + ax * t, r))
@@ -1547,6 +1668,52 @@ def _carrier_lslot(g, X, Y, Z, th, radial_lo, radial_hi):
     return U(entry, arc, pocket)
 
 
+def _insert_socket_cuts(g, X, Y, Z, d):
+    """Socket bore over the core stub + the two L-slots for the core's bayonet
+    lugs.  Shared by every nozzle insert."""
+    P = g.P
+    sb = 0.5 * (P["stub_od"] + P["press_clearance"])
+    d = S(d, cyl_x(X, Y, Z, 0, 0, sb, g.socket_x0 - 1.0, g.socket_x1))
+    for th in (0.0, np.pi):
+        d = S(d, U(
+            arc_slot_x(X, Y, Z, sb - 0.05, sb + P["lug_h"] + 0.15,
+                       g.socket_x0 - 1.0, 2.30, th - 0.34, th + 0.34),
+            arc_slot_x(X, Y, Z, sb - 0.05, sb + P["lug_h"] + 0.15,
+                       1.55, 2.30, th, th + math.radians(80.0)),
+            arc_slot_x(X, Y, Z, sb - 0.05, sb + P["lug_h"] + 0.15,
+                       1.55, 2.30,
+                       th + math.radians(80.0) - 0.34,
+                       th + math.radians(80.0) + 0.34)))
+    return d
+
+
+def part_nozzle_insert_bell(g):
+    """Fixed nozzle for the bell tip: the same bayonet socket onto the core stub,
+    then a plain O4 Ti tube with an O2.6 bore and a retaining groove for the
+    tip's internal ridge.  No magnet flange -- the float is gone."""
+    P = g.P
+    x_end = g.bell_noz_end
+    ro = g.bell_seat_r
+    bore_r = 0.5 * P["bell_bore"]
+
+    def fn(X, Y, Z, C):
+        socket = cyl_x(X, Y, Z, 0, 0, 0.5 * P["socket_od"], g.socket_x0, g.socket_x1)
+        tube = cyl_x(X, Y, Z, 0, 0, ro, g.socket_x1 - 0.4, x_end)
+        d = U(socket, tube)
+        # retaining groove for the tip's ridge
+        d = S(d, tube_x(X, Y, Z, 0, 0, ro - P["bell_groove_d"], ro + 1.0,
+                        g.bell_groove_x0, g.bell_groove_x1))
+        d = S(d, cyl_x(X, Y, Z, 0, 0, bore_r, g.socket_x1 - 1.0, x_end + 1.0))
+        d = _insert_socket_cuts(g, X, Y, Z, d)
+        # damper-disc recess at the ear end (disc = bore size, not the O4 jig)
+        d = S(d, cyl_x(X, Y, Z, 0, 0, bore_r + 0.15,
+                       x_end - P["damper_recess"], x_end + 1.0))
+        return d
+
+    b = ((g.socket_x0 - 1.2, x_end + 1.2), (-5.5, 5.5), (-5.5, 5.5))
+    return fn, b
+
+
 def part_nozzle_insert(g, name):
     P = g.P
     Ltube = P["insert_tube_lengths"][name]
@@ -1569,18 +1736,7 @@ def part_nozzle_insert(g, name):
         # bore
         d = S(d, cyl_x(X, Y, Z, 0, 0, bore_r, g.flange_x0 - 1.0, x_end + 1.0))
         # socket bore over the core stub + L-slots for the core lugs
-        sb = 0.5 * (P["stub_od"] + P["press_clearance"])
-        d = S(d, cyl_x(X, Y, Z, 0, 0, sb, g.socket_x0 - 1.0, g.socket_x1))
-        for th in (0.0, np.pi):
-            d = S(d, U(
-                arc_slot_x(X, Y, Z, sb - 0.05, sb + P["lug_h"] + 0.15,
-                           g.socket_x0 - 1.0, 2.30, th - 0.34, th + 0.34),
-                arc_slot_x(X, Y, Z, sb - 0.05, sb + P["lug_h"] + 0.15,
-                           1.55, 2.30, th, th + math.radians(80.0)),
-                arc_slot_x(X, Y, Z, sb - 0.05, sb + P["lug_h"] + 0.15,
-                           1.55, 2.30,
-                           th + math.radians(80.0) - 0.34,
-                           th + math.radians(80.0) + 0.34)))
+        d = _insert_socket_cuts(g, X, Y, Z, d)
 
         # fixed ring-magnet counterbore, opening +X, floor at fixed_mag_x0
         d = S(d, cyl_x(X, Y, Z, 0, 0, g.mag_pocket_r,
@@ -1749,6 +1905,445 @@ def part_mold_a(g):
 
 def part_mold_b(g):
     return _mold_half(g, False)
+
+
+# --------------------------------------------------------------------------
+# PART: bell tip S/M/L (+ moulds) -- replaces the mag-float carrier + skirt
+# --------------------------------------------------------------------------
+# Decided 2026-09-01 (artifact "Aperture Tip"): one blunt nose cone for every
+# size, cast Shore A 10-15, O5 -> O12 over 2.4 mm (55 deg half-angle) so the
+# cone's base stops at the aperture rim and insertion is self-limited; a hollow
+# rolled lip (tube O3, wall 0.4, Shore 00-30) on an oval footprint in S/M/L; a
+# 0.5 mm bell-shaped web between them so the lip can rock; an anterior sector
+# thinned + lengthened for jaw motion; an inferior sector extended over the
+# intertragic notch; a 0.8 mm vent exiting under the lip.
+#
+# Frame: nozzle-local, +X along the nozzle into the ear -- the same frame as the
+# nozzle inserts and the old carrier.  th = atan2(Z, Y): 0 = +Y = superior,
+# 90 deg = +Z = anterior (tragus side), 180 deg = -Y = inferior (notch).
+#
+# Mould: two halves split on y = 0 pulling +/-Y, exactly like the carrier
+# mould, plus a removable core that carries the bore, the seat with its
+# retaining ridge, the vent, the plug that fills the hollow under the web, and
+# the ring inside the rolled lip.  A closed hollow torus cannot be pulled, so
+# the lip is a C-section open toward the axis (bell_lip_slit_deg) and the core's
+# ring comes out through the slit -- Shore 00-30 stretches ~1.5x there.
+
+BELL_SIZES = ("XS", "S", "M", "L")
+BELL_LEGACY_PARTS = {"carrier", "carrier_mold_a", "carrier_mold_b", "carrier_mold_core",
+                     "nozzle_insert_short", "nozzle_insert_med", "nozzle_insert_long"}
+
+
+def _sector(th, center_deg, width_deg, trans_deg):
+    """1 inside a sector of azimuth, 0 outside, smoothstep over trans_deg."""
+    hw = math.radians(0.5 * width_deg)
+    tr = math.radians(trans_deg)
+    dth = np.abs(_wrap(th - math.radians(center_deg)))
+    tb = np.clip((dth - (hw - tr)) / tr, 0.0, 1.0)
+    return 1.0 - tb * tb * (3.0 - 2.0 * tb)
+
+
+def _smoothstep(t):
+    t = np.clip(t, 0.0, 1.0)
+    return t * t * (3.0 - 2.0 * t)
+
+
+def _polyline_dist(px, pr, pts):
+    """Distance from (px, pr) to a polyline of (x, r) points; points may be arrays."""
+    best = None
+    for (ax, ar), (bx, br) in zip(pts[:-1], pts[1:]):
+        dx, dr = bx - ax, br - ar
+        dd = np.maximum(dx * dx + dr * dr, 1e-12)
+        h = np.clip(((px - ax) * dx + (pr - ar) * dr) / dd, 0.0, 1.0)
+        d = np.sqrt((px - ax - dx * h) ** 2 + (pr - ar - dr * h) ** 2)
+        best = d if best is None else np.minimum(best, d)
+    return best
+
+
+def bell_lip(g, size, th):
+    """Per-azimuth lip: (centreline radius, tube centre x, wall)."""
+    P = g.P
+    a_c, b_c = g.bell_lip_axes[size]
+    r_e = 1.0 / np.sqrt((np.cos(th) / a_c) ** 2 + (np.sin(th) / b_c) ** 2)
+    b_inf = _sector(th, P["bell_inf_center_deg"], P["bell_inf_deg"],
+                    P["bell_sector_trans_deg"])
+    b_ant = _sector(th, P["bell_ant_center_deg"], P["bell_ant_deg"],
+                    P["bell_sector_trans_deg"])
+    r_lip = r_e + P["bell_inf_ext"] * b_inf
+    x_lip = g.bell_lip_x - P["bell_ant_free"] * b_ant
+    wall = P["bell_lip_wall"] + (P["bell_ant_wall"] - P["bell_lip_wall"]) * b_ant
+    return r_lip, x_lip, wall
+
+
+def bell_web_r(g, X, r_lip, x_wl):
+    """Web centreline radius at station X: an S-curve from the lip radius to the
+    land, axial tangent at both ends -- the bell."""
+    t = (X - x_wl) / np.maximum(g.bell_web_x1 - x_wl, 1e-6)
+    return r_lip + (g.bell_web_r1 - r_lip) * _smoothstep(t)
+
+
+def bell_web_pts(g, r_lip, x_lip, n=10, Rt=None):
+    P = g.P
+    Rt = g.bell_Rt if Rt is None else Rt
+    x_wl = x_lip + Rt + P["bell_web_stub"]
+    pts = [(x_lip + Rt - 0.05, r_lip), (x_wl, r_lip)]     # stub ends in the shell wall
+    for t in np.linspace(0.0, 1.0, n + 1)[1:]:
+        pts.append((x_wl + (g.bell_web_x1 - x_wl) * t,
+                    r_lip + (g.bell_web_r1 - r_lip) * _smoothstep(t)))
+    return pts
+
+
+def bell_vent_field(g, X, Y, Z):
+    """The O0.8 vent, as a solid to cut from the tip / add to the mould core.
+
+    canal <- bore -> radial link just past the Ti tube end -> groove along the
+    Ti/silicone seat (closed by the tube) -> radial channel across the tip's
+    proximal face (closed by the insert's socket face) -> the hollow under the
+    web, which is open to the concha under the lip.  Nothing on the core bridges
+    the sleeve, so the core pulls -X without tearing it.
+    """
+    P = g.P
+    rv = 0.5 * P["bell_vent_dia"]
+    az = math.radians(P["bell_vent_az_deg"])
+    uy, uz = math.cos(az), math.sin(az)
+    rb = g.bell_seat_r + 0.15                    # a near-full O0.8 groove in the seat
+    bead = cyl_x(X, Y, Z, rb * uy, rb * uz, rv, g.bell_x0 - 0.6, g.bell_noz_end + 0.7)
+    xl = g.bell_noz_end + 0.3
+    link = capsule(X, Y, Z, (xl, 0.0, 0.0), (xl, rb * uy, rb * uz), rv)
+    xf = g.bell_x0 + 0.15
+    r1 = g.bell_rib_r + 0.3
+    face = capsule(X, Y, Z, (xf, 1.5 * uy, 1.5 * uz), (xf, r1 * uy, r1 * uz), rv)
+    return U(bead, link, face)
+
+
+def bell_tip_field(g, size, X, Y, Z, C=None):
+    P = g.P
+    key = ("bell_tip", size, X.shape, Y.shape, Z.shape,
+           float(X.ravel()[0]), float(Y.ravel()[0]), float(Z.ravel()[0]))
+    if C is not None and key in C.cache:
+        return C.cache[key]
+    rho = np.sqrt(Y ** 2 + Z ** 2)
+    th = np.arctan2(Z, Y)
+    Rt = g.bell_Rt_by[size]
+    r_lip, x_lip, wall = bell_lip(g, size, th)
+
+    # ---- nose: O12 land + 55 deg cone + sleeve over the Ti tube + vent rib
+    land = cyl_x(X, Y, Z, 0, 0, g.bell_base_r, g.bell_land_x0, g.bell_cb_x)
+    cone = cone_x(X, Y, Z, g.bell_cb_x, g.bell_base_r, g.bell_tip_x, g.bell_nose_r)
+    sleeve = cyl_x(X, Y, Z, 0, 0, g.bell_sleeve_r, g.bell_x0, g.bell_land_x0 + 0.2)
+    az = math.radians(P["bell_vent_az_deg"])
+    u = Y * math.cos(az) + Z * math.sin(az)      # radial along the vent azimuth
+    v = -Y * math.sin(az) + Z * math.cos(az)
+    # a box, not a wedge: its sides are parallel to the mould pull
+    rib = box(X, u, v, (0.5 * (g.bell_x0 + g.bell_land_x0),
+                        0.5 * (1.5 + g.bell_rib_r), 0.0),
+              (0.5 * (g.bell_land_x0 - g.bell_x0) + 0.1,
+               0.5 * (g.bell_rib_r - 1.5), 0.9))
+    nose = U(land, cone, sleeve, rib)
+
+    # ---- web sheet
+    web = _polyline_dist(X, rho, bell_web_pts(g, r_lip, x_lip, Rt=Rt)) - 0.5 * P["bell_web_t"]
+    d = smin(nose, web, P["bell_fillet"])
+
+    # ---- rolled lip: tube O3 in every meridian plane, on the oval centreline
+    uu, vv = X - x_lip, rho - r_lip
+    rr = np.sqrt(uu ** 2 + vv ** 2)
+    dt = rr - Rt
+    if P["bell_lip_hollow"]:
+        shell = np.maximum(dt, -(dt + wall))
+        phi = np.arctan2(uu, -vv)                # 0 at the pole facing the axis
+        slit = (np.abs(phi) - math.radians(0.5 * P["bell_lip_slit_deg"])) \
+            * np.maximum(rr, 0.2)
+        lip = S(shell, slit)
+    else:
+        lip = dt
+    d = U(d, lip)
+
+    # ---- cuts: seat on the Ti tube (keeping the ridge), bore, vent
+    seat = cyl_x(X, Y, Z, 0, 0, g.bell_seat_r, g.bell_x0 - 1.0, g.bell_noz_end)
+    ridge = tube_x(X, Y, Z, 0, 0, g.bell_ridge_r, g.bell_seat_r + 0.2,
+                   g.bell_groove_x0, g.bell_groove_x1)
+    # the vent groove crosses the ridge: open the ridge there rather than leave
+    # a sliver of silicone between the groove and the ridge's inner face
+    ridge = S(ridge, arc_slot_x(X, Y, Z, 0.0, g.bell_seat_r + 0.3,
+                                g.bell_groove_x0 - 0.2, g.bell_groove_x1 + 0.2,
+                                az - 0.32, az + 0.32))
+    seat = S(seat, ridge)
+    bore = cyl_x(X, Y, Z, 0, 0, 0.5 * P["bell_bore"], g.bell_x0 - 1.0, g.bell_tip_x + 1.0)
+    d = S(d, U(seat, bore))
+    d = S(d, bell_vent_field(g, X, Y, Z))
+    if C is not None:
+        C.cache[key] = d
+    return d
+
+
+def bell_mold_geom(g, size):
+    P = g.P
+    x0 = g.bell_x0 - P["bell_disc_t"] - 3.5
+    x1 = g.bell_tip_x + 3.5
+    r = g.bell_lip_rmax[size] + P["mold_wall"]
+    return x0, x1, r
+
+
+def bell_core_field(g, size, X, Y, Z, C=None):
+    """The removable core = everything the mould halves must not fill that the
+    tip does not occupy: rod (seat + O2.6 bore), the ridge groove, the vent bead,
+    the plug under the web, the ring inside the lip, and a base disc behind the
+    tip's proximal face.  Built as (region - tip) so the cast is exact."""
+    P = g.P
+    rho = np.sqrt(Y ** 2 + Z ** 2)
+    th = np.arctan2(Z, Y)
+    Rt = g.bell_Rt_by[size]
+    r_lip, x_lip, _ = bell_lip(g, size, th)
+    x_wl = x_lip + Rt + P["bell_web_stub"]
+    rp = np.where(X < g.bell_x0, g.bell_disc_r[size],
+         np.where(X < x_wl, r_lip,
+         np.where(X < g.bell_land_x0, bell_web_r(g, X, r_lip, x_wl),
+         np.where(X < g.bell_noz_end, g.bell_seat_r, 0.5 * P["bell_bore"]))))
+    x0, x1, r = bell_mold_geom(g, size)
+    region = np.maximum(rho - rp, slab(X, g.bell_x0 - P["bell_disc_t"], x1 + 2.0))
+    region = U(region, np.sqrt((X - x_lip) ** 2 + (rho - r_lip) ** 2) - Rt)
+    core = S(region, bell_tip_field(g, size, X, Y, Z, C))
+    rod = cyl_x(X, Y, Z, 0, 0, g.bell_seat_r, x0 - 2.0,
+                g.bell_x0 - P["bell_disc_t"] + 0.5)
+    handle = cyl_x(X, Y, Z, 0, 0, 4.0, x0 - 8.0, x0 - 1.5)
+    return U(core, rod, handle, bell_vent_field(g, X, Y, Z))
+
+
+def bell_void_field(g, size, X, Y, Z, C=None):
+    """tip + core: the cavity the two halves close around."""
+    return U(bell_tip_field(g, size, X, Y, Z, C), bell_core_field(g, size, X, Y, Z, C))
+
+
+def part_bell_tip(g, size):
+    rr = g.bell_lip_rmax[size] + 1.2
+
+    def fn(X, Y, Z, C):
+        return bell_tip_field(g, size, X, Y, Z, C)
+
+    return fn, ((g.bell_x0 - 1.0, g.bell_tip_x + 1.0), (-rr, rr), (-rr, rr))
+
+
+def part_bell_mold_core(g, size):
+    x0, x1, r = bell_mold_geom(g, size)
+    rd = g.bell_disc_r[size] + 1.0
+
+    def fn(X, Y, Z, C):
+        return bell_core_field(g, size, X, Y, Z, C)
+
+    return fn, ((x0 - 9.0, x1 + 3.0), (-rd, rd), (-rd, rd))
+
+
+def _bell_mold_half(g, size, upper):
+    P = g.P
+    x0, x1, r = bell_mold_geom(g, size)
+    sgn = 1.0 if upper else -1.0
+    pinx = (x1 - 2.5, x0 + 2.5)
+    pinz = g.bell_lip_rmax[size] + 0.5 * P["mold_wall"]
+    a_c, b_c = g.bell_lip_axes[size]
+    Rt = g.bell_Rt_by[size]
+
+    def fn(X, Y, Z, C):
+        block = box(X, Y, Z, (0.5 * (x0 + x1), 0.0, 0.0),
+                    (0.5 * (x1 - x0), r, r))
+        d = I(block, -sgn * Y)
+        void = bell_void_field(g, size, X, Y, Z, C)
+        # pour spout: from the +X face down the cone's flank (pour nose-up, so
+        # the lip fills first -- that is where a metered 00-30 first pour goes)
+        void = U(void, cyl_x(X, Y, Z, 0.0, 3.6, 0.5 * P["mold_spout_dia"],
+                             g.bell_cb_x + 0.3, x1 + 2.0))
+        # vents at the lip's proximal-outer quadrant, both sides, in the parting plane
+        xv = g.bell_lip_x - 1.0
+        zv = b_c + Rt - 0.6
+        void = U(void, cyl_z(X, Y, Z, xv, 0.0, 0.5 * P["mold_vent_dia"], zv, r + 2.0))
+        void = U(void, cyl_z(X, Y, Z, xv, 0.0, 0.5 * P["mold_vent_dia"], -r - 2.0, -zv))
+        d = S(d, void)
+
+        for px in pinx:
+            for pz in (pinz, -pinz):
+                pin = cyl_y(X, Y, Z, px, pz, 0.5 * P["mold_pin_dia"],
+                            -P["mold_pin_len"], P["mold_pin_len"])
+                if upper:
+                    d = U(d, I(pin, Y))
+                    d = S(d, I(pin, -Y))
+                else:
+                    hole = cyl_y(X, Y, Z, px, pz, 0.5 * P["mold_pin_dia"] + 0.12,
+                                 -P["mold_pin_len"] - 0.2, 0.2)
+                    d = S(d, hole)
+        return d
+
+    b = ((x0 - 1.5, x1 + 1.5), (-r - 4.0, r + 4.0), (-r - 1.5, r + 1.5))
+    return fn, b
+
+
+def _first_run(inside, step):
+    """Length of the first contiguous True run."""
+    idx = np.flatnonzero(inside)
+    if len(idx) == 0:
+        return 0.0
+    n = 1
+    while n < len(idx) and idx[n] == idx[n - 1] + 1:
+        n += 1
+    return n * step
+
+
+def _field_at(fn, pts):
+    """Evaluate a broadcasting field function on an (n, 3) list of points."""
+    p = np.asarray(pts, dtype=float)
+    X = p[:, 0].reshape(-1, 1, 1)
+    Y = p[:, 1].reshape(-1, 1, 1)
+    Z = p[:, 2].reshape(-1, 1, 1)
+    return np.asarray(fn(X, Y, Z)).reshape(-1)
+
+
+def _wall_along(fn, origins, dirs, tmax, step):
+    """March from each origin along its direction and return the length of the
+    first negative (inside) run of the field -- the wall thickness there."""
+    o = np.asarray(origins, dtype=float)
+    d = np.asarray(dirs, dtype=float)
+    d = d / np.maximum(np.linalg.norm(d, axis=1, keepdims=True), 1e-12)
+    t = np.arange(0.0, tmax + step, step)
+    pts = (o[:, None, :] + d[:, None, :] * t[None, :, None]).reshape(-1, 3)
+    f = _field_at(fn, pts).reshape(len(o), len(t)) < 0
+    out = np.zeros(len(o))
+    for i in range(len(o)):
+        out[i] = _first_run(f[i], step)
+    return out
+
+
+def bell_measure(g, size, mesh, n=800):
+    """Numbers off the built tip: footprint and volume from the mesh, insertion
+    depth from the rim stop, the named walls probed through the field, the
+    global minimum wall (field marched inward from mesh vertices), and the
+    rocking clearance."""
+    P = g.P
+    Rt = g.bell_Rt_by[size]
+    fn = lambda X, Y, Z: bell_tip_field(g, size, X, Y, Z)
+    v = np.asarray(mesh.vertices)
+    rho = np.hypot(v[:, 1], v[:, 2])
+    x_max = float(v[:, 0].max())
+    stop = v[rho >= g.bell_base_r - 0.06, 0]
+    x_stop = float(stop.max()) if len(stop) else float("nan")
+    out = dict(H=float(v[:, 1].max() - v[:, 1].min()),
+               W=float(v[:, 2].max() - v[:, 2].min()),
+               vol=float(mesh.volume), x_max=x_max, x_stop=x_stop,
+               insertion=x_max - x_stop, protrusion=x_max)
+
+    def probe(p0, p1):
+        p0, p1 = np.asarray(p0, float), np.asarray(p1, float)
+        L = float(np.linalg.norm(p1 - p0))
+        return float(_wall_along(fn, [p0], [p1 - p0], L, L / (n - 1))[0])
+
+    def lip_at(th_deg):
+        th = np.array([math.radians(th_deg)])
+        r_lip, x_lip, wall = bell_lip(g, size, th)
+        return float(r_lip[0]), float(x_lip[0]), float(wall[0])
+
+    # lip wall, probed inward from outside the tube's outer pole
+    for tag, th_deg in (("lip", 0.0), ("lip_ant", P["bell_ant_center_deg"])):
+        rl, xl, wl = lip_at(th_deg)
+        c, s = math.cos(math.radians(th_deg)), math.sin(math.radians(th_deg))
+        out[tag] = probe((xl, (rl + Rt + 0.3) * c, (rl + Rt + 0.3) * s),
+                         (xl, (rl + 0.2) * c, (rl + 0.2) * s))
+        out[tag + "_spec"] = wl
+    # web, probed along its normal at mid-run (superior azimuth)
+    rl, xl, _ = lip_at(0.0)
+    x_wl = xl + Rt + P["bell_web_stub"]
+    xm = 0.5 * (x_wl + g.bell_web_x1)
+    h = 0.05
+    r0 = float(bell_web_r(g, np.array([xm - h]), rl, x_wl)[0])
+    r1 = float(bell_web_r(g, np.array([xm + h]), rl, x_wl)[0])
+    rm = float(bell_web_r(g, np.array([xm]), rl, x_wl)[0])
+    ln = math.hypot(2 * h, r1 - r0)
+    nx, nr = -(r1 - r0) / ln, 2 * h / ln
+    out["web"] = probe((xm + 0.8 * nx, rm + 0.8 * nr, 0.0),
+                       (xm - 0.8 * nx, rm - 0.8 * nr, 0.0))
+    # sleeve over the Ti tube (superior azimuth, clear of the vent rib)
+    xs = 0.5 * (g.bell_x0 + g.bell_land_x0)
+    out["sleeve"] = probe((xs, 3.6, 0.0), (xs, 1.6, 0.0))
+    # nose: bore wall near the tip face
+    xt = g.bell_tip_x - 0.4
+    out["nose"] = probe((xt, 3.5, 0.0), (xt, 0.8, 0.0))
+
+    # global minimum wall: march inward from a sample of mesh vertices
+    rng = np.random.default_rng(0)
+    sel = rng.choice(len(v), size=min(3000, len(v)), replace=False)
+    nrm = np.asarray(mesh.vertex_normals)[sel]
+    t = _wall_along(fn, v[sel] - nrm * 0.02, -nrm, 2.0, 0.01)
+    keep = t > 0.03
+    t, pv = t[keep], v[sel][keep]
+    out["min_wall"] = float(t.min()) if len(t) else float("nan")
+    out["p05_wall"] = float(np.percentile(t, 5)) if len(t) else float("nan")
+    if len(t):
+        p = pv[int(np.argmin(t))]
+        pr, pth = math.hypot(p[1], p[2]), math.degrees(math.atan2(p[2], p[1]))
+        dv = abs(_wrap(np.array([math.radians(pth - P["bell_vent_az_deg"])]))[0])
+        if pr < g.bell_rib_r + 0.2 and dv < math.radians(30):
+            out["min_where"] = "vent"          # cusp where the O0.8 vent meets the bore/seat
+        elif abs(pr - _field_lip_r(g, size, pth)) < Rt + 0.2 and \
+                abs(p[0] - _field_lip_x(g, size, pth)) < Rt + 0.2:
+            out["min_where"] = "lip"           # free edge of the C-section
+        else:
+            out["min_where"] = "body"
+        out["min_at"] = (float(p[0]), float(pr), float(pth))
+
+    # rocking: radial gap from the lip's inner edge to the sleeve, over the azimuth
+    th = np.linspace(-np.pi, np.pi, 721)
+    r_lip, x_lip, _ = bell_lip(g, size, th)
+    gap = r_lip - Rt - g.bell_sleeve_r
+    x_wl = x_lip + Rt + P["bell_web_stub"]
+    L = np.hypot(g.bell_web_x1 - x_wl, g.bell_web_r1 - r_lip) + P["bell_web_stub"]
+    i = int(np.argmin(gap))
+    out["rock_gap"] = float(gap[i])
+    out["rock_deg"] = float(math.degrees(math.atan2(max(gap[i], 0.0), L[i])))
+    out["rock_az"] = float(math.degrees(th[i]))
+    out["web_len_min"], out["web_len_max"] = float(L.min()), float(L.max())
+    return out
+
+
+def _field_lip_r(g, size, th_deg):
+    return float(bell_lip(g, size, np.array([math.radians(th_deg)]))[0][0])
+
+
+def _field_lip_x(g, size, th_deg):
+    return float(bell_lip(g, size, np.array([math.radians(th_deg)]))[1][0])
+
+
+def bell_draw_check(g, size, spacing=0.16, n_pts=4000, step=0.08):
+    """Can the two halves pull +/-Y off (tip + core)?  From points on the cavity
+    surface, march along the pull through the void field: mould material that
+    meets cavity again further along is trapped under a silicone overhang.
+    Returns (fraction of shadowed points, worst overhang thickness in mm)."""
+    rr = g.bell_lip_rmax[size] + 1.0
+    b = ((g.bell_x0 - 0.5, g.bell_tip_x + 0.5), (-rr, rr), (-rr, rr))
+    fn = lambda X, Y, Z: bell_void_field(g, size, X, Y, Z)
+    fld, org, sp = evaluate(lambda X, Y, Z, C: fn(X, Y, Z), b, spacing)
+    m = polygonise(fld, org, sp)
+    v = np.asarray(m.vertices)
+    nrm = np.asarray(m.vertex_normals)
+    rng = np.random.default_rng(1)
+    shadow, worst, total = 0, 0.0, 0
+    for sgn in (1.0, -1.0):
+        # cavity-surface points on this half, off the sampling box's cut faces
+        sel = np.flatnonzero((sgn * v[:, 1] > 0.3)
+                             & (v[:, 0] > b[0][0] + 0.3) & (v[:, 0] < b[0][1] - 0.3))
+        if len(sel) == 0:
+            continue
+        sel = rng.choice(sel, size=min(n_pts, len(sel)), replace=False)
+        o = v[sel] + nrm[sel] * 0.04
+        ok = _field_at(fn, o) > 0.0            # origin must sit in mould material
+        sel, o = sel[ok], o[ok]
+        t = np.arange(0.0, 2 * rr, step)
+        pts = (o[:, None, :] + np.array([0.0, sgn, 0.0])[None, None, :]
+               * t[None, :, None]).reshape(-1, 3)
+        f = _field_at(fn, pts).reshape(len(sel), len(t))
+        inside = f < -0.02
+        total += len(sel)
+        for i in range(len(sel)):
+            if inside[i].any():
+                shadow += 1
+                worst = max(worst, _first_run(inside[i], step))
+    return shadow / max(total, 1), worst
 
 
 # --------------------------------------------------------------------------
@@ -1947,22 +2542,46 @@ PARTS = {
     "plunger_cam": (part_plunger_cam, "solid"),
     "driver_carrier": (part_driver_carrier, "solid"),
     "damper_jig": (part_damper_jig, "solid"),
+    "nozzle_insert_bell": (part_nozzle_insert_bell, "solid"),
 }
+for _sz in BELL_SIZES:
+    PARTS[f"bell_tip_{_sz}"] = ((lambda g, s=_sz: part_bell_tip(g, s)), "fine")
+    PARTS[f"bell_tip_{_sz}_mold_a"] = ((lambda g, s=_sz: _bell_mold_half(g, s, True)), "fine")
+    PARTS[f"bell_tip_{_sz}_mold_b"] = ((lambda g, s=_sz: _bell_mold_half(g, s, False)), "fine")
+    PARTS[f"bell_tip_{_sz}_mold_core"] = ((lambda g, s=_sz: part_bell_mold_core(g, s)), "fine")
 
-# parts that live in the assembly frame (moulds and the jig have their own frames)
-ASSEMBLY_PARTS = ["core", "faceplate", "jacket_wing",
-                  "nozzle_insert_short", "carrier", "driver_carrier"]
+BELL_PARTS = {n for n in PARTS if n.startswith("bell_tip_")} | {"nozzle_insert_bell"}
+
+
+def enabled_parts(P):
+    """What --all builds: the bell family by default, the mag-float carrier
+    family only with tip_style='carrier'."""
+    off = BELL_PARTS if P["tip_style"] == "carrier" else BELL_LEGACY_PARTS
+    return [n for n in PARTS if n not in off]
+
+
+def assembly_parts(P):
+    """Parts that live in the assembly frame (moulds and the jig have their own)."""
+    if P["tip_style"] == "carrier":
+        tip = ["nozzle_insert_short", "carrier"]
+    else:
+        tip = ["nozzle_insert_bell", f"bell_tip_{P['bell_asm_size']}"]
+    return ["core", "faceplate", "jacket_wing"] + tip + ["driver_carrier"]
+
+
 PLUNGER_PARTS = ["plunger_foot", "plunger_pad", "plunger_pin", "plunger_cam"]
 
 # these are modelled about the nozzle axis, so their STLs are axis-aligned in the
 # nozzle-local frame and get canted into place only for the assembly
 NOZZLE_FRAME_PARTS = {"nozzle_insert_short", "nozzle_insert_med",
-                      "nozzle_insert_long", "carrier"}
+                      "nozzle_insert_long", "carrier", "nozzle_insert_bell"} \
+    | {f"bell_tip_{s}" for s in BELL_SIZES}
 
 
 def build(name, g, voxel=None):
     fn, bounds = PARTS[name][0](g)
-    budget = g.P["budget_lattice"] if PARTS[name][1] == "lattice" else g.P["budget"]
+    budget = {"lattice": g.P["budget_lattice"],
+              "fine": g.P["budget_fine"]}.get(PARTS[name][1], g.P["budget"])
     sp = spacing_for(bounds, budget, voxel)
     t0 = time.time()
     field, origin, sp = evaluate(fn, bounds, sp)
@@ -2124,6 +2743,10 @@ def main():
     ap.add_argument("--cant", type=float, default=None,
                     help="nozzle cant in degrees about +Y (default 45)")
     ap.add_argument("--no-assembly", action="store_true")
+    ap.add_argument("--tip-style", choices=["bell", "carrier"], default=None,
+                    help="bell (default) or the cancelled mag-float carrier + skirt")
+    ap.add_argument("--bell-size", choices=list(BELL_SIZES), default=None,
+                    help="lip size shown in the assembly (default M)")
     args = ap.parse_args()
 
     if args.list:
@@ -2139,6 +2762,10 @@ def main():
         P["nozzle_cant_deg"] = args.cant
     if args.trim is not None:
         P["body_trim_mm"] = args.trim
+    if args.tip_style is not None:
+        P["tip_style"] = args.tip_style
+    if args.bell_size is not None:
+        P["bell_asm_size"] = args.bell_size
     P = solve_body_trim(P)
     if P["notch_sector_ext"] > 0:
         P = calibrate_notch(P)
@@ -2150,7 +2777,7 @@ def main():
     if args.ear in ("left", "both"):
         os.makedirs(os.path.join(out, "left"), exist_ok=True)
 
-    names = list(PARTS) if args.all else args.part
+    names = enabled_parts(P) if args.all else args.part
     if not names:
         ap.error("nothing to do -- pass --all or --part NAME")
 
@@ -2172,6 +2799,20 @@ def main():
           f"carrier OD {P['carrier_od']} x {g.carrier_x0:.2f}..{g.carrier_x1:.2f} mm    "
           f"tip protrusion {g.tip_protrusion:.2f} mm "
           f"(max {g.tip_protrusion_max:.2f} at full float)")
+    if P["tip_style"] == "bell":
+        print(f"tip = BELL (S/M/L, assembly shows {P['bell_asm_size']}): nose "
+              f"Ø{P['bell_nose_tip_d']:.1f}->Ø{P['bell_nose_base_d']:.1f} over "
+              f"{P['bell_nose_len']:.2f} mm ({g.bell_half_angle:.1f} deg half-angle), "
+              f"lip tube Ø{P['bell_lip_tube_d']:.1f} wall {P['bell_lip_wall']:.2f} "
+              f"({'C-section, slit ' + format(P['bell_lip_slit_deg'], '.0f') + ' deg' if P['bell_lip_hollow'] else 'solid bead'}), "
+              f"web {P['bell_web_t']:.2f} mm")
+        print(f"      seated on the Ø{P['bell_nozzle_od']:.1f} Ti insert tube (bore "
+              f"Ø{P['bell_bore']:.1f}), ridge in a {P['bell_groove_w']:.1f} x "
+              f"{P['bell_groove_d']:.2f} groove at x = {g.bell_groove_x0:.2f}.."
+              f"{g.bell_groove_x1:.2f}; Ti ends {g.bell_noz_end:.2f}, tip face "
+              f"{g.bell_tip_x:.2f}, rim stop {g.bell_cb_x:.2f}, lip plane "
+              f"{g.bell_lip_x:.2f} (carrier was {g.carrier_x1:.2f} at the seal plane)")
+        print(f"      mag-float carrier + skirt: CANCELLED, kept behind --tip-style carrier")
     for w in g.warnings:
         print(f"  WARNING: {w}")
     print("=" * 100)
@@ -2194,11 +2835,21 @@ def main():
             mesh.export(os.path.join(out, "right", f"{n}.stl"))
         if args.ear in ("left", "both"):
             mirror(mesh).export(os.path.join(out, "left", f"{n}.stl"))
+        # the bell family also lands flat in stl/tips/ as bell_tip_<size>_<R|L>...
+        if n.startswith("bell_tip_"):
+            os.makedirs(os.path.join(out, "tips"), exist_ok=True)
+            size, _, rest = n[len("bell_tip_"):].partition("_")
+            suffix = f"_{rest}" if rest else ""
+            if args.ear in ("right", "both"):
+                mesh.export(os.path.join(out, "tips", f"bell_tip_{size}{suffix}_R.stl"))
+            if args.ear in ("left", "both"):
+                mirror(mesh).export(os.path.join(out, "tips",
+                                                 f"bell_tip_{size}{suffix}_L.stl"))
 
     # ---- assembly ------------------------------------------------------
     if args.all and not args.no_assembly:
         parts = []
-        for k in ASSEMBLY_PARTS:
+        for k in assembly_parts(P):
             if k not in meshes:
                 continue
             mk = meshes[k]
@@ -2434,14 +3085,57 @@ def main():
         print(f"nozzle cant {P['nozzle_cant_deg']:.0f} deg about +Y   "
               f"axis {tuple(round(float(v), 3) for v in g.n_ax)}   "
               f"nozzle base {tuple(round(float(v), 2) for v in g.nozzle_base)}")
-        print(f"  rigid body along the nozzle axis: {lo:.2f} .. {g.carrier_x0:.2f} mm "
-              f"= {g.carrier_x0 - lo:.2f} mm stack   "
+        print(f"  rigid body along the nozzle axis: {lo:.2f} .. {g.tip_x0:.2f} mm "
+              f"= {g.tip_x0 - lo:.2f} mm stack   "
               f"(uncanted baseline 23.40 mm, TRYON_REPORT.md rec 1)")
-        print(f"  seal plane at {g.carrier_x1:.2f} mm; everything behind it spans "
-              f"{g.carrier_x1 - lo:.2f} mm along the axis")
+        print(f"  seal plane at {g.seal_x:.2f} mm; everything behind it spans "
+              f"{g.seal_x - lo:.2f} mm along the axis; tip face at {g.tip_x1:.2f} mm")
+
+    # ---- bell tip: sizes, volumes, walls, insertion -- measured on the meshes
+    built = [s for s in BELL_SIZES if f"bell_tip_{s}" in meshes]
+    if built:
+        print("-" * 100)
+        print(f"bell tip: nose Ø{P['bell_nose_tip_d']:.1f}->Ø{P['bell_nose_base_d']:.1f} "
+              f"x {P['bell_nose_len']:.2f} mm, {g.bell_half_angle:.1f} deg; lip tube "
+              f"Ø{P['bell_lip_tube_d']:.1f}, wall {P['bell_lip_wall']:.2f} "
+              f"({P['bell_ant_wall']:.2f} anterior, +{P['bell_ant_free']:.1f} mm free "
+              f"length); inferior +{P['bell_inf_ext']:.1f} mm; web {P['bell_web_t']:.2f}; "
+              f"vent Ø{P['bell_vent_dia']:.1f} at {P['bell_vent_az_deg']:.0f} deg")
+        print(f"  {'size':4s} {'spec HxW':>10s} {'built HxW':>12s} {'vol mm3':>8s} "
+              f"{'lip':>5s} {'ant':>5s} {'web':>5s} {'slv':>5s} {'nose':>5s} "
+              f"{'min':>5s} {'p05':>5s}  {'insert':>6s} {'protr':>6s} "
+              f"{'web L':>9s} {'rock':>10s}")
+        for s in built:
+            m = bell_measure(g, s, meshes[f"bell_tip_{s}"])
+            h, w = P["bell_sizes"][s]
+            print(f"  {s:4s} {h:5.1f}x{w:4.1f} {m['H']:6.2f}x{m['W']:5.2f} "
+                  f"{m['vol']:8.1f} {m['lip']:5.2f} {m['lip_ant']:5.2f} {m['web']:5.2f} "
+                  f"{m['sleeve']:5.2f} {m['nose']:5.2f} {m['min_wall']:5.2f} "
+                  f"{m['p05_wall']:5.2f}  {m['insertion']:6.2f} {m['protrusion']:6.2f} "
+                  f"{m['web_len_min']:4.2f}-{m['web_len_max']:4.2f} "
+                  f"{m['rock_deg']:4.1f}deg@{m['rock_az']:4.0f}")
+        print(f"  walls are MEASURED through the mesh (mm): lip = tube wall at the "
+              f"superior pole (spec {P['bell_lip_wall']:.2f}), ant = anterior sector "
+              f"(spec {P['bell_ant_wall']:.2f}), web (spec {P['bell_web_t']:.2f}), "
+              f"slv = sleeve over the Ti tube (spec {P['bell_sleeve_wall']:.2f}), "
+              f"nose = bore wall at the tip face; min/p05 = ray thickness over 2500 "
+              f"surface points.  insert = tip face to the most distal Ø"
+              f"{P['bell_nose_base_d']:.0f} station (the rim stop), spec <= "
+              f"{P['bell_nose_len']:.1f}.  rock = inward rock before the lip's inner "
+              f"edge meets the sleeve, at the worst azimuth (spec +/-15).  H includes "
+              f"the inferior extension.")
+        for s in built:
+            if f"bell_tip_{s}_mold_a" in meshes:
+                frac, worst = bell_draw_check(g, s)
+                print(f"  {s} mould, split y=0 pull +/-Y: {100 * frac:.1f}% of cavity "
+                      f"points shadowed along the pull, worst overhang "
+                      f"{worst:.2f} mm of silicone  -> "
+                      + ("pulls clean" if frac < 0.01 else
+                         "pulls with a flex of the lip (soft part, hard mould)"
+                         if worst < 1.0 else "*** UNDERCUT ***"))
 
     # ---- skirt contact land + pressure budget (docs/MECH_VALIDATION.md JOB 2)
-    if args.all or "carrier" in meshes:
+    if "carrier" in meshes:
         fl = math.radians(P["skirt_flare_deg"])
         w = g.skirt_land_w
         print("-" * 100)

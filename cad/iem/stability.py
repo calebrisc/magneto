@@ -160,7 +160,8 @@ LIP_SEARCH = 3.0     # mm, radius to look for undercut surface under a pad
 
 def stability_check(rec, P, field, transform_fn, contacts=None,
                     plungers=0, cable_point=None, com=None,
-                    lip_upper_bound=False, cable_tug=None, mu=None):
+                    lip_upper_bound=False, cable_tug=None, mu=None,
+                    cable_mode="cone"):
     """Worst-case load scale the seated pose can resist.  See module docstring."""
     M = np.array(rec["transform"], float)
     global MU
@@ -290,14 +291,21 @@ def stability_check(rec, P, field, transform_fn, contacts=None,
         cable_point = com
     f_inert = G_LOAD * ASSEMBLY_MASS * 9.81
     # downward-backward cone: -z inferior, -x posterior (scan frame)
-    cable_dirs = _cone_dirs(np.array([-1.0, 0.0, -1.0]), CONE_HALF_DEG, 13)
+    # "cone" = a cable hanging down and back, what the boot is raked for.
+    # "sphere" = every pull direction including a straight outward yank, which is
+    # the case a hook has to survive and a friction-only fit does not.
+    from earfit import NOZZLE_AXIS
+    nax = M[:3, :3] @ NOZZLE_AXIS
+    nax = nax / np.linalg.norm(nax)
+    if cable_mode == "sphere":
+        cable_dirs = _sphere_dirs(26) + [(-nax).tolist()]
+        cable_dirs = [np.asarray(d, float) / np.linalg.norm(d) for d in cable_dirs]
+    else:
+        cable_dirs = _cone_dirs(np.array([-1.0, 0.0, -1.0]), CONE_HALF_DEG, 13)
     inert_dirs = _sphere_dirs(14)
 
     # (a) skirt preload reaction: always on, never scaled.  Acts outward along
     # the nozzle axis, applied at the rim centroid.
-    from earfit import NOZZLE_AXIS
-    nax = M[:3, :3] @ NOZZLE_AXIS
-    nax = nax / np.linalg.norm(nax)
     rim_c = transform_fn(P["rim"], M).mean(axis=0)
     F_sk = -SKIRT_PRELOAD * nax               # outward = away from the canal
     w_always = np.concatenate([F_sk, np.cross(rim_c - com, F_sk)])

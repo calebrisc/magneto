@@ -45,7 +45,9 @@ The **nozzle axis is canted** relative to the body: `nozzle_cant_deg` (default
 
 ## 2. Design decisions carried in from the brief
 
-* Right-ear master, L/R mirror variants only; **one size**, no S/M/L.
+* Right-ear master, L/R mirror variants only. **One body.** S/M/L exists on two
+  parts only: the bell-tip lip (9/1) and the clamp pad extension (9/4, sized by
+  fit, not by ear size — see `docs/CLAMP_SIZE_BANDS.md`).
 * The seal happens at the **canal opening**. Nothing enters the canal — the
   skirt rim is the most-distal feature of the whole assembly (see §5).
 * Everything is **magnetically removable**: jacket→core (3 magnets + 2 pins),

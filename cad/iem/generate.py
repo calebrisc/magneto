@@ -1372,7 +1372,7 @@ def part_jacket_wing(g):
     ymax = max(p[1] for p in pts) + 3.0
     xmin = min(min(p[0] for p in pts), cx - g.core_rx) - 3.5
     zmin, zmax = -g.core_rz - thick - 2.0, 1.0
-    if P["wing_style"] != "gyroid":
+    if P["wing_style"] != "gyroid" and g.plungers:      # no plungers -> plain jacket bounds
         ymax = -1e9
         for pl in g.plungers:
             tip = pl["mount"] + pl["aim"] * (g.pl_pad1 + P["plunger_rocker"])

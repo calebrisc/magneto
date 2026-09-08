@@ -1,11 +1,11 @@
-#!/usr/bin/env python3
-"""Valorant session supervisor — presence-polling counterpart of magneto_session.
+﻿#!/usr/bin/env python3
+"""Valorant session supervisor â€” presence-polling counterpart of magneto_session.
 
 Valorant has no GSI, so match boundaries come from the Riot Client's local API:
 the lockfile (%LOCALAPPDATA%/Riot Games/Riot Client/Config/lockfile) gives
 port+password for a localhost HTTPS server, and our own presence's base64
 `private` blob carries sessionLoopState (MENUS/PREGAME/INGAME), map, queue and
-live score. Read-only localhost polling — no injection, no overlay, no game
+live score. Read-only localhost polling â€” no injection, no overlay, no game
 memory. Unofficial API: treat every field as best-effort and fail soft.
 
 Arms the same Raw Input tap as the CS2 supervisor, only while INGAME.
@@ -85,7 +85,7 @@ MAP_CODENAMES = {"bonsai": "split", "triad": "haven", "jam": "lotus",
                  "infinity": "abyss", "plummet": "summit", "duality": "bind",
                  "canyon": "fracture", "foxtrot": "breeze", "port": "icebox",
                  "pitt": "pearl", "juliett": "sunset", "rook": "corrode",
-                 "rangev2": "range"}
+                 "rangev2": "range", "fortcollins": "retake"}
 
 
 def map_name(priv):
@@ -126,7 +126,7 @@ def fmt_stats(s):
     rows = [("shots", s["shots"]),
             ("strafe-release shots measured", s.get("cs_measured", 0)),
             ("fast release&rarr;shot (&lt;60 ms)", s.get("cs_early", 0)),
-            ("60–130 ms release&rarr;shot", s.get("cs_inwin", 0)),
+            ("60&ndash;130 ms release&rarr;shot", s.get("cs_inwin", 0)),
             ("counter-strafed shots (CS habit)", s.get("cstrafe_shots", 0)),
             ("&hellip;opposite key still held at shot", s.get("cstrafe_held_at_shot", 0)),
             ("moving shots", s.get("moving_shots", 0)),
@@ -158,14 +158,14 @@ def write_report(cap_path, anchor, a, b, map_, mode, score, stamp):
 <style>body{{font:14px system-ui;margin:2em auto;max-width:640px;color:#222}}
 table{{border-collapse:collapse;margin:.5em 0}}td{{border:1px solid #ccc;
 padding:3px 10px}}h2{{margin-top:1.4em}}.note{{color:#777}}</style>
-<h1>Valorant — {html.escape(map_)}</h1>
-<p class=note>{html.escape(mode)} · {dur:.1f} min ·
-score {score[0]}–{score[1]} (ally–enemy, last seen)</p>
+<h1>Valorant &mdash; {html.escape(map_)}</h1>
+<p class=note>{html.escape(mode)} &middot; {dur:.1f} min &middot;
+score {score[0]}&ndash;{score[1]} (ally&ndash;enemy, last seen)</p>
 <h2>Whole match</h2>{fmt_stats(whole)}
 <h2>First half</h2>{fmt_stats(h1)}
 <h2>Second half</h2>{fmt_stats(h2)}
 <p class=note>Input-only metrics (Valorant has no live event feed).
-Val stops on key release — fast release&rarr;shot is fine here (unlike CS);
+Val stops on key release &mdash; fast release&rarr;shot is fine here (unlike CS);
 the habit to unlearn is counter-strafing: it's neutral at best, and shots
 with the opposite key still held are fired while self-inflicted-inaccurate.
 Timing buckets kept CS-identical for cross-game comparison.</p>"""
@@ -228,7 +228,7 @@ def regen(base):
 
 def main():
     win_input_tap.start(lambda: state["cap_file"])
-    print("val supervisor up — waiting for Riot client / VALORANT", flush=True)
+    print("val supervisor up â€” waiting for Riot client / VALORANT", flush=True)
     end = time.time() + RUN_HOURS * 3600
     seen_lock = False
     cache = {}
@@ -254,7 +254,7 @@ def main():
             if state["cap_file"] is not None:
                 if priv is not None:
                     state["last_priv"] = priv
-                    # scores zero out on the end screen — keep the max seen
+                    # scores zero out on the end screen â€” keep the max seen
                     sc = (priv.get("partyOwnerMatchScoreAllyTeam") or 0,
                           priv.get("partyOwnerMatchScoreEnemyTeam") or 0)
                     if sum(sc) > sum(state.get("score") or (0, 0)):

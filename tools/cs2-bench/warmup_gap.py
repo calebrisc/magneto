@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """Warmup-vs-match gap: same input metrics, split by session type.
 
 Classifies every Val capture in sessions/ by mode (from its .val.jsonl:
@@ -15,7 +15,7 @@ DAYS = float(sys.argv[1]) if len(sys.argv) > 1 else 7.0
 cutoff = time.time() - DAYS * 86400
 
 CLASSES = {"range": "practice", "custom": "practice", "unknown": "practice",
-           "deathmatch": "dm", "hurm": "dm", "competitive": "match",
+           "deathmatch": "dm", "hurm": "dm", "fortcollins": "practice", "retake": "practice", "competitive": "match",
            "unrated": "match", "swiftplay": "match"}
 
 buckets = {}

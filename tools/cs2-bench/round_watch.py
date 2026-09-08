@@ -77,9 +77,16 @@ def input_stats(cap_path, anchor, a, b):
         return {"shots": 0}
     crouch_shots = sum(1 for c in clicks if c[1])
     # counter-strafe signature: opposite strafe key pressed within
-    # [-0.1 s, +0.15 s] of the release that precedes the shot
+    # [-0.1 s, +0.15 s] of the release that precedes the shot. A BRIEF press
+    # (released <=0.25 s) is a counter-strafe tap (the CS stop habit); a press
+    # kept held is a strafe direction-change (dodge-dueling), counted apart.
+    def press_duration(key, p):
+        for t2, k2 in zip(strafe_ups, strafe_up_keys):
+            if k2 == key and t2 > p:
+                return t2 - p
+        return 99.0  # never released in window
     delays = []
-    cstrafe = cstrafe_held = 0
+    cstrafe = cstrafe_held = strafe_swap = 0
     for c, cr, held_a, held_d in clicks:
         if cr: continue  # crouch spray-downs pollute duel-timing stats
         i = bisect.bisect_right(strafe_ups, c) - 1
@@ -87,10 +94,15 @@ def input_stats(cap_path, anchor, a, b):
             rel_t = strafe_ups[i]
             delays.append((c - rel_t) * 1000)
             opp = "d" if strafe_up_keys[i] == "a" else "a"
-            if any(rel_t - 0.1 <= p <= rel_t + 0.15 for p in ad_presses[opp]):
-                cstrafe += 1
-                if (opp == "a" and held_a) or (opp == "d" and held_d):
-                    cstrafe_held += 1
+            hits = [p for p in ad_presses[opp]
+                    if rel_t - 0.1 <= p <= rel_t + 0.15]
+            if hits:
+                if press_duration(opp, hits[0]) <= 0.25:
+                    cstrafe += 1
+                    if (opp == "a" and held_a) or (opp == "d" and held_d):
+                        cstrafe_held += 1
+                else:
+                    strafe_swap += 1
     inwin = sum(1 for d in delays if 60 <= d < 130)
     early = sum(1 for d in delays if d < 60)
     moving = sum(1 for c, f in zip(clicks, moving_flags) if f and not c[1])
@@ -119,7 +131,8 @@ def input_stats(cap_path, anchor, a, b):
             "cs_early": early, "moving_shots": moving, "sprays": sprays,
             "longest_burst": longest, "peak_flick_cps": int(peak),
             "total_dx": total_dx,
-            "cstrafe_shots": cstrafe, "cstrafe_held_at_shot": cstrafe_held}
+            "cstrafe_shots": cstrafe, "cstrafe_held_at_shot": cstrafe_held,
+            "strafe_swap_shots": strafe_swap}
 
 def main():
     st = load_state()

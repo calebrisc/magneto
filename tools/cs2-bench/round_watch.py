@@ -134,6 +134,72 @@ def input_stats(cap_path, anchor, a, b):
             "cstrafe_shots": cstrafe, "cstrafe_held_at_shot": cstrafe_held,
             "strafe_swap_shots": strafe_swap}
 
+def peek_stats(cap_path, anchor, a, b):
+    """Peek-rhythm stats for wall-clock window [a, b]: shots split by
+    movement-key state, planted peek windows (1-2 shots), chained cycles."""
+    MOVE = {"a", "d", "w", "s"}
+    held, still_start, cur_shots = set(), None, []
+    shots_moving = shots_still = 0
+    stills = []
+    try:
+        rd = csv.DictReader(open(cap_path))
+        from report_gen import cap_time_col
+        tcol, scale = cap_time_col(rd.fieldnames)
+        t0 = None
+        for r in rd:
+            try:
+                t = int(r[tcol]) * scale
+            except Exception:
+                continue
+            if t0 is None:
+                t0 = t
+            w = anchor + (t - t0)
+            if w < a or w > b:
+                continue
+            k = r["kind"]
+            if k in MOVE:
+                if not held and still_start is not None:
+                    stills.append((still_start, w, len(cur_shots),
+                                   (cur_shots[0] - still_start)
+                                   if cur_shots else None))
+                    still_start = None
+                held.add(k)
+            elif k in ("Au", "Du", "Wu", "Su"):
+                held.discard(k[0].lower())
+                if not held:
+                    still_start, cur_shots = w, []
+            elif k == "L":
+                if held:
+                    shots_moving += 1
+                else:
+                    shots_still += 1
+                    if still_start is not None:
+                        cur_shots.append(w)
+    except Exception:
+        pass
+    qual = [s for s in stills if 0.08 <= s[1] - s[0] <= 0.9 and 1 <= s[2] <= 2]
+    chains, cur = 0, []
+    cycles = 0
+    for s in qual:
+        if cur and s[0] - cur[-1][1] <= 2.0:
+            cur.append(s)
+        else:
+            if len(cur) >= 2:
+                chains += 1
+                cycles += len(cur)
+            cur = [s]
+    if len(cur) >= 2:
+        chains += 1
+        cycles += len(cur)
+    durs = [s[1] - s[0] for s in qual]
+    dels = [s[3] for s in qual if s[3] is not None]
+    return {"shots_moving_held": shots_moving, "shots_planted": shots_still,
+            "peek_windows": len(qual),
+            "avg_still_ms": round(1000 * sum(durs) / len(durs)) if durs else None,
+            "rel_to_shot_ms": round(1000 * sum(dels) / len(dels)) if dels else None,
+            "peek_chains": chains, "chained_cycles": cycles}
+
+
 def main():
     st = load_state()
     print("watcher up", flush=True)

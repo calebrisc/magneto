@@ -133,12 +133,21 @@ def fmt_stats(s):
             ("sprays (&ge;0.4 s)", s.get("sprays", 0)),
             ("peak flick (counts/s)", s.get("peak_flick_cps", 0)),
             ("total |dx| (counts)", s.get("total_dx", 0))]
+    if s.get("peek_windows") is not None:
+        rows += [("shots w/ movement key held", s.get("shots_moving_held")),
+                 ("shots planted", s.get("shots_planted")),
+                 ("peek windows (1-2 shots)", s.get("peek_windows")),
+                 ("avg stillness (ms)", s.get("avg_still_ms")),
+                 ("release&rarr;shot (ms)", s.get("rel_to_shot_ms")),
+                 ("chained peek cycles", s.get("chained_cycles"))]
     tr = "".join(f"<tr><td>{k}</td><td>{v}</td></tr>" for k, v in rows)
     return f"<table>{tr}</table>"
 
 
 def write_report(cap_path, anchor, a, b, map_, mode, score, stamp):
+    from round_watch import peek_stats
     whole = input_stats(cap_path, anchor, a, b)
+    whole.update(peek_stats(cap_path, anchor, a, b))
     mid = (a + b) / 2
     h1 = input_stats(cap_path, anchor, a, mid)
     h2 = input_stats(cap_path, anchor, mid, b)

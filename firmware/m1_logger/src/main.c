@@ -42,7 +42,7 @@ int main(void)
 		}
 	}
 
-	printk("# m1_logger: %d Hz, differential, 12-bit\n", SAMPLE_HZ);
+	printk("# m1_logger: %d Hz, single-ended, 12-bit\n", SAMPLE_HZ);
 	printk("t_ms,ch0_raw,ch0_mv,ch1_raw,ch1_mv\n");
 
 	while (1) {

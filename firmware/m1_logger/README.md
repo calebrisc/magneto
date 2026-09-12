@@ -4,20 +4,22 @@ Streams one sin/cos TMR bridge pair (2× AAT003-10E-EVB01) as CSV over the
 DK's USB virtual COM port. No amps — bridges drive the SAADC directly
 (differential, 40 µs acquisition time for the 40 kΩ source impedance).
 
-## Wiring (one EVB01 board — the AAT003 outputs sin AND cos)
+## Wiring (one EVB01 board — 4 wires total)
 
-| EVB01 pin  | nRF54L15-DK        | SAADC   |
-|------------|--------------------|---------|
-| V+ / VCC   | VDD (3.3 V)        | —       |
-| V− / GND   | GND                | —       |
-| SIN+       | P1.04              | AIN0    |
-| SIN−       | P1.05              | AIN1    |
-| COS+       | P1.06              | AIN2    |
-| COS−       | P1.07              | AIN3    |
+The EVB01's 2×3 header exposes SINGLE-ENDED outputs (per NVE's card:
+pin 1 = square pad). Pins 1/6 are both Vdd, 3/4 both GND — use either.
 
+| EVB01 pin       | nRF54L15-DK  | SAADC |
+|-----------------|--------------|-------|
+| Pin 1 (or 6) Vdd| VDD (3.3 V)  | —     |
+| Pin 3 (or 4) GND| GND          | —     |
+| Pin 5 Sin       | P1.04        | AIN0  |
+| Pin 2 Cos       | P1.06        | AIN2  |
+
+Header layout (component side, pin 1 = square): rows [1 2] / [3 4] / [5 6].
 AIN↔P1.xx mapping confirmed from Nordic's adc_dt sample overlay
-(AIN0–3 = P1.04–07, AIN4–7 = P1.11–14). Match the EVB01 end by its
-silkscreen labels, not position.
+(AIN0–3 = P1.04–07). Outputs are mid-rail-centered; the overlay uses
+gain 1/4 so the 0–3.6 V single-ended range covers them.
 
 ## Build & flash
 
